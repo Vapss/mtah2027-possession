@@ -1,0 +1,25 @@
+# Local hooks only: nothing here needs the network, so it works offline and in a container.
+# Install with `pre-commit install` if you use pre-commit; the same checks run in CI either way.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: .venv/bin/ruff check --fix
+        language: system
+        files: ^(tools|tests)/.*\.py$
+        types: [python]
+
+      - id: ruff-format
+        name: ruff format
+        entry: .venv/bin/ruff format
+        language: system
+        files: ^(tools|tests)/.*\.py$
+        types: [python]
+
+      - id: data-guard
+        name: licensed data and oversized files
+        entry: .venv/bin/python tools/guard_data.py
+        language: system
+        pass_filenames: true
+        always_run: true

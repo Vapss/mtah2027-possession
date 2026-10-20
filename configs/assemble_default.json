@@ -1,0 +1,7 @@
+{
+  "artifacts": "artifacts",
+  "out": "submissions/submission.csv",
+  "abstain_below": 0.0,
+  "x_outside_halves": false,
+  "weights": {}
+}

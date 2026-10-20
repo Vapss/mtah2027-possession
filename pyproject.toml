@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mtah2027-possession"
+version = "0.1.0"
+description = "More than a Hack 2027 Phase 1 -- per-frame ball possession"
+requires-python = ">=3.9"
+dependencies = ["numpy", "pandas"]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.urls]
+Upstream = "https://github.com/metrica-sports/more-than-a-hack-2027"
+
+# Only our code is linted. `evaluation/` and `starter/` are the organisers' files: they are
+# read-only reference, and reformatting them would make every upstream merge a conflict.
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+extend-exclude = ["evaluation", "starter", "data", ".venv", "artifacts", "runs", "submissions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["tools", "games"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+filterwarnings = ["error::FutureWarning"]
