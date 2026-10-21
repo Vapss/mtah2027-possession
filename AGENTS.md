@@ -1,13 +1,11 @@
 # Working agreement
 
-> **This is the team handbook, not an agent-instruction file.** It is deliberately stored under
-> `docs/` so that promoting it to `AGENTS.md` (the filename agent tooling loads automatically) is a
-> human decision, taken knowingly: `git mv docs/WORKING-AGREEMENT.md AGENTS.md`, then commit. The
-> content is identical to what `AGENTS.md` should contain; only the filename differs.
+This file is the contract for anyone writing code in this repository — human or model. Read it
+before your first commit. Each rule says how it is enforced; if a rule matters and nothing enforces
+it, add the check, not another paragraph.
 
-This file is the contract for anyone writing code in this repository. Read it before your first
-commit. Each rule says how it is enforced; if a rule matters and nothing enforces it, add the check,
-not another paragraph.
+`CLAUDE.md` and `.github/copilot-instructions.md` are symlinks to this file on purpose: one source,
+no drift.
 
 ---
 
