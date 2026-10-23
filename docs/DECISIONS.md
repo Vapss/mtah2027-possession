@@ -125,3 +125,59 @@ documented in the module docstring instead.
 **Cost.** Our counts differ from the reference by at most 59 frames on `SET PIECES`. Verified on the
 delivered file: union of the 59 intervals is 43,987 frames (22.1% of the match); `GOALS` covers
 16,503 frames (8.3%) because the annotator tags the whole goal sequence, not the restart.
+
+---
+
+## 9. Our contract is deliberately stricter than the official validator
+
+**Decided.** `tools/contract.py` rejects a submission with an extra column and one with a leading
+index column. `evaluation/validate_submission.py` -- the file that decides the competition -- accepts
+both.
+
+**Why.** Measured, not assumed. A probe compared the two on the same files, and they agree on the
+five cases that actually happen (a trailing blank line, an Excel BOM, CRLF endings, quoted labels, a
+header written as `frame, label`): all five pass both. They disagree on exactly two, and in the safe
+direction -- we are the strict one. That order matters: a harness stricter than the organiser blocks
+a file that might have scored, which is annoying and visible. The opposite order silently ships a
+file that scores nothing.
+
+**Cost.** `make submission && make validate` can block a file the official validator would have
+accepted. If that ever happens to a real submission, the fix is to relax `SUBMISSION_COLUMNS` in
+`tools/contract.py` and record it here, not to hand-edit the CSV.
+
+---
+
+## 10. CI does not run the tests that need the match data
+
+**Decided.** The bundle-dependent tests skip themselves in CI: 10 of 60 on a clean clone, 50 pass.
+The authoritative gate is `make ci` **run locally with the bundle unpacked**; GitHub Actions proves
+the harness works on a machine that has no data.
+
+**Why.** The data is gated and licensed for the competition only -- it cannot be in the repository or
+in a public CI cache, and putting it there is the one rule that ends a submission. The ten skipped
+tests are precisely the ones carrying this repository's real claims: the byte-identical regeneration
+of the four baselines, the 638 Smart Tagging instances, and the 43,987 frames of `SET PIECES`. Losing
+them in CI is the price of not shipping the data.
+
+**Cost.** A green check in GitHub no longer means "the numbers still hold", and someone will read it
+that way. Two mitigations are available and neither is implemented: a small synthetic bundle fixture
+so ingest and Smart Tagging parsing run on every push (the 638-instance assertions would still need
+real data), or a documented rule that the PR checklist item is a pasted local `make ci`. Until one
+exists, treat CI as a syntax gate and the local run as the evidence.
+
+---
+
+## 11. The pandas version is part of the contract until there is a lock
+
+**Decided.** `requirements.txt` stays as the organisers wrote it -- `numpy`, `pandas`, unpinned -- and
+we accept the risk until `uv lock` lands. The risk is recorded here rather than silently tolerated.
+
+**Why.** `tests/test_regression_baseline.py` proves reproducibility by regenerating the four shipped
+baselines and demanding `git diff` come back empty. That is a byte-level assertion on pandas' CSV
+writer. It passes on pandas 3.0.6 (the version in the venv this repository was verified against), and
+it can fail on another version for reasons that have nothing to do with our code.
+
+**Cost.** If it fails, the message says "starter/baseline.py no longer reproduces the committed
+baseline CSVs", which points at the organisers' script and not at the dependency -- a misleading
+error, which is worse than a plain failure. Pinning the interpreter and the two libraries closes it;
+that is task E1, and it is a deliverable requirement anyway ("pinned dependencies").
