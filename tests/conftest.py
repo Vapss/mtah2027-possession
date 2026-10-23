@@ -21,12 +21,6 @@ def repo_root() -> Path:
     return REPO_ROOT
 
 
-@pytest.fixture(scope="session")
-def data_available() -> bool:
-    """The match bundle is gated; tests that need it skip instead of failing."""
-    return (REPO_ROOT / "data" / "tactical" / "BAR-ATH_tactical_atd.txt").is_file()
-
-
 @pytest.fixture
 def all_x() -> pd.DataFrame:
     """A legal but useless submission: every frame abstains."""

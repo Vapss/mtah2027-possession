@@ -9,14 +9,11 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from pathlib import Path
 
-import pytest
-
-ATD = Path("data/tactical/BAR-ATH_tactical_atd.txt")
+from _bundle import requires_bundle
 
 
-@pytest.mark.skipif(not ATD.is_file(), reason="match bundle not unpacked; nothing to regenerate")
+@requires_bundle
 def test_baseline_regenerates_committed_results(repo_root) -> None:
     subprocess.run(
         [sys.executable, "starter/baseline.py"],
@@ -38,7 +35,7 @@ def test_baseline_regenerates_committed_results(repo_root) -> None:
     )
 
 
-@pytest.mark.skipif(not ATD.is_file(), reason="match bundle not unpacked")
+@requires_bundle
 def test_regenerated_baselines_still_score_the_published_value(repo_root) -> None:
     """Regeneration plus scoring: the two halves of reproducibility in one test."""
     board = subprocess.run(
