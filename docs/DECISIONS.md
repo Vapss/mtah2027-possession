@@ -181,3 +181,48 @@ it can fail on another version for reasons that have nothing to do with our code
 baseline CSVs", which points at the organisers' script and not at the dependency -- a misleading
 error, which is worse than a plain failure. Pinning the interpreter and the two libraries closes it;
 that is task E1, and it is a deliverable requirement anyway ("pinned dependencies").
+
+---
+
+## 12. Acceptance criteria are a paired Δ`spellF1`, never `f1_D` or `macroF1`
+
+**Decided.** Every issue in the backlog is judged by the paired Δ`spellF1` of the submission with the
+change versus without it, with `n_discordant` reported. `macroF1` and `f1_D` are reported and never
+decide a merge.
+
+**Why.** Measured, and it is not close:
+
+| política | macroF1 | spellF1 |
+|---|---|---|
+| `smooth50` tal cual | 0.6207 | 0.3256 |
+| + `SET PIECES` como `D` | 0.6675 | 0.2732 |
+| + etiqueta previa en los huecos de balón | 0.5105 | 0.3805 |
+
+The first change *raises* the tie-break metric by 0.047 while *lowering* the ranked metric by 0.052.
+The issue as originally written (`SET PIECES` as `D`, acceptance = passes the format validator) would
+have merged a regression. Four issues were framed that way. `f1_D` and `spellF1` are in fact in
+reverse order across the four shipped baselines (`smooth125`: f1_D 0.146 / spellF1 0.4242; `raw`:
+f1_D 0.420 / spellF1 0.0378).
+
+**Cost.** Slower reviews: every PR needs a paired comparison and a discordant-pair count instead of a
+single number. And most local deltas land inside the noise band, so many PRs will honestly close as
+"no concluyente" -- which is the correct answer and an unsatisfying one.
+
+---
+
+## 13. The public slice cannot measure anything that depends on missing ball
+
+**Decided.** No decision about multi-camera fusion (`C2`) is taken on public-slice evidence. The
+artifact exists, is weighted **0** by default, and the technical document explains why it was
+dropped.
+
+**Why.** The graded 5 minutes are the easiest part of the match: **88.2%** of their frames have the
+ball detected, against **56.9%** over the full match (113,488 / 199,319). Fusion can only act where
+the tactical feed has no ball, so the public slice systematically under-samples the only regime where
+it applies, and the other 43% of the match has no public ground truth at all. On top of that,
+`P(sin balón | D) = 0.336`, so two thirds of dead-ball frames have the ball visible and are not a
+ball-recovery problem either.
+
+**Cost.** We are deliberately leaving a possible gain unexplored, and we cannot prove the decision
+right -- only that it cannot be proven locally. That is the honest state; the alternative is
+spending 25% of the effort on a signal no experiment in this repository can score.
