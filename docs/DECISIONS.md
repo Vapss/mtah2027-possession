@@ -92,3 +92,36 @@ covers the unpacked directory and not the archives, and it says nothing about de
 exports.
 
 **Cost.** Legitimate large files need an explicit decision. None are expected here.
+
+---
+
+## 7. Ingest decides by content hash, not by filename or flags
+
+**Decided.** `tools/ingest.py` treats a destination whose bytes already match the archive as
+*present*, never rewrites it -- even under `--force` -- and aborts the whole run before writing
+anything if a destination is tracked by git and differs.
+
+**Why.** The bundle ships a `README.md` that is byte-identical to the committed `data/README.md`, so
+a name-based rule would either skip a real asset or overwrite a tracked file. Re-running ingest on a
+good tree has to be a no-op that leaves mtimes alone, otherwise "did the data change?" becomes
+unanswerable. The preflight exists because a half-unpacked tree looks like a successful run.
+
+**Cost.** Proving "present" means hashing both sides: cheap for the 8 small assets, slower for the
+196 MB tracking file. Accepted, because a wrong overwrite costs more than a few seconds of I/O.
+
+---
+
+## 8. Smart Tagging intervals are half-open, unlike the reference loader
+
+**Decided.** `tools/smart_tagging.py` maps `<start>`/`<end>` to `round(seconds * 25)` and treats
+`end_frame` as exclusive: `[start_frame, end_frame)`.
+
+**Why.** Every other interval in this repository is half-open, and a mask that disagrees by one frame
+per instance is the kind of error that survives review. `starter/load_smart_tagging.py` is inclusive
+and is not imported: it is read-only reference code, it prints from a time-base check, and importing
+it would make our pipeline depend on a file the organisers may change. The one-frame difference is
+documented in the module docstring instead.
+
+**Cost.** Our counts differ from the reference by at most 59 frames on `SET PIECES`. Verified on the
+delivered file: union of the 59 intervals is 43,987 frames (22.1% of the match); `GOALS` covers
+16,503 frames (8.3%) because the annotator tags the whole goal sequence, not the restart.

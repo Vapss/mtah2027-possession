@@ -9,7 +9,7 @@ ARTIFACTS ?= artifacts
 SUBMISSIONS ?= submissions
 BASELINE ?= evaluation/results/baseline_smooth125.csv
 
-.PHONY: help venv install dev test lint fmt guard demo submission validate score score-baselines ci clean
+.PHONY: help venv install dev test lint fmt guard ingest demo submission validate score score-baselines ci clean
 
 help:  ## list the targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sed 's/:.*## /\t/' | expand -t22
@@ -36,6 +36,9 @@ fmt:  ## apply lint fixes and formatting
 
 guard:  ## refuse to proceed if licensed data or an oversized file is about to be committed
 	$(PY) tools/guard_data.py
+
+ingest:  ## unpack the download zips into data/ -- idempotent, never clobbers a tracked file
+	$(PY) tools/ingest.py
 
 demo:  ## turn the shipped baseline into an artifact, so the pipeline can be exercised with no data
 	mkdir -p $(ARTIFACTS)
