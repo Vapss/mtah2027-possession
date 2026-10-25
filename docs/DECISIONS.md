@@ -346,3 +346,29 @@ El comando no escribe submissions ni el ledger.
 **Coste.** La ventana pública solo tiene 17 posesiones. El score y el jackknife describen la
 sensibilidad de esa muestra; ni el delta local ni el p-valor diagnóstico prueban generalización al
 partido completo.
+
+---
+
+## 18. Emisión B5: identidad desde XML y evidencia física fija
+
+**Decidido.** `tools/emision.py` obtiene la pertenencia a equipo del XML ATD, usando el equipo local
+como `H` y el visitante como `A`. El metadata se debe mantener alineado con los 46 slots ordenados
+por id; se falla cerrado si cambia el formato o el reparto medido de 24/22. Smart Tagging `Team`
+sirve únicamente de ancla diagnóstica, nunca de etiqueta de entrenamiento.
+
+La emisión usa los cinco jugadores más cercanos con voto gaussiano y sigma fijo de **1,84 m**;
+mezcla 0,80 de voto local, 0,10 de distancia al centroide y 0,10 del recuento a 10 m. La rapidez
+derivada del balón solo reduce `confidence` cuando su desplazamiento por frame excede la escala
+espacial sigma; no predice `D`. `p_dead` tiene suelo 0,02 y suma 0,15 únicamente fuera del rectángulo
+del campo. No hay decodificación temporal.
+
+**Por qué.** El XML identifica los equipos de cada track: 24 locales (Barcelona) y 22 visitantes
+(Atletic Club); no hace falta inferir identidades por posición. El voto suave evita que una
+diferencia de pocos centímetros en `argmin` controle toda la etiqueta. Sigma viene de la distancia
+mediana medida balón→jugador y no se barre aquí; cualquier búsqueda de sigma o k pertenece al
+barrido pre-registrado de #22.
+
+**Coste.** La emisión sigue siendo frame-local y el `D` es deliberadamente débil. La accuracy de
+equipo solo se interpreta en frames vivos con balón observado; los frames sin balón tienen
+`confidence=0` y quedan para la combinación con otros artefactos o el decodificador #6. Las métricas
+del slice público son diagnóstico, no evidencia de generalización al partido completo.
