@@ -10,8 +10,10 @@ SUBMISSIONS ?= submissions
 BASELINE ?= evaluation/results/baseline_smooth125.csv
 GRAPHIFY ?= graphify
 GRAPH_OUT ?= graphify-out
+POSTPROCESS_INPUT ?= runs/argmin_baseline.csv
+POSTPROCESS_OUTPUT ?= runs/postprocessed.csv
 
-.PHONY: help venv install dev test lint fmt guard ingest demo submission validate score score-baselines graph graph-check ci clean
+.PHONY: help venv install dev test lint fmt guard ingest demo submission validate score score-baselines graph graph-check postprocess verify-b6 ci clean
 
 help:  ## list the targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sed 's/:.*## /\t/' | expand -t22
@@ -38,6 +40,12 @@ fmt:  ## apply lint fixes and formatting
 
 guard:  ## refuse to proceed if licensed data or an oversized file is about to be committed
 	$(PY) tools/guard_data.py
+
+postprocess:  ## apply the fixed #35 cleanup to a frame,label CSV
+	$(PY) tools/postprocess.py $(POSTPROCESS_INPUT) $(POSTPROCESS_OUTPUT)
+
+verify-b6:  ## reproduce B6 public evidence and compare hashes and metrics to its manifest
+	$(PY) tools/verify_b6.py
 
 ingest:  ## unpack the download zips into data/ -- idempotent, never clobbers a tracked file
 	$(PY) tools/ingest.py

@@ -465,3 +465,62 @@ Al seleccionar exactamente el 65% de los frames vivos con balón por confianza, 
 observada es 0,650, accuracy **0,856** y corte efectivo `confidence=0,664506`. Al corte numérico
 0,65, cobertura/accuracy es 0,677/0,848. Los 391 frames vivos sin balón se excluyen de la
 puntuación H/A; sus probabilidades H/A son uniformes y `confidence=0`.
+
+## 20. B6 post-procesa estructura con reglas fijas, sin podar por duración promedio
+
+**Decidido.** `tools/postprocess.py` aplica reglas deterministas a etiquetas H/A/D dentro de runs
+video-temporales explícitos. La CLI usa los dos bloques de mitad de `games.py` como intervalos
+semiabiertos; cualquier fila fuera de ellos se conserva. Dentro de cada run, X se rellena hacia
+adelante (y hacia atrás solo al inicio) para decidir la estructura, y luego se restaura en las
+mismas filas. Un run enteramente X queda igual.
+
+Los parámetros son fijos: los segmentos H/A de 1–14 frames se absorben; un D de 1–14 solo se
+absorbe si tiene dos vecinos inmediatos H/A iguales; y las interrupciones de 1–14 frames entre
+tramos del mismo equipo se fusionan mediante esas mismas reglas locales. Los tramos de 15 frames o
+más no se absorben ni se fusionan por esta regla. Si un segmento H/A corto no tiene vecino del mismo
+equipo, se absorbe al vecino de mayor duración original; en empate se consulta la distancia a 355
+frames y luego se prefiere el anterior. La referencia de 355 frames solo desempata; no elimina
+posesiones por ser cortas. Cada operación reduce el número de runs RLE y el bucle termina en punto
+fijo, con límite defensivo de `n_frames+1`. Cualquier otro umbral o variante corresponde al barrido
+pre-registrado de #22.
+
+**Baseline y resultado público.** El baseline se generó desde el commit de `dev` `d9e0bfb` con
+`python tools/emision.py --output artifacts/possession.csv`; H/A toma el argmin del artefacto y las
+filas con `confidence=0` se emiten como X. Los archivos reproducibles `runs/argmin_baseline.csv`,
+`runs/argmin_baseline_metrics.json` y `runs/postprocess_comparison.json` son locales e ignorados
+por Git. SHA-256 del baseline: `3a402d4236acb8deb25e71453792b7fa31c6bd5abbfa1cbf03e1e85d401ff701`.
+La comparación usa `tools/compare_submissions.py` y el scorer oficial sobre el slice público (17
+posesiones); no prueba generalización al partido completo. El baseline no contiene etiquetas D,
+por lo que la regla D es un no-op en esta comparación y solo se ejerce mediante sus pruebas
+sintéticas.
+
+| IoU | Antes TP/FP/FN | Antes P/R/F1 | Después TP/FP/FN | Después P/R/F1 |
+|---:|---:|---:|---:|---:|
+| 0,3 | 9 / 119 / 8 | 0,070 / 0,529 / 0,124 | 15 / 35 / 2 | 0,300 / 0,882 / 0,448 |
+| 0,5 | 2 / 126 / 15 | 0,016 / 0,118 / 0,028 | 4 / 46 / 13 | 0,080 / 0,235 / 0,119 |
+| 0,7 | 0 / 128 / 17 | 0 / 0 / 0 | 2 / 48 / 15 | 0,040 / 0,118 / 0,060 |
+
+El conteo baja de 128 a 50 predicciones, frente a 17 posesiones GT; `n_pred` es diagnóstico, no
+objetivo de aceptación. El delta medio pareado de `spellF1` es **+0,14094**, con `n_discordant=2`
+(2 victorias, 0 derrotas; test exacto de signos p=0,5, diagnóstico por posesión, no prueba del
+delta). La magnitud supera la referencia de ruido de ~0,04 del partido completo, pero el slice
+público solo tiene 17 posesiones y 2 discordancias; no establece generalización al partido completo.
+No se ajustaron parámetros después de medir.
+
+Reproducción (con el bundle táctico disponible):
+
+```bash
+python tools/emision.py --output artifacts/possession.csv
+python -c 'import pandas as pd; a=pd.read_csv("artifacts/possession.csv"); live=a.confidence.to_numpy()>0; labels=a[["p_home","p_away"]].idxmax(axis=1).map({"p_home":"H","p_away":"A"}); labels.loc[~live]="X"; pd.DataFrame({"frame":a.frame,"label":labels}).to_csv("runs/argmin_baseline.csv",index=False,lineterminator="\n")'
+python tools/postprocess.py runs/argmin_baseline.csv runs/postprocessed.csv
+python tools/compare_submissions.py runs/argmin_baseline.csv runs/postprocessed.csv --gt public
+make lint
+make test
+make guard
+```
+
+La evidencia de esos artefactos está fijada en
+`docs/evidence/b6_public_manifest.json`; `make verify-b6` reconstruye baseline, salida y
+comparación desde `artifacts/possession.csv`, y falla si cualquier versión, métrica o SHA-256 cambia.
+La regeneración de ese artefacto exige el bundle táctico licenciado. La diferencia entre 128 y la
+nota anterior de 129 se debe a la política explícita `confidence=0 → X`, no a un cambio de emisión.
