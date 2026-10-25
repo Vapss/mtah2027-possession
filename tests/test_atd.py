@@ -16,6 +16,7 @@ Two layers are tested separately.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import numpy as np
@@ -32,6 +33,7 @@ EXPECTED_SLOTS = 46
 EXPECTED_BALL_PRESENT = 113488
 PLAY_MEDIAN_PLAYERS = 22
 HALFTIME_MEDIAN_PLAYERS = 12
+HALFTIME_BALL_PRESENT = 18961
 FIRST_BALL_FRAME = 4192
 # The ball is detected from video frame 11187: two frames after the kickoff Smart Tagging marks at
 # 11185, which is the frame the tracking first reports it moving.
@@ -95,7 +97,24 @@ def test_presence_does_not_require_the_z_channel(tmp_path: Path) -> None:
     assert np.isnan(positions[0, 2])
 
 
-def test_an_absent_ball_is_all_nan(tmp_path: Path) -> None:
+def test_presence_requires_both_x_and_y(tmp_path: Path) -> None:
+    """A half position is not a position: 0 frames of the export disagree, so nothing is lost."""
+    path = write(tmp_path, record(1, ball=("0.5", "NaN", "0.5")))
+    _, present = atd.read(path, expected_frames=1).ball()
+
+    assert present.tolist() == [False]
+
+
+def test_a_height_without_a_position_is_not_a_ball(tmp_path: Path) -> None:
+    """11,062 frames of the delivered file carry z and no x/y; counting them would inflate 11%."""
+    path = write(tmp_path, record(1, ball=("NaN", "NaN", "0.5")))
+    positions, present = atd.read(path, expected_frames=1).ball()
+
+    assert present.tolist() == [False]
+    assert positions[0, 2] == 0.5
+
+
+def test_a_missing_ball_parses_as_nan(tmp_path: Path) -> None:
     path = write(tmp_path, record(1))
     positions, present = atd.read(path, expected_frames=1).ball()
 
@@ -114,6 +133,16 @@ def test_players_returns_the_slots_of_one_frame(tmp_path: Path) -> None:
     assert tracking.n_slots == 2
     assert np.allclose(tracking.players(1), [[0.4, 0.5, 0.6], [0.7, 0.8, 0.9]])
     assert np.isnan(tracking.players(0)[1]).all()
+
+
+def test_players_rejects_a_non_integer_frame(tmp_path: Path) -> None:
+    """`int(1.9)` and `int(True)` would both pick a frame; a float here is a caller bug."""
+    path = write(tmp_path, record(1), record(2))
+    tracking = atd.read(path, expected_frames=2)
+
+    for frame in (1.9, -0.5, "1", True):
+        with pytest.raises(TypeError, match="integer"):
+            tracking.players(frame)
 
 
 def test_players_rejects_a_frame_outside_the_file(tmp_path: Path) -> None:
@@ -143,11 +172,28 @@ def test_delivered_players_match_an_independent_parse(tracking: atd.Tracking) ->
 
 
 def test_delivered_fingerprint(tracking: atd.Tracking) -> None:
-    """The three invariants the reader asserts, measured here rather than trusted."""
+    """What `load()` already guarantees, restated so a loosened fingerprint is caught here."""
     assert len(tracking) == N_FRAMES
     assert tracking.n_slots == EXPECTED_SLOTS
     _, present = tracking.ball()
     assert int(present.sum()) == EXPECTED_BALL_PRESENT
+
+
+def test_delivered_halves_and_halftime(tracking: atd.Tracking) -> None:
+    """Per half, not just the match: 21 before the break and 22 after, and a ball at halftime.
+
+    `load()` only checks the match-wide figures, so these are the numbers a fingerprint would
+    smooth over if the export started dropping the second half.
+    """
+    counts = (~np.isnan(tracking.players_array[:, :, 0])).sum(axis=1)
+    blocks = games.half_video_blocks(games.GAME)
+    medians = [int(np.median(counts[first : last + 1])) for _, first, last in blocks]
+    _, present = tracking.ball()
+    halftime = present[blocks[0][2] + 1 : blocks[1][1]]
+
+    assert medians == [21, 22]
+    assert int(halftime.sum()) == HALFTIME_BALL_PRESENT
+    assert halftime.mean() > 0.9
 
 
 def test_ball_is_present_most_of_the_time_but_never_all_of_it(tracking: atd.Tracking) -> None:
@@ -224,6 +270,41 @@ def test_read_rejects_the_wrong_number_of_records(tmp_path: Path) -> None:
         atd.read(path, expected_frames=3)
 
 
+def test_read_rejects_slots_that_shift_the_coordinates(tmp_path: Path) -> None:
+    """One slot with four channels and one with two has the right total and the wrong meaning."""
+    path = write(tmp_path, "1:0.1,0.2,0.3,0.4;0.5,0.6:0.7,0.8,0.9\n")
+
+    with pytest.raises(atd.ATDError, match="slot 0.*4 channels"):
+        atd.read(path, expected_frames=1)
+
+
+def test_read_accepts_crlf_and_a_missing_final_newline(tmp_path: Path) -> None:
+    """Two ways a copy of the file differs without being a different export."""
+    path = tmp_path / "atd.txt"
+    path.write_bytes(b"1:0.1,0.2,0.3:0.5,0.5,NaN\r\n2:0.4,0.5,0.6:0.6,0.6,NaN")
+    tracking = atd.read(path, expected_frames=2)
+
+    assert np.allclose(tracking.players(1)[0], [0.4, 0.5, 0.6])
+    _, present = tracking.ball()
+    assert present.tolist() == [True, True]
+
+
+def test_read_rejects_a_file_that_is_not_ascii(tmp_path: Path) -> None:
+    """A BOM is the usual sign of the wrong file; a decode traceback is the wrong way to say it."""
+    path = tmp_path / "bom.txt"
+    path.write_bytes(b"\xef\xbb\xbf1:0,0,0:0,0,0\n")
+
+    with pytest.raises(atd.ATDError, match="ASCII"):
+        atd.read(path, expected_frames=1)
+
+
+def test_read_rejects_a_non_finite_coordinate(tmp_path: Path) -> None:
+    path = write(tmp_path, record(1, ball=("inf", "0.5", "NaN")))
+
+    with pytest.raises(atd.ATDError, match="non-finite"):
+        atd.read(path, expected_frames=1)
+
+
 def test_read_rejects_a_coordinate_that_is_not_a_number(tmp_path: Path) -> None:
     path = write(tmp_path, record(1, players=[("abc", "0.2", "0.3")]))
 
@@ -236,6 +317,49 @@ def test_read_rejects_a_ball_with_the_wrong_number_of_channels(tmp_path: Path) -
 
     with pytest.raises(atd.ATDError, match="record 1"):
         atd.read(path, expected_frames=1)
+
+
+def test_load_refuses_a_file_that_does_not_match_the_export(tmp_path: Path, monkeypatch) -> None:
+    """A three-record file is structurally valid and still not the delivered tactical export."""
+    file = write(tmp_path, record(1, slots=2), record(2, slots=2), record(3, slots=2))
+    monkeypatch.setattr(atd, "path", lambda source=games.DEFAULT_SOURCE: file)
+    monkeypatch.setattr(games, "source_frames", lambda *args, **kwargs: 3)
+    atd._load.cache_clear()
+
+    with pytest.raises(atd.ATDError, match="expected 46"):
+        atd.load()
+
+
+def test_load_reuses_the_parsed_file_and_notices_a_rewrite(tmp_path: Path, monkeypatch) -> None:
+    """Cached per file identity: a rewrite in a long-lived process must not be served stale."""
+    file = write(tmp_path, record(1, slots=2), record(2, slots=2))
+    monkeypatch.setattr(atd, "path", lambda source=games.DEFAULT_SOURCE: file)
+    monkeypatch.setattr(games, "source_frames", lambda *args, **kwargs: 2)
+    monkeypatch.setattr(atd, "fingerprint_problems", lambda *args, **kwargs: [])
+    atd._load.cache_clear()
+
+    first = atd.load()
+    assert atd.load() is first
+
+    # Same path, different bytes and a later timestamp: what `make ingest --force` does.
+    stamp = file.stat().st_mtime_ns
+    file.write_text(record(1, slots=2, ball=("0.9", "0.9", "NaN")) + record(2, slots=2))
+    os.utime(file, ns=(stamp + 10**9, stamp + 10**9))
+    rewritten = atd.load()
+
+    assert rewritten is not first
+    assert np.allclose(rewritten.ball()[0][0, :2], [0.9, 0.9])
+
+
+def test_cli_reports_a_bad_file_without_a_traceback(
+    tmp_path: Path, monkeypatch, capsys: pytest.CaptureFixture
+) -> None:
+    file = tmp_path / "broken.txt"
+    file.write_text("1:0,0,0\n", encoding="ascii")
+    monkeypatch.setattr(atd, "path", lambda source=games.DEFAULT_SOURCE: file)
+
+    assert atd.main([]) == 1
+    assert "expected 3" in capsys.readouterr().err
 
 
 def test_cli_reports_the_fingerprint(tracking: atd.Tracking, capsys: pytest.CaptureFixture) -> None:

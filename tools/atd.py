@@ -16,7 +16,8 @@ recording.
 
 Presence is `not NaN` on **x and y**, never on all three channels: only 9,909 of those 113,488
 present balls carry a z, so requiring three would report the ball missing 95% of the time while it
-is plainly there.
+is plainly there. A z on its own is not a detection either -- 11,062 frames of this export have a
+ball height and no position -- so the mask ignores the third channel in both directions.
 
 What is asserted
 ----------------
@@ -35,7 +36,9 @@ because every downstream number would otherwise be silently wrong.
 from __future__ import annotations
 
 import argparse
+import operator
 import sys
+from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -96,13 +99,17 @@ class Tracking:
     through `players()` would corrupt every other caller in the process.
     """
 
-    __slots__ = ("_ball", "_frames", "_players")
+    __slots__ = ("_ball", "_frames", "_players", "_present")
 
     def __init__(self, players: np.ndarray, ball: np.ndarray) -> None:
-        for array in (players, ball):
+        # The mask is computed once: callers ask for it per frame, and recomputing 199k booleans at
+        # a time turns an accessor into a hot loop (0.2 ms each, 43 s over a match).
+        present = ~np.isnan(ball[:, 0]) & ~np.isnan(ball[:, 1])
+        for array in (players, ball, present):
             array.flags.writeable = False
         self._players = players
         self._ball = ball
+        self._present = present
         self._frames = np.arange(len(players), dtype=np.int64)
         self._frames.flags.writeable = False
 
@@ -114,7 +121,7 @@ class Tracking:
 
     @property
     def n_slots(self) -> int:
-        """How many tracked objects each record carries (players, plus the ball as a field)."""
+        """Player slots per record. The ball is a separate field, not one of these."""
         return int(self._players.shape[1])
 
     @property
@@ -127,16 +134,20 @@ class Tracking:
         return self._frames
 
     def ball(self) -> tuple[np.ndarray, np.ndarray]:
-        """Ball positions `(frames, 3)` and a `(frames,)` presence mask.
+        """Ball positions `(frames, 3)` and a read-only `(frames,)` presence mask.
 
-        Present means x and y are known -- see the module docstring for why z cannot be required.
-        An absent ball is all-`NaN` in the position table.
+        Present means x and y are known -- see the module docstring for why z cannot be required or
+        believed. An absent ball has `NaN` in x and y; its z is whatever the export left there.
         """
-        return self._ball, ~np.isnan(self._ball[:, 0])
+        return self._ball, self._present
 
     def players(self, frame: int) -> np.ndarray:
         """The slots of one video frame, `(slots, 3)`, `NaN` where nothing is tracked."""
-        index = int(frame)
+        # `operator.index` and not `int()`: int(1.9) and int(True) would silently pick a frame,
+        # and a float that reaches here is a bug in the caller, not a rounding question.
+        if isinstance(frame, bool):
+            raise TypeError(f"video frame must be an integer, not {frame!r}")
+        index = operator.index(frame)
         if not 0 <= index < len(self):
             raise IndexError(
                 f"video frame {index} is outside this file (0..{len(self) - 1}); "
@@ -150,9 +161,27 @@ def path(source: str = games.DEFAULT_SOURCE) -> Path:
     return Path(games.asset_paths(source=source)["atd_raw"])
 
 
+@contextmanager
+def _open(file: Path):
+    """Open a tracking file as ASCII, turning a decode or permission error into an ATDError.
+
+    The delivered files are ASCII; a BOM or a stray byte means the wrong file, and a traceback
+    from deep inside a reader is a worse way to learn that than a message that names the file.
+    The decode error surfaces while reading, not at `open()`, which is why this is a context
+    manager and not a factory.
+    """
+    try:
+        with file.open("r", encoding="ascii") as handle:
+            yield handle
+    except UnicodeDecodeError as problem:
+        raise ATDError(file, [f"is not ASCII ({problem}) -- wrong file, or a BOM"]) from None
+    except OSError as problem:
+        raise ATDError(file, [f"cannot be read ({problem})"]) from None
+
+
 def _scan(path: Path) -> tuple[int, int]:
     """Record count and slot count, from a single cheap pass that never builds an array."""
-    with path.open("r", encoding="ascii") as handle:
+    with _open(path) as handle:
         first = handle.readline()
         if not first:
             raise ATDError(path, ["the file is empty"])
@@ -173,11 +202,15 @@ def _scan(path: Path) -> tuple[int, int]:
 def _numbers(cell: str, frame_id: int, what: str, file: Path) -> np.ndarray:
     """Parse one comma-separated group, naming the record and the file when it does not parse."""
     try:
-        return np.fromstring(cell, sep=",", dtype=np.float64)
+        values = np.fromstring(cell, sep=",", dtype=np.float64)
     except ValueError as problem:
         raise ATDError(
             file, [f"record {frame_id}: {what} is not a list of numbers ({problem})"]
         ) from None
+    # `inf` and `1e999` parse happily and would then read as "present" in every downstream mask.
+    if np.isinf(values).any():
+        raise ATDError(file, [f"record {frame_id}: {what} contains a non-finite coordinate"])
+    return values
 
 
 def read(file: str | Path, expected_frames: int | None = None) -> Tracking:
@@ -203,7 +236,7 @@ def read(file: str | Path, expected_frames: int | None = None) -> Tracking:
     players = np.full((records, slots, CHANNELS), np.nan, dtype=np.float64)
     ball = np.full((records, CHANNELS), np.nan, dtype=np.float64)
 
-    with file.open("r", encoding="ascii") as handle:
+    with _open(file) as handle:
         for index, line in enumerate(handle):
             frame_id = index + 1
             fields = line.rstrip("\n").split(":")
@@ -231,6 +264,18 @@ def read(file: str | Path, expected_frames: int | None = None) -> Tracking:
                     [
                         f"record {frame_id} has {len(cells)} player slots, expected {slots} "
                         "(the count on record 1)"
+                    ],
+                )
+            # Per cell, not the total: one slot with four channels and another with two sums to
+            # the same size and would shift every coordinate after it by one, silently.
+            short = [i for i, cell in enumerate(cells) if cell.count(",") != CHANNELS - 1]
+            if short:
+                slot = short[0]
+                raise ATDError(
+                    file,
+                    [
+                        f"record {frame_id}: player slot {slot} has "
+                        f"{cells[slot].count(',') + 1} channels, expected {CHANNELS}"
                     ],
                 )
             flat = _numbers(fields[1].replace(";", ","), frame_id, "a player slot", file)
@@ -264,9 +309,12 @@ def fingerprint_problems(tracking: Tracking, source: str = games.DEFAULT_SOURCE)
     These are fingerprints, not ideals: they say "this is the file the rest of the pipeline was
     measured against", which is exactly the assumption every downstream number rests on.
     """
-    expected = FINGERPRINTS.get(source)
-    if expected is None:
-        return []
+    if source not in FINGERPRINTS:
+        raise KeyError(
+            f"no fingerprint for source {source!r}; have {sorted(FINGERPRINTS)}. "
+            "A source without one cannot be validated, which is worse than not loading it."
+        )
+    expected = FINGERPRINTS[source]
 
     problems = []
     if tracking.n_slots != expected.slots:
@@ -314,7 +362,12 @@ def _halves_masks(n_frames: int) -> tuple[np.ndarray, np.ndarray]:
 
 
 @lru_cache(maxsize=2)
-def _load(file: str, source: str, expected_frames: int) -> Tracking:
+def _load(file: str, source: str, expected_frames: int, stamp: int) -> Tracking:
+    """Parse, validate and cache. `stamp` is the file's identity, so a rewrite re-reads it.
+
+    Caching by path alone would serve a stale array after `make ingest --force` replaced the file
+    in a long-lived process, and the numbers would look fine.
+    """
     tracking = read(file, expected_frames=expected_frames)
     problems = fingerprint_problems(tracking, source)
     if problems:
@@ -330,7 +383,10 @@ def load(source: str = games.DEFAULT_SOURCE) -> Tracking:
     the text itself.
     """
     file = path(source).resolve()
-    return _load(str(file), source, games.source_frames(source))
+    if not file.is_file():
+        raise ATDError(file, ["no such file -- see DATA.md, or point MTAH_DATA_DIR at the bundle"])
+    stat = file.stat()
+    return _load(str(file), source, games.source_frames(source), stat.st_mtime_ns ^ stat.st_size)
 
 
 def summary(tracking: Tracking) -> list[tuple[str, str]]:
@@ -361,7 +417,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    tracking = load(args.source)
+    try:
+        tracking = load(args.source)
+    except ATDError as problem:
+        print(problem, file=sys.stderr)
+        return 1
     print(f"{games.GAME} {args.source}  {path(args.source)}")
     for label, value in summary(tracking):
         print(f"  {label:<28} {value}")

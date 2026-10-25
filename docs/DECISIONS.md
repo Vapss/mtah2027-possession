@@ -236,7 +236,9 @@ la estructura (ids `1..N` consecutivos, `N = games.source_frames()`, 46 slots ×
 en el último campo), al cargar compara la huella medida de la entrega: 113.488 frames con balón
 presente, mediana de 22 slots ocupados en juego y 12 en el descanso.
 
-La presencia del balón se decide por `x` e `y`, nunca exigiendo los tres canales.
+La presencia del balón se decide por `x` e `y`, y la forma se valida **por slot**, no por el total
+del registro: un slot con cuatro canales y otro con dos suma lo mismo y desplazaría en silencio todas
+las coordenadas siguientes.
 
 **Por qué.** Leer el balón del primer campo de cada línea da **40,0%** de presencia y un hueco
 fantasma de 52.239 frames; del último da los 113.488 / 199.319 (56,9%) correctos. Y exigir los tres
