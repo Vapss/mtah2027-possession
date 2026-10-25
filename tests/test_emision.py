@@ -45,8 +45,10 @@ def test_emission_sums_to_one_and_dead_probability_is_weak() -> None:
     assert artifact.p_dead.iloc[3] == pytest.approx(
         emision.P_DEAD_FLOOR + emision.P_DEAD_OUT_OF_BOUNDS
     )
-    assert artifact.confidence.equals(artifact[["p_home", "p_away"]].max(axis=1))
-    assert artifact.confidence.iloc[2] == pytest.approx(0.49)  # uniform H/A plus the D floor
+    expected_confidence = artifact[["p_home", "p_away"]].max(axis=1) * result.ball_present
+    assert artifact.confidence.equals(expected_confidence)
+    assert artifact.confidence.iloc[2] == 0.0  # no observed ball: this emission abstains
+    assert artifact.p_home.iloc[2] == pytest.approx(0.49)  # uniform H/A plus the D floor
     assert np.isnan(result.ball_speed_mps[0])
     assert result.ball_speed_mps[1] > 0
     assert np.isnan(result.ball_speed_mps[2:]).all()
@@ -109,5 +111,6 @@ def test_public_metrics_exclude_ungraded_frames_and_missing_ball_from_team_accur
     assert report["team_accuracy_h_a"] is None
     assert "absent-ball frames are H/A-uniform" in report["team_accuracy_scope"]
     assert report["team_log_loss_h_a"] is None
+    assert report["team_log_loss_h_a_with_dead_mass"] is None
     assert set(report["log_loss_by_actual_class"]) == {"H", "A", "D"}
     assert set(report["brier_one_vs_rest_by_class"]) == {"H", "A", "D"}

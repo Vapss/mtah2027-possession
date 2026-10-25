@@ -200,7 +200,7 @@ def emit(tracking: atd.Tracking, teams: TeamSlots) -> Emission:
     p_away = (1.0 - p_dead) * team_away_p
 
     speed = _ball_speed(ball_xy_m, present)
-    confidence = np.maximum(p_home, p_away)
+    confidence = np.maximum(p_home, p_away) * present.astype(float)
 
     artifact = pd.DataFrame(
         {
@@ -279,9 +279,10 @@ def public_metrics(
     team_truth = y[live_ball_present]
     team_probabilities_observed = team_probabilities[live_ball_present]
     confidence_observed = artifact["confidence"].to_numpy(dtype=float)[scored][live_ball_present]
+    raw_team_probabilities_observed = probabilities[live_ball_present, :2]
     predicted_observed = team_probabilities_observed.argmax(axis=1)
     selective_curve = []
-    for threshold in (0.55, 0.60, 0.65, 0.70, 0.80):
+    for threshold in (0.55, 0.60, 0.65, 0.70, 0.80, 0.90, 0.95):
         covered = confidence_observed >= threshold
         selective_curve.append(
             {
@@ -317,7 +318,7 @@ def public_metrics(
         "n_live_team_frames_without_ball": int(live_ball_absent.sum()),
         "team_accuracy_h_a": accuracy,
         "team_accuracy_scope": (
-            "live frames with observed ball; absent-ball frames are H/A-uniform and not scored"
+            "live frames with observed ball; absent-ball frames are H/A-uniform, confidence=0"
         ),
         "team_log_loss_h_a": (
             float(
@@ -332,6 +333,35 @@ def public_metrics(
             if len(team_truth)
             else None
         ),
+        "team_log_loss_h_a_with_dead_mass": (
+            float(
+                -np.log(
+                    np.clip(
+                        raw_team_probabilities_observed[np.arange(len(team_truth)), team_truth],
+                        1e-12,
+                        1.0,
+                    )
+                ).mean()
+            )
+            if len(team_truth)
+            else None
+        ),
+        "team_log_loss_raw_by_actual_team": {
+            name: (
+                float(
+                    -np.log(
+                        np.clip(
+                            raw_team_probabilities_observed[team_truth == code, code],
+                            1e-12,
+                            1.0,
+                        )
+                    ).mean()
+                )
+                if np.any(team_truth == code)
+                else None
+            )
+            for code, name in ((pm.H, "H"), (pm.A, "A"))
+        },
         "team_brier_one_vs_rest_h_a": (
             float(
                 np.mean(np.square(team_probabilities_observed - np.eye(2, dtype=float)[team_truth]))
