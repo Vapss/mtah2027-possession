@@ -23,7 +23,7 @@ import possession_metrics as pm  # noqa: E402
 
 from tools import atd, emision  # noqa: E402
 
-THRESHOLDS = (0.55, 0.60, 0.70, 0.80)
+THRESHOLDS = (0.55, 0.60, 0.65, 0.70, 0.80)
 TEMPERATURE_BOUNDS = (0.01, 100.0)
 
 
@@ -161,7 +161,7 @@ def run(gt_path: str | Path | None = None) -> dict[str, Any]:
     d_away_eval = d_away[eligible]
     temperature = _fit_temperature(d_home_eval, d_away_eval, truth)
     baseline = _softmax_nearest(d_home_eval, d_away_eval, temperature)
-    nearest_confidence = np.exp(-np.minimum(d_home_eval, d_away_eval) / emision.SIGMA_M)
+    nearest_confidence = baseline.max(axis=1) * (1.0 - base.artifact["p_dead"].to_numpy()[eligible])
 
     # The three candidate variants are exactly those written in DECISIONS.md section 19.
     nearest = _softmax_nearest(d_home_eval, d_away_eval, emision.SIGMA_M)
@@ -183,8 +183,12 @@ def run(gt_path: str | Path | None = None) -> dict[str, Any]:
     )
     vote3_context = np.column_stack(
         (
-            0.80 * vote3[0] + 0.10 * centroid_home + 0.10 * count_home,
-            0.80 * vote3[1] + 0.10 * centroid_away + 0.10 * count_away,
+            emision.VOTE_MIX[0] * vote3[0]
+            + emision.VOTE_MIX[1] * centroid_home
+            + emision.VOTE_MIX[2] * count_home,
+            emision.VOTE_MIX[0] * vote3[1]
+            + emision.VOTE_MIX[1] * centroid_away
+            + emision.VOTE_MIX[2] * count_away,
         )
     )
     vote3_context /= vote3_context.sum(axis=1, keepdims=True)
@@ -206,6 +210,18 @@ def run(gt_path: str | Path | None = None) -> dict[str, Any]:
         )
     )
     no_density /= no_density.sum(axis=1, keepdims=True)
+    full_context = np.column_stack(
+        (
+            emision.VOTE_MIX[0] * v5[0]
+            + emision.VOTE_MIX[1] * centroid_home
+            + emision.VOTE_MIX[2] * count_home,
+            emision.VOTE_MIX[0] * v5[1]
+            + emision.VOTE_MIX[1] * centroid_away
+            + emision.VOTE_MIX[2] * count_away,
+        )
+    )
+    full_context /= full_context.sum(axis=1, keepdims=True)
+    confidence5 = _confidence(weights5.sum(axis=1), base.ball_speed_mps)
 
     base_probabilities = base.artifact[["p_home", "p_away"]].to_numpy(copy=True)
     base_probabilities /= base_probabilities.sum(axis=1, keepdims=True)
@@ -223,12 +239,15 @@ def run(gt_path: str | Path | None = None) -> dict[str, Any]:
         "b_top3_vote": _metrics(vote3_context[eligible], vote3_conf[eligible], output_scale, truth),
         "c_top5_centroid_no_density": _metrics(
             no_density[eligible],
-            base.artifact["confidence"].to_numpy()[eligible],
+            confidence5[eligible],
             output_scale,
             truth,
         ),
+        "d_top5_full_context_negative_control": _metrics(
+            full_context[eligible], confidence5[eligible], output_scale, truth
+        ),
     }
-    rows["d_current_top5_full_context"] = _metrics(
+    rows["delivered_calibrated_argmin"] = _metrics(
         base_probabilities[eligible],
         base.artifact["confidence"].to_numpy()[eligible],
         output_scale,

@@ -37,6 +37,8 @@ SIGMA_M = 1.84
 NEAREST_K = 5
 CONTEXT_RADIUS_M = 10.0
 VOTE_MIX = (0.80, 0.10, 0.10)  # nearest-player vote, team centroid, nearby-player count
+# Frozen in-sample H/A log-loss calibration on the 5,640 public live frames with observed ball.
+EMISSION_TEMPERATURE_M = 2.857386876102962
 P_DEAD_FLOOR = 0.02
 P_DEAD_OUT_OF_BOUNDS = 0.15
 
@@ -119,16 +121,6 @@ def team_slots(xml_path: str | Path | None = None) -> TeamSlots:
     return TeamSlots(slots, teams[local_id], teams[visiting_id], counts[0], counts[1])
 
 
-def _normalise_pair(first: np.ndarray, second: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    total = first + second
-    valid = total > 0
-    a = np.full(total.shape, 0.5, dtype=float)
-    b = np.full(total.shape, 0.5, dtype=float)
-    a[valid] = first[valid] / total[valid]
-    b[valid] = second[valid] / total[valid]
-    return a, b
-
-
 def _ball_speed(ball_xy_m: np.ndarray, present: np.ndarray) -> np.ndarray:
     """Frame-to-frame ball speed; gaps and half-time are never bridged."""
     speed = np.full(len(ball_xy_m), np.nan, dtype=float)
@@ -160,19 +152,12 @@ def emit(tracking: atd.Tracking, teams: TeamSlots) -> Emission:
         row_distances[~player_present[valid_rows]] = np.inf
         distances[valid_rows] = row_distances
 
-    k = min(NEAREST_K, tracking.n_slots)
-    nearest_indices = np.argpartition(distances, kth=k - 1, axis=1)[:, :k]
-    nearest_distances = np.take_along_axis(distances, nearest_indices, axis=1)
-    vote_weights = np.exp(-0.5 * np.square(nearest_distances / SIGMA_M))
-    nearest_teams = teams.codes[nearest_indices]
-    vote_home = np.sum(vote_weights * (nearest_teams == 0), axis=1)
-    vote_away = np.sum(vote_weights * (nearest_teams == 1), axis=1)
-    vote_home_p, vote_away_p = _normalise_pair(vote_home, vote_away)
+    nearest = np.min(distances, axis=1)
+    nearest[~present] = np.nan
 
     near = present[:, None] & (distances <= CONTEXT_RADIUS_M)
     home_near = np.sum(near & (teams.codes[None, :] == 0), axis=1)
     away_near = np.sum(near & (teams.codes[None, :] == 1), axis=1)
-    count_home_p, count_away_p = _normalise_pair(home_near, away_near)
 
     centroids = np.full((len(present), 2, 2), np.nan, dtype=float)
     centroid_distances = np.full((len(present), 2), np.nan, dtype=float)
@@ -185,39 +170,37 @@ def emit(tracking: atd.Tracking, teams: TeamSlots) -> Emission:
         centroid_distances[has_players & present, side] = np.linalg.norm(
             centroids[has_players & present, side] - ball_xy_m[has_players & present], axis=1
         )
-    centroid_support = np.exp(-0.5 * np.square(centroid_distances / CONTEXT_RADIUS_M))
-    centroid_support[~np.isfinite(centroid_support)] = 0.0
-    centroid_home_p, centroid_away_p = _normalise_pair(
-        centroid_support[:, 0], centroid_support[:, 1]
+    # The preregistered soft-vote/context hypothesis lost to argmin. The delivered emission is
+    # the same nearest-track classifier with its in-sample calibrated softmax temperature.
+    team_distances = np.column_stack(
+        (
+            np.min(np.where(teams.codes[None, :] == 0, distances, np.inf), axis=1),
+            np.min(np.where(teams.codes[None, :] == 1, distances, np.inf), axis=1),
+        )
     )
-
-    team_home_p = (
-        VOTE_MIX[0] * vote_home_p + VOTE_MIX[1] * centroid_home_p + VOTE_MIX[2] * count_home_p
-    )
-    team_away_p = (
-        VOTE_MIX[0] * vote_away_p + VOTE_MIX[1] * centroid_away_p + VOTE_MIX[2] * count_away_p
-    )
-    team_home_p[~present] = 0.5
-    team_away_p[~present] = 0.5
+    team_home_p = np.full(len(present), 0.5, dtype=float)
+    team_away_p = np.full(len(present), 0.5, dtype=float)
+    has_home = np.isfinite(team_distances[:, 0])
+    has_away = np.isfinite(team_distances[:, 1])
+    both = has_home & has_away & present
+    if both.any():
+        logits = -team_distances[both] / EMISSION_TEMPERATURE_M
+        logits -= logits.max(axis=1, keepdims=True)
+        probabilities = np.exp(logits)
+        probabilities /= probabilities.sum(axis=1, keepdims=True)
+        team_home_p[both], team_away_p[both] = probabilities.T
+    home_only = has_home & ~has_away & present
+    away_only = has_away & ~has_home & present
+    team_home_p[home_only], team_away_p[home_only] = 1.0, 0.0
+    team_home_p[away_only], team_away_p[away_only] = 0.0, 1.0
 
     ball_out = present & ((ball[:, 0] < 0) | (ball[:, 0] > 1) | (ball[:, 1] < 0) | (ball[:, 1] > 1))
     p_dead = P_DEAD_FLOOR + P_DEAD_OUT_OF_BOUNDS * ball_out.astype(float)
     p_home = (1.0 - p_dead) * team_home_p
     p_away = (1.0 - p_dead) * team_away_p
 
-    nearest = np.min(distances, axis=1)
-    nearest[~present] = np.nan
     speed = _ball_speed(ball_xy_m, present)
-    evidence_mass = vote_home + vote_away
-    track_support = 1.0 - np.exp(-2.0 * evidence_mass)
-    # A ball moving more than the emission's spatial scale in one frame makes the frame-local
-    # association less reliable. This factor changes confidence only, never the H/A label.
-    speed_scale = SIGMA_M * FPS
-    speed_factor = np.ones(len(speed), dtype=float)
-    measured_speed = np.isfinite(speed)
-    speed_factor[measured_speed] = np.exp(-0.5 * np.square(speed[measured_speed] / speed_scale))
-    confidence = track_support * speed_factor
-    confidence[~present] = 0.0
+    confidence = np.maximum(p_home, p_away)
 
     artifact = pd.DataFrame(
         {
@@ -291,6 +274,41 @@ def public_metrics(
         )
         target = (y == code).astype(float)
         class_brier[name] = float(np.mean(np.square(probabilities[:, code] - target)))
+    team_probabilities = probabilities[:, :2].copy()
+    team_probabilities /= team_probabilities.sum(axis=1, keepdims=True)
+    team_truth = y[live_ball_present]
+    team_probabilities_observed = team_probabilities[live_ball_present]
+    confidence_observed = artifact["confidence"].to_numpy(dtype=float)[scored][live_ball_present]
+    predicted_observed = team_probabilities_observed.argmax(axis=1)
+    selective_curve = []
+    for threshold in (0.55, 0.60, 0.65, 0.70, 0.80):
+        covered = confidence_observed >= threshold
+        selective_curve.append(
+            {
+                "threshold": threshold,
+                "n_covered": int(covered.sum()),
+                "coverage": float(covered.mean()) if len(covered) else 0.0,
+                "accuracy": (
+                    float(np.mean(predicted_observed[covered] == team_truth[covered]))
+                    if covered.any()
+                    else None
+                ),
+            }
+        )
+    target_count = int(np.ceil(0.65 * len(team_truth)))
+    top_confidence = np.argsort(-confidence_observed, kind="stable")[:target_count]
+    coverage_at_65 = {
+        "target_coverage": 0.65,
+        "coverage": float(len(top_confidence) / len(team_truth)) if len(team_truth) else 0.0,
+        "confidence_threshold": (
+            float(confidence_observed[top_confidence[-1]]) if len(top_confidence) else None
+        ),
+        "accuracy": (
+            float(np.mean(predicted_observed[top_confidence] == team_truth[top_confidence]))
+            if len(top_confidence)
+            else None
+        ),
+    }
     return {
         "ground_truth": str(source),
         "n_scored_frames": int(scored.sum()),
@@ -299,8 +317,30 @@ def public_metrics(
         "n_live_team_frames_without_ball": int(live_ball_absent.sum()),
         "team_accuracy_h_a": accuracy,
         "team_accuracy_scope": (
-            "live frames with observed ball; absent-ball frames abstain (confidence=0)"
+            "live frames with observed ball; absent-ball frames are H/A-uniform and not scored"
         ),
+        "team_log_loss_h_a": (
+            float(
+                -np.log(
+                    np.clip(
+                        team_probabilities_observed[np.arange(len(team_truth)), team_truth],
+                        1e-12,
+                        1.0,
+                    )
+                ).mean()
+            )
+            if len(team_truth)
+            else None
+        ),
+        "team_brier_one_vs_rest_h_a": (
+            float(
+                np.mean(np.square(team_probabilities_observed - np.eye(2, dtype=float)[team_truth]))
+            )
+            if len(team_truth)
+            else None
+        ),
+        "selective_prediction_curve": selective_curve,
+        "selective_prediction_at_65pct_coverage": coverage_at_65,
         "log_loss_by_actual_class": class_loss,
         "brier_one_vs_rest_by_class": class_brier,
     }
@@ -369,8 +409,8 @@ def generate(output: str | Path, metadata: str | Path | None = None) -> dict[str
         "public_metrics": public_metrics(result.artifact, result.ball_present),
         "smart_tagging_anchor": smart_tagging_anchor(result, teams),
         "profile": {
-            "sigma_m": SIGMA_M,
-            "nearest_k": NEAREST_K,
+            "method": "nearest-track argmin with in-sample calibrated softmax temperature",
+            "temperature_m": EMISSION_TEMPERATURE_M,
             "ball_present_fraction": float(result.ball_present.mean()),
             "median_nearest_player_distance_m": float(np.nanmedian(result.nearest_distance_m)),
             "median_ball_speed_mps": float(np.nanmedian(result.ball_speed_mps)),

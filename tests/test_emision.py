@@ -45,7 +45,8 @@ def test_emission_sums_to_one_and_dead_probability_is_weak() -> None:
     assert artifact.p_dead.iloc[3] == pytest.approx(
         emision.P_DEAD_FLOOR + emision.P_DEAD_OUT_OF_BOUNDS
     )
-    assert artifact.confidence.iloc[2] == 0.0  # no ball: abstain from this job's opinion
+    assert artifact.confidence.equals(artifact[["p_home", "p_away"]].max(axis=1))
+    assert artifact.confidence.iloc[2] == pytest.approx(0.49)  # uniform H/A plus the D floor
     assert np.isnan(result.ball_speed_mps[0])
     assert result.ball_speed_mps[1] > 0
     assert np.isnan(result.ball_speed_mps[2:]).all()
@@ -75,6 +76,7 @@ def test_metadata_team_and_smart_tagging_anchor_are_consistent() -> None:
 def test_fixed_emission_constants_are_not_a_search_grid() -> None:
     assert emision.SIGMA_M == 1.84
     assert emision.NEAREST_K == 5
+    assert pytest.approx(2.857386876102962) == emision.EMISSION_TEMPERATURE_M
     assert emision.P_DEAD_FLOOR < 0.05
     assert emision.P_DEAD_OUT_OF_BOUNDS < 0.25
 
@@ -85,6 +87,7 @@ def test_public_metrics_exclude_ungraded_frames_and_missing_ball_from_team_accur
             "p_home": [0.8, 0.1, 0.1, 0.8],
             "p_away": [0.1, 0.8, 0.1, 0.1],
             "p_dead": [0.1, 0.1, 0.8, 0.1],
+            "confidence": [0.8, 0.8, 0.1, 0.8],
         }
     )
     gt_path = emision.REPO_ROOT / "evaluation/gt/BAR-ATH_possession_gt_public.csv"
@@ -93,7 +96,7 @@ def test_public_metrics_exclude_ungraded_frames_and_missing_ball_from_team_accur
     # The public file is full-length, so build the ordinary artifact shape used by the metric.
     repeated = pd.DataFrame(
         np.tile(artifact.to_numpy(), (games.source_frames() // 4 + 1, 1))[: games.source_frames()],
-        columns=["p_home", "p_away", "p_dead"],
+        columns=["p_home", "p_away", "p_dead", "confidence"],
     )
     repeated.insert(0, "frame", np.arange(games.source_frames()))
     ball_present = np.zeros(games.source_frames(), dtype=bool)
@@ -104,6 +107,7 @@ def test_public_metrics_exclude_ungraded_frames_and_missing_ball_from_team_accur
     assert report["n_live_team_frames_with_ball"] == 0
     assert report["n_live_team_frames_without_ball"] == report["n_live_team_frames"]
     assert report["team_accuracy_h_a"] is None
-    assert "absent-ball frames abstain" in report["team_accuracy_scope"]
+    assert "absent-ball frames are H/A-uniform" in report["team_accuracy_scope"]
+    assert report["team_log_loss_h_a"] is None
     assert set(report["log_loss_by_actual_class"]) == {"H", "A", "D"}
     assert set(report["brier_one_vs_rest_by_class"]) == {"H", "A", "D"}
