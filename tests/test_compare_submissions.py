@@ -211,12 +211,18 @@ def test_class_scores_partition_the_official_matched_and_missed_counts() -> None
 
     assert by_class["classes"]["short"]["n_gt"] == 1
     assert by_class["classes"]["long"]["n_gt"] == 2
+    assert by_class["official"] is False
+    assert "not additive" in by_class["additivity"]
     for key, row in official["per_iou"].items():
         short = by_class["classes"]["short"]["per_iou"][key]
         long = by_class["classes"]["long"]["per_iou"][key]
+        assert short["official"] is False
+        assert long["official"] is False
         assert short["n_matched"] + long["n_matched"] == row["n_matched"]
         assert short["n_missed"] + long["n_missed"] == row["n_missed"]
         assert short["n_spurious_global"] == long["n_spurious_global"] == row["n_spurious"]
+        assert short["recall"] == short["n_matched"] / short["n_gt"]
+        assert long["recall"] == long["n_matched"] / long["n_gt"]
 
 
 def test_class_delta_isolates_a_short_only_change() -> None:
@@ -225,11 +231,15 @@ def test_class_delta_isolates_a_short_only_change() -> None:
     result = compare.compare_class_scores([short, long], [short, long], [long])
 
     assert result["classes"]["short"]["delta_mean_spell_f1_b_minus_a"] == -1.0
+    assert result["classes"]["short"]["delta_mean_recall_b_minus_a"] == -1.0
     assert result["classes"]["long"]["delta_mean_spell_f1_b_minus_a"] == 0.0
+    assert result["classes"]["long"]["delta_mean_recall_b_minus_a"] == 0.0
     for row in result["classes"]["short"]["per_iou"].values():
         assert row["delta_spell_f1_b_minus_a"] == -1.0
+        assert row["delta_recall_b_minus_a"] == -1.0
     for row in result["classes"]["long"]["per_iou"].values():
         assert row["delta_spell_f1_b_minus_a"] == 0.0
+        assert row["delta_recall_b_minus_a"] == 0.0
 
 
 def test_spurious_prediction_lowers_both_class_f1_without_moving_tp() -> None:
@@ -242,6 +252,7 @@ def test_spurious_prediction_lowers_both_class_f1_without_moving_tp() -> None:
         for row in result["classes"][name]["per_iou"].values():
             assert row["b"]["n_spurious_global"] == row["a"]["n_spurious_global"] + 1
             assert row["delta_matched_b_minus_a"] == 0
+            assert row["delta_recall_b_minus_a"] == 0
             assert row["delta_spell_f1_b_minus_a"] < 0
 
 
@@ -266,6 +277,9 @@ def test_comparison_is_json_serializable_for_the_ledger() -> None:
     encoded = json.dumps(result, sort_keys=True)
     assert '"by_possession_class"' in encoded
     assert '"duration_class": "short"' in encoded
+    assert '"official": false' in encoded
+    assert '"recall"' in encoded
+    assert "not additive" in result["by_possession_class"]["additivity"]
 
 
 def test_default_output_stays_b6_compatible_and_opts_in_to_classes() -> None:

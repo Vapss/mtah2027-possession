@@ -105,7 +105,14 @@ CLASS_DEFINITION = (
     "GT possessions split by duration: short < 4 s, long >= 4 s. "
     "spellF1_c = 2*TP_c / (2*TP_c + FN_c + FP_global), where FP_global is the number of "
     "predicted spells left unmatched against all GT classes; it is shared by both classes "
-    "and by both submissions, so a class delta cannot be manufactured by re-splitting FPs."
+    "and by both submissions, so a class delta cannot be manufactured by re-splitting FPs. "
+    "This is NOT the official spellF1: official=false. Class F1s are not additive and do not "
+    "sum to the aggregate; only TP_c and FN_c form an exact decomposition of TP_total/FN_total."
+)
+CLASS_METRIC = "class_restricted_spell_f1_shared_fp"
+CLASS_ADDITIVITY = (
+    "Class F1s are not additive and do not sum to the aggregate spellF1; only TP_c and "
+    "FN_c are an exact decomposition (TP_short + TP_long = TP_total, and likewise FN)."
 )
 
 
@@ -136,6 +143,7 @@ def class_spell_scores(
         indices = [index for index, label in enumerate(labels) if label == name]
         per_iou: dict[str, Any] = {}
         scores = []
+        recalls = []
         for key, flags in flags_by_iou.items():
             n_gt = len(indices)
             matched = int(flags[indices].sum())
@@ -145,19 +153,32 @@ def class_spell_scores(
             recall = matched / n_gt if n_gt else 0.0
             f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
             per_iou[key] = {
+                "official": False,
+                "metric": CLASS_METRIC,
                 "n_gt": n_gt,
                 "n_matched": matched,
                 "n_missed": missed,
                 "n_spurious_global": spurious_global,
+                "recall": recall,
                 "spell_f1": f1,
             }
             scores.append(f1)
+            recalls.append(recall)
         classes[name] = {
+            "official": False,
+            "metric": CLASS_METRIC,
             "n_gt": len(indices),
+            "mean_recall": float(np.mean(recalls)) if recalls else 0.0,
             "mean_spell_f1": float(np.mean(scores)) if scores else 0.0,
             "per_iou": per_iou,
         }
-    return {"definition": CLASS_DEFINITION, "classes": classes}
+    return {
+        "official": False,
+        "metric": CLASS_METRIC,
+        "additivity": CLASS_ADDITIVITY,
+        "definition": CLASS_DEFINITION,
+        "classes": classes,
+    }
 
 
 def compare_class_scores(
@@ -176,25 +197,55 @@ def compare_class_scores(
         for key, row_a in class_a["per_iou"].items():
             row_b = class_b["per_iou"][key]
             per_iou[key] = {
+                "official": False,
+                "metric": CLASS_METRIC,
                 "a": {
                     field: row_a[field]
-                    for field in ("n_matched", "n_missed", "n_spurious_global", "spell_f1")
+                    for field in (
+                        "n_matched",
+                        "n_missed",
+                        "n_spurious_global",
+                        "recall",
+                        "spell_f1",
+                    )
                 },
                 "b": {
                     field: row_b[field]
-                    for field in ("n_matched", "n_missed", "n_spurious_global", "spell_f1")
+                    for field in (
+                        "n_matched",
+                        "n_missed",
+                        "n_spurious_global",
+                        "recall",
+                        "spell_f1",
+                    )
                 },
                 "delta_matched_b_minus_a": row_b["n_matched"] - row_a["n_matched"],
+                "delta_recall_b_minus_a": row_b["recall"] - row_a["recall"],
                 "delta_spell_f1_b_minus_a": row_b["spell_f1"] - row_a["spell_f1"],
             }
         classes[name] = {
+            "official": False,
+            "metric": CLASS_METRIC,
             "n_gt": class_a["n_gt"],
-            "a": {"mean_spell_f1": class_a["mean_spell_f1"]},
-            "b": {"mean_spell_f1": class_b["mean_spell_f1"]},
+            "a": {
+                "mean_recall": class_a["mean_recall"],
+                "mean_spell_f1": class_a["mean_spell_f1"],
+            },
+            "b": {
+                "mean_recall": class_b["mean_recall"],
+                "mean_spell_f1": class_b["mean_spell_f1"],
+            },
+            "delta_mean_recall_b_minus_a": (class_b["mean_recall"] - class_a["mean_recall"]),
             "delta_mean_spell_f1_b_minus_a": (class_b["mean_spell_f1"] - class_a["mean_spell_f1"]),
             "per_iou": per_iou,
         }
-    return {"definition": CLASS_DEFINITION, "classes": classes}
+    return {
+        "official": False,
+        "metric": CLASS_METRIC,
+        "additivity": CLASS_ADDITIVITY,
+        "definition": CLASS_DEFINITION,
+        "classes": classes,
+    }
 
 
 def sign_diagnostic(

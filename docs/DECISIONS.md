@@ -540,9 +540,13 @@ greedy uno-a-uno y los mismos IoU que el scorer. En la clase `c`:
 - `spellF1_c = 2·TP_c / (2·TP_c + FN_c + FP_global)`.
 
 Así `TP_corta + TP_larga = TP_total` y `FN_corta + FN_larga = FN_total`, y una predicción espuria
-baja las dos F1 sin mover ningún `TP`. El delta por clase es el que decide si un cambio movió las
-cortas, las largas o ambas; el agregado oficial sigue siendo el número de aceptación. El bootstrap
-no se usa como test: es una cota marginal de cada submission y ya lo produce `tools/score.py`.
+baja las dos F1 sin mover ningún `TP`. `spellF1_c` **no es el `spellF1` oficial**: se emite con
+`official: false` y `metric: class_restricted_spell_f1_shared_fp`, y se acompaña de
+`recall_c = TP_c / n_gt_c`, que no depende de `FP_global`. Los F1 por clase **no son aditivos** y no
+suman el agregado; solo `TP` y `FN` son una descomposición exacta. El delta por clase indica si un
+cambio movió las cortas, las largas o ambas; el agregado oficial sigue siendo el número de
+aceptación. El bootstrap no se usa como test: es una cota marginal de cada submission y ya lo
+produce `tools/score.py`.
 
 **Uso.** `python tools/compare_submissions.py A.csv B.csv --gt public --class-breakdown` imprime,
 por fold y en agregado, `spellF1`, TP/FP/FN y el desglose `by_possession_class`, además de las 17
