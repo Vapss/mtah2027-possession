@@ -524,3 +524,62 @@ La evidencia de esos artefactos está fijada en
 comparación desde `artifacts/possession.csv`, y falla si cualquier versión, métrica o SHA-256 cambia.
 La regeneración de ese artefacto exige el bundle táctico licenciado. La diferencia entre 128 y la
 nota anterior de 129 se debe a la política explícita `confidence=0 → X`, no a un cambio de emisión.
+
+## 21. El hueco de balón se rellena con la etiqueta previa, y la ganancia es haber dejado de emitir `D`
+
+**Decidido.** `tools/ball_gaps.py` emite `artifacts/ball_gaps.csv`, un artefacto que repite las
+probabilidades de `artifacts/possession.csv` y solo levanta la mano dentro de un hueco de balón: en
+el frame `i` de un hueco escribe la fila de probabilidades y la `confidence` del **último frame
+anterior cuyo decodificado no sea `X`, dentro del mismo medio tiempo**. Fuera de los huecos la
+`confidence` es 0. `make ball-gaps` lo genera y `make submission` lo combina sin cambios: el
+ensamblador sigue siendo el único escritor.
+
+Un **hueco** es un tramo maximal de frames consecutivos dentro de un bloque de medio tiempo de
+`games.half_video_blocks` sin balón observado (`x` e `y` NaN, la máscara de `tools/atd.py`). No es
+hueco un balón con `z` y sin `x,y`, ni un balón observado fuera del campo — eso es el disparador de
+precisión de #16, y usarlo acá convertiría esta regla en el detector de `D` que la decisión 16
+prohíbe. Bordes: se rellena `[s, e)` y nada más; `s-1` y `e` conservan su etiqueta, sin interpolar ni
+mover un borde. Un hueco sin predecesor en el medio tiempo (el medio 1 arranca con uno de 2 frames)
+se deja como está: no hay back-fill. Un hueco que llega al final del medio tiempo se rellena desde la
+izquierda. Sin tope de longitud; el corte por tramo es #10 y el parámetro `bands` existe para que ese
+issue no escriba una segunda implementación.
+
+**Por qué.** La regla no detecta `D` por el balón (decisión 16): el balón solo dice *dónde* se
+arrastra el estado, y la etiqueta que se escribe es la que el frame anterior ya tenía. Un hueco
+posterior a un `D` queda `D`.
+
+Medido en el slice público (17 posesiones; diagnóstico, no generalización):
+
+| submission | spellF1 | macroF1 | `D` | `H` | `A` |
+|---|---:|---:|---:|---:|---:|
+| `baseline_smooth50` tal cual | 0,3256 | 0,6207 | — | — | — |
+| `baseline_smooth50` + relleno | 0,3805 | 0,5105 | — | — | — |
+| `make submission`, solo B5 | 0,0405 | 0,4322 | 0 | 149.795 | 49.524 |
+| `make submission`, B5 + `ball_gaps` | 0,0438 | 0,4722 | 0 | 119.279 | 80.040 |
+| B5 decodificado con `confidence=0 → X` + B6 | 0,1851 | 0,4811 | 0 | — | — |
+| lo mismo con el relleno antes de B6 | 0,1851 | 0,4949 | 0 | — | — |
+
+**El Δ de +0,055 del ticket es del baseline, no del mecanismo.** El scorer oficial ya rellena `X`
+hacia adelante con la etiqueta previa del medio tiempo (`fill_abstentions`): sobre el baseline,
+emitir `X` en los huecos da exactamente el mismo 0,3805 que rellenar. Lo que movía la métrica era
+**dejar de emitir `D`** en esos frames; nuestro artefacto B5 nunca emite `D` porque usa
+`confidence=0`, así que el relleno llega tarde a esa ganancia. Sobre la receta documentada de la
+decisión 20 el Δ es **0,00000** con `n_discordant=0`.
+
+Sobre la submission que produce `make submission` hoy el Δ pareado es **+0,00330** (`n_discordant=0`,
+jackknife 0,00056..0,00332) y `macroF1` **+0,0400**. Está dentro de la banda de ruido (0,04 del
+partido completo, 0,33 del slice), así que por la decisión 12 el resultado se escribe **no
+concluyente**: no se cierra #5 como ganancia. Lo que sí arregla, y no es una cuestión de métrica:
+sin el artefacto, 30.516 frames sin balón salen `H` porque en el ensamblador `p_home = p_away = 0,49`
+y `argmax` desempata por orden de columna. El `H` no era una predicción.
+
+**Coste.** Un artefacto derivado de otro artefacto: `make ball-gaps` tiene que correr después de
+`tools/emision.py` y antes de `make submission`, y un `ball_gaps.csv` viejo sobre un
+`possession.csv` nuevo aplicaría etiquetas rancias en 64.641 frames. El resumen JSON imprime el
+SHA-256 del artefacto base y el de la salida para que la regeneración sea verificable, pero el CSV no
+puede llevar esa huella (contrato fijo) y no hay guard automático. Además, `--abstain-below`
+interactúa: si #6 lo activa, los frames rellenados con `max(p) < corte` vuelven a `X` y el relleno se
+debilita sin avisar. Y todo el Δ del baseline sale de 3 huecos, los tres del tramo 126–500. El slice
+público tiene 88,2% de frames con balón contra 56,9% del partido completo (decisión 13), así que
+mide el 12% fácil de este problema, no el 41% que importa.
+
