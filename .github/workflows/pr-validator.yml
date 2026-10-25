@@ -1,0 +1,108 @@
+name: pr-validator
+
+# Despierta al validador automático (agente OpenBot "Amoeba") en cada PR nuevo.
+# El validador comenta el PR con un veredicto APTO / APTO CON CAMBIOS / NO APTO.
+# No aprueba ni mergea: solo comenta.
+#
+# Secrets necesarios (Settings → Secrets and variables → Actions):
+#   OPENBOT_PR_WEBHOOK_URL     URL del webhook de la rutina "Validar PRs de mtah2027-possession"
+#   OPENBOT_PR_WEBHOOK_SECRET  secreto de firma de esa rutina (se genera en Routines)
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "Número de PR a validar"
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-validator-${{ inputs.pr || github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  notify:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve head SHA
+        id: head
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ -n "${{ github.event.pull_request.head.sha }}" ]; then
+            echo "sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            SHA="$(curl -sS \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/pulls/${{ inputs.pr }}" \
+              | jq -r .head.sha)"
+            [ -n "${SHA}" ] && [ "${SHA}" != "null" ] || { echo "PR no encontrado"; exit 1; }
+            echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build payload
+        env:
+          REPO: ${{ github.repository }}
+          ACTION: ${{ github.event.action || 'workflow_dispatch' }}
+          PR_NUMBER: ${{ inputs.pr || github.event.pull_request.number }}
+          TITLE: ${{ github.event.pull_request.title || '' }}
+          HEAD_SHA: ${{ steps.head.outputs.sha }}
+        run: |
+          python3 - <<'PY'
+          import datetime
+          import json
+          import os
+
+          payload = {
+              "type": "pr_validation",
+              "occurredAt": datetime.datetime.now(datetime.timezone.utc).strftime(
+                  "%Y-%m-%dT%H:%M:%SZ"
+              ),
+              "data": {
+                  "repository": {"full_name": os.environ["REPO"]},
+                  "action": os.environ["ACTION"],
+                  "pull_request": {
+                      "number": int(os.environ["PR_NUMBER"]),
+                      "title": os.environ["TITLE"],
+                      "head": {"sha": os.environ["HEAD_SHA"]},
+                      "draft": False,
+                  },
+              },
+          }
+          # Sin salto final: la firma se calcula sobre los bytes exactos que se envían.
+          with open("payload.json", "wb") as fh:
+              fh.write(json.dumps(payload).encode())
+          PY
+
+      - name: Sign and deliver
+        env:
+          WEBHOOK_URL: ${{ secrets.OPENBOT_PR_WEBHOOK_URL }}
+          WEBHOOK_SECRET: ${{ secrets.OPENBOT_PR_WEBHOOK_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WEBHOOK_URL}" ] || [ -z "${WEBHOOK_SECRET}" ]; then
+            echo "::warning::OPENBOT_PR_WEBHOOK_URL o OPENBOT_PR_WEBHOOK_SECRET sin configurar; no se despierta al validador."
+            exit 0
+          fi
+          TS="$(date +%s)"
+          DID="gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          { printf '%s.%s.' "${TS}" "${DID}"; cat payload.json; } > signing-input.bin
+          SIG="$(openssl dgst -sha256 -hmac "${WEBHOOK_SECRET}" -hex < signing-input.bin | sed 's/^.*= //')"
+          curl -sS --fail-with-body \
+            --retry 2 --retry-delay 10 --retry-connrefused \
+            -X POST "${WEBHOOK_URL}" \
+            -H 'content-type: application/json' \
+            -H "x-openbot-timestamp: ${TS}" \
+            -H "x-openbot-delivery-id: ${DID}" \
+            -H "x-openbot-signature: sha256=${SIG}" \
+            --data-binary @payload.json
+          echo
+          echo "Validador despierto para el PR #${{ inputs.pr || github.event.pull_request.number }}."
