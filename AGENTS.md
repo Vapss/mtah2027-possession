@@ -84,8 +84,9 @@ make submission    # artifacts/*.csv -> submissions/submission.csv
 make validate      # the organisers' own validator over submissions/
 make score         # score submissions/ with --bootstrap 1000, append to runs/ledger.jsonl
 make guard         # licensed data / oversized file check
-make graph         # code graph in graphify-out/ (optional, dev only -- see below)
 make ci            # everything above, in order
+make graph-check   # build the code graph and prove it cannot be committed (CI runs this too)
+make graph         # the same, plus the HTML view, in graphify-out/ (optional, dev only)
 ```
 
 Never run the scorer by hand with different flags. `--bootstrap 1000` is the default here because
@@ -106,6 +107,9 @@ the public ground truth cannot rank two plausible methods on its own.
   so every edge is grounded in the AST, with no model in the loop.
 - `graphify-out/` is gitignored. Do not commit the graph: it goes stale on the next commit and
   reviewing a JSON snapshot hides the diff that matters.
+- CI runs `make graph-check`, which builds the graph and fails if the output is no longer ignored
+  or if `GRAPH_REPORT.md` names a different commit than `HEAD`. That is what keeps this section a
+  rule instead of a paragraph: drop the `.gitignore` line and the build goes red.
 - Treat it as a map, not as a source of truth. The graph is a snapshot of the commit it was built
   from -- `GRAPH_REPORT.md` names that commit, and `graphify update .` re-extracts after changes.
   A "god node" is an invitation to read `file:line`, never a reason to change code.

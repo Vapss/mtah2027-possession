@@ -48,3 +48,22 @@ jobs:
           name: scoreboard
           path: runs/
           if-no-files-found: warn
+
+  graph:
+    # The code graph is optional for the harness; its contract is not. This job builds it and
+    # checks the two things that fail silently: the output becoming committable, and a report
+    # that describes a different commit than the one under test.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install graphify
+        run: |
+          uv tool install graphifyy
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Build the code graph and check it cannot be committed
+        run: make graph-check PY=python3
