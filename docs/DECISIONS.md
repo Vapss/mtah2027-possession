@@ -346,3 +346,122 @@ El comando no escribe submissions ni el ledger.
 **Coste.** La ventana pública solo tiene 17 posesiones. El score y el jackknife describen la
 sensibilidad de esa muestra; ni el delta local ni el p-valor diagnóstico prueban generalización al
 partido completo.
+
+---
+
+## 18. Emisión B5: identidad desde XML y evidencia física fija
+
+**Decidido.** `tools/emision.py` obtiene la pertenencia a equipo del XML ATD, usando el equipo local
+como `H` y el visitante como `A`. El metadata se debe mantener alineado con los 46 slots ordenados
+por id; se falla cerrado si cambia el formato o el reparto medido de 24/22. Smart Tagging `Team`
+sirve únicamente de ancla diagnóstica, nunca de etiqueta de entrenamiento.
+
+La primera propuesta de emisión fue voto top-5 con sigma fijo de **1,84 m**, mezclado con centroide
+y densidad a 10 m. La ablación preregistrada de la sección 19 no la mejoró frente a `argmin`, por
+lo que no es la salida final. El artefacto entregado usa el mínimo de distancia por equipo y
+softmax con temperatura fija **2,857386876 m**, calibrada in-sample por log-loss H/A en los 5.640
+frames públicos vivos con balón observado. `confidence = max(p_home, p_away) × ball_present`, así
+el job se abstiene cuando no observa balón. `p_dead` mantiene el suelo débil 0,02 y suma 0,15 solo
+fuera del rectángulo del campo. La rapidez y los contextos se conservan como diagnósticos de la
+ablación, no alteran la emisión final. No hay decodificación temporal.
+
+**Por qué.** El XML identifica los equipos de cada track: 24 locales (Barcelona) y 22 visitantes
+(Atletic Club); no hace falta inferir identidades por posición. La ablación no mostró mejora del
+voto suave sobre `argmin`; se conserva la referencia calibrada. Sigma viene de la distancia mediana
+medida balón→jugador y no se barre aquí; cualquier búsqueda de sigma o k pertenece al barrido
+pre-registrado de #22. La temperatura final se documenta como calibración in-sample del GT público,
+no como ajuste con estimación independiente.
+
+**Coste.** La emisión sigue siendo frame-local y el `D` es deliberadamente débil. La accuracy y
+las pérdidas H/A solo se interpretan en frames vivos con balón observado. Sin balón, H/A queda
+uniforme y `confidence=0`; el campo es `max(p_home,p_away) × ball_present` e incluye el suelo D.
+Las métricas del slice público son diagnóstico, no evidencia de generalización al partido completo.
+
+---
+
+## 19. Ablación B5 preregistrada: voto, vecinos y confianza
+
+**Preregistro (antes de correr las variantes).** La unidad de evaluación es cada frame público H/A
+con balón observado; no se incluyen D/X ni frames sin balón en accuracy o pérdidas H/A. Se reportan
+accuracy, log-loss y Brier binario para H y A por separado y agregados. La referencia `argmin`
+elige el equipo del jugador más cercano; su probabilidad es softmax de las distancias mínimas al
+jugador local y visitante, con una temperatura escalar calibrada minimizando log-loss H/A sobre la
+misma muestra pública mediante búsqueda áurea determinista en `T ∈ [0,01; 100]`. Esa calibración
+es in-sample y solo es una referencia descriptiva.
+
+Se ejecutan exactamente estas tres variantes, sin rejilla ni selección posterior:
+
+1. **Vecino único.** Probabilidad H/A por softmax de distancias mínimas por equipo con escala fija
+   1,84 m; `confidence = exp(-d_min / 1,84 m)`. La clase dura es el equipo del jugador más cercano.
+2. **Voto top-3.** Peso gaussiano `exp(-d² / (2 × 1,84²))` sobre los tres jugadores más cercanos,
+   con la mezcla de contexto vigente 0,80 voto, 0,10 centroide y 0,10 densidad a 10 m. Conserva la
+   fórmula actual de `confidence` basada en masa del voto y rapidez.
+3. **Sin densidad.** Top-5 vigente y centroide, se elimina el término de densidad; los pesos
+   restantes se renormalizan a 8/9 y 1/9. Conserva la `confidence` vigente.
+
+La curva de selective prediction se reporta para el artefacto actual con cortes predefinidos
+`max(p_home,p_away) >= 0,55 / 0,60 / 0,70 / 0,80`: cobertura sobre los frames elegibles y accuracy
+entre los cubiertos. Se reporta aparte la misma curva con el campo `confidence`, que expresa peso
+del job y no debe confundirse con `max(p)`. Si ninguna variante mejora al `argmin` calibrado en
+log-loss, la conclusión de B5 será no concluyente: conservar `argmin` más su confianza para #6, sin
+seleccionar una variante por accuracy ni por spellF1 crudo.
+
+**Resultado de la corrida preregistrada.** Reproducir con
+`python tools/ablate_emision.py --output /tmp/ablation34.json`. En 5.640 frames H/A con balón,
+la temperatura calibrada in-sample del `argmin` fue 2,857 m. `Log-loss` total es la media sobre
+frames; H/A muestra pérdida por etiqueta verdadera. Brier es la media de los errores binarios
+one-vs-rest de H y A; al condicionar a H/A y normalizar sus dos probabilidades, ambos Brier por
+clase son iguales.
+
+| Variante | Accuracy | Log-loss | Log-loss H/A | Brier H/A |
+|---|---:|---:|---:|---:|
+| `argmin` con temperatura calibrada | 0,7784 | 0,4705 | 0,4220 / 0,5470 | 0,1557 / 0,1557 |
+| (a) vecino único, sigma 1,84 m | 0,7784 | 0,4952 | 0,4394 / 0,5830 | 0,1589 / 0,1589 |
+| (b) voto top-3 + contexto | 0,7617 | 0,5254 | 0,4750 / 0,6049 | 0,1705 / 0,1705 |
+| (c) top-5 + centroide, sin densidad | 0,7631 | 0,5433 | 0,4918 / 0,6245 | 0,1735 / 0,1735 |
+| top-5 + contexto actual | 0,7606 | 0,5228 | 0,4717 / 0,6031 | 0,1701 / 0,1701 |
+
+Ninguna variante mejora log-loss o Brier del comparador. La accuracy de (a) iguala el argmin, y
+las otras quedan por debajo. Por el criterio preregistrado, **B5 no demuestra una emisión mejor**;
+para #6 se conserva `argmin` calibrado, con `confidence=max(p_home,p_away) × ball_present`. No se
+elige variante por accuracy ni se atribuye mejora de spellF1 sin #35.
+
+La curva siguiente corresponde al artefacto top-5 anterior a la decisión final, no al entregado:
+
+| Corte | Cobertura | Accuracy cubierta |
+|---:|---:|---:|
+| 0,55 | 0,914 | 0,785 |
+| 0,60 | 0,862 | 0,795 |
+| 0,70 | 0,766 | 0,819 |
+| 0,80 | 0,646 | 0,837 |
+
+En el artefacto top-5 anterior, la curva separada del campo `confidence` fue menos estable (corte
+0,55: 0,645/0,818; 0,60: 0,628/0,820; 0,70: 0,580/0,824; 0,80: 0,465/0,807,
+cobertura/accuracy). Esa columna no era `max(p)`.
+
+**Artefacto final entregado: argmin calibrado.** Reproducir con
+`python tools/emision.py --output /tmp/possession.csv`. En los 5.640 frames vivos con balón:
+accuracy **0,778369**, log-loss H/A **0,421965 / 0,547026** (log-loss total **0,470548**, que
+redondea a **0,4705**), Brier H/A **0,155681 / 0,155681** cuando H/A se renormaliza a dos clases.
+En el CSV sin renormalizar, `p_dead` reduce H/A; por eso el log-loss directo del artefacto es
+H/A **0,442168 / 0,567381**, media **0,4908**. La diferencia media de 0,020262 es exactamente
+la masa D: 5.638 frames puntuables tienen `p_dead=0,02` y dos fuera de campo tienen `p_dead=0,17`.
+El artefacto regenerado desde el commit validado reproduce esos valores; no era un CSV viejo ni un
+cambio de clasificador. Temperatura fija `T=2,857386876 m`,
+estimada in-sample por búsqueda áurea de log-loss. En los frames puntuables, como
+`confidence=max(p_home,p_away) × ball_present`, sus curvas de confianza y `max(p)` coinciden:
+
+| Corte de `confidence` | Cobertura | Accuracy cubierta |
+|---:|---:|---:|
+| 0,55 | 0,867 | 0,807 |
+| 0,60 | 0,774 | 0,831 |
+| 0,65 | 0,677 | 0,848 |
+| 0,70 | 0,593 | 0,865 |
+| 0,80 | 0,411 | 0,912 |
+| 0,90 | 0,240 | 0,971 |
+| 0,95 | 0,113 | 0,983 |
+
+Al seleccionar exactamente el 65% de los frames vivos con balón por confianza, la cobertura
+observada es 0,650, accuracy **0,856** y corte efectivo `confidence=0,664506`. Al corte numérico
+0,65, cobertura/accuracy es 0,677/0,848. Los 391 frames vivos sin balón se excluyen de la
+puntuación H/A; sus probabilidades H/A son uniformes y `confidence=0`.
