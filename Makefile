@@ -11,7 +11,7 @@ BASELINE ?= evaluation/results/baseline_smooth125.csv
 GRAPHIFY ?= graphify
 GRAPH_OUT ?= graphify-out
 
-.PHONY: help venv install dev test lint fmt guard ingest demo submission validate score score-baselines graph ci clean
+.PHONY: help venv install dev test lint fmt guard ingest demo submission validate score score-baselines graph graph-check ci clean
 
 help:  ## list the targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sed 's/:.*## /\t/' | expand -t22
@@ -67,11 +67,15 @@ score:  ## score $(SUBMISSIONS)/ on the public ground truth and record it in run
 score-baselines:  ## score the four shipped baselines -- the number to beat
 	$(PY) tools/score.py --results evaluation/results --bootstrap 1000 --note "baselines"
 
-graph:  ## build the code graph in $(GRAPH_OUT)/ -- optional dev tool, nothing leaves the machine
+graph-check:  ## build the code graph and prove it cannot be committed (CI runs this too)
 	@command -v $(GRAPHIFY) >/dev/null 2>&1 || \
 	  { echo "graphify is not installed: uv tool install graphifyy"; exit 1; }
 	$(GRAPHIFY) extract . --code-only
 	$(GRAPHIFY) cluster-only . --no-label
+	$(PY) tools/check_graph.py
+
+graph:  ## build the code graph in $(GRAPH_OUT)/ -- optional dev tool, nothing leaves the machine
+	@$(MAKE) --no-print-directory graph-check PY=$(PY) GRAPHIFY=$(GRAPHIFY) GRAPH_OUT=$(GRAPH_OUT)
 	$(GRAPHIFY) export html
 	@echo "read $(GRAPH_OUT)/GRAPH_REPORT.md, or open $(GRAPH_OUT)/graph.html"
 

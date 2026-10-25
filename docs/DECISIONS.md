@@ -278,6 +278,11 @@ El pase semántico (docs, PDFs, imágenes) queda apagado: requiere clave de LLM,
 medio de un repo cuya regla es que las etiquetas salgan de código determinista, y añadiría bordes
 `INFERRED` que aquí nadie necesita. El grafo es 97% `EXTRACTED` justamente por eso.
 
+En CI, `make graph-check` construye el grafo y falla si la salida deja de estar ignorada (la línea
+de `.gitignore` es una regla, no un deseo) o si `GRAPH_REPORT.md` nombra un commit distinto de
+`HEAD` (un mapa que describe otro árbol). Es un job aparte porque graphify no puede ser requisito
+de `make ci`: quien no lo tenga instalado tiene que poder correr el harness igual.
+
 **Coste.** 2,4 s y 576 nodos para este repo, sin red. Quien quiera nombres de comunidades legibles
 tiene que configurar un backend; sin él, el informe dice "Community N" y sigue sirviendo para
 navegar. Y es un mapa, no una verdad: un god node es una invitación a leer `file:line`.
