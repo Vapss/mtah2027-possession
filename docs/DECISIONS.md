@@ -319,3 +319,30 @@ está solo**, así que "balón parado" y "balón perdido" no son la misma cosa q
 campo) cubre el 7,1% de `D`. Y la ventana pública es la parte del partido con más balón detectado
 (88,2% frente a 56,9%), así que ahí la cobertura está sobrestimada; en el partido completo estas
 señales cubrirán aún menos. Lo que queda es contexto, y el contexto hay que modelarlo.
+
+---
+
+## 17. Comparar submissions pareadas sin confundir el test de signos con `spellF1`
+
+**Decidido.** `tools/compare_submissions.py` compara dos CSV con el scorer oficial y reporta el delta
+de `spellF1` para cada IoU y su promedio, junto con posesiones verdaderas/predichas, emparejadas,
+perdidas y espurias. Expone además las banderas de emparejamiento de cada posesión, su duración y el
+grupo corta (<4 s) / larga (≥4 s), para que los análisis posteriores puedan reutilizarlas. El
+jackknife quita una posesión verdadera cada vez, conserva todas las predicciones y vuelve a ejecutar
+el emparejamiento completo; así la sensibilidad también incluye predicciones espurias y posibles
+reasignaciones. Cada fold conserva `spellF1`, TP/FP/FN y delta por umbral.
+
+El comando añade una prueba exacta de signos a IoU 0,5 como diagnóstico separado: cuenta qué
+configuración empareja cada posesión verdadera en las que discrepan, y reporta empates y
+`n_discordant`. Su p-valor **no es** una prueba de significancia para el delta de `spellF1`: no
+incluye la penalización global por posesiones predichas sin pareja. Además, su interpretación
+requiere signos independientes y equiprobables bajo la nula; posesiones del mismo partido pueden
+depender unas de otras.
+
+**Uso.** `python tools/compare_submissions.py A.csv B.csv --gt public` imprime JSON reproducible.
+`--gt` también acepta `private` en un entorno que tenga ese ground truth o una ruta CSV explícita.
+El comando no escribe submissions ni el ledger.
+
+**Coste.** La ventana pública solo tiene 17 posesiones. El score y el jackknife describen la
+sensibilidad de esa muestra; ni el delta local ni el p-valor diagnóstico prueban generalización al
+partido completo.
