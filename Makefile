@@ -8,8 +8,10 @@ PYTEST ?= .venv/bin/pytest
 ARTIFACTS ?= artifacts
 SUBMISSIONS ?= submissions
 BASELINE ?= evaluation/results/baseline_smooth125.csv
+GRAPHIFY ?= graphify
+GRAPH_OUT ?= graphify-out
 
-.PHONY: help venv install dev test lint fmt guard ingest demo submission validate score score-baselines ci clean
+.PHONY: help venv install dev test lint fmt guard ingest demo submission validate score score-baselines graph ci clean
 
 help:  ## list the targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sed 's/:.*## /\t/' | expand -t22
@@ -65,7 +67,15 @@ score:  ## score $(SUBMISSIONS)/ on the public ground truth and record it in run
 score-baselines:  ## score the four shipped baselines -- the number to beat
 	$(PY) tools/score.py --results evaluation/results --bootstrap 1000 --note "baselines"
 
+graph:  ## build the code graph in $(GRAPH_OUT)/ -- optional dev tool, nothing leaves the machine
+	@command -v $(GRAPHIFY) >/dev/null 2>&1 || \
+	  { echo "graphify is not installed: uv tool install graphifyy"; exit 1; }
+	$(GRAPHIFY) extract . --code-only
+	$(GRAPHIFY) cluster-only . --no-label
+	$(GRAPHIFY) export html
+	@echo "read $(GRAPH_OUT)/GRAPH_REPORT.md, or open $(GRAPH_OUT)/graph.html"
+
 ci: lint test guard demo submission validate score  ## exactly what GitHub Actions runs
 
 clean:  ## remove generated outputs (never touches data/ or evaluation/results/)
-	rm -rf $(ARTIFACTS) runs $(SUBMISSIONS)/*.csv $(SUBMISSIONS)/*.tmp
+	rm -rf $(ARTIFACTS) runs $(GRAPH_OUT) $(SUBMISSIONS)/*.csv $(SUBMISSIONS)/*.tmp
