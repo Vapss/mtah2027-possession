@@ -372,3 +372,66 @@ barrido pre-registrado de #22.
 equipo solo se interpreta en frames vivos con balón observado; los frames sin balón tienen
 `confidence=0` y quedan para la combinación con otros artefactos o el decodificador #6. Las métricas
 del slice público son diagnóstico, no evidencia de generalización al partido completo.
+
+---
+
+## 19. Ablación B5 preregistrada: voto, vecinos y confianza
+
+**Preregistro (antes de correr las variantes).** La unidad de evaluación es cada frame público H/A
+con balón observado; no se incluyen D/X ni frames sin balón en accuracy o pérdidas H/A. Se reportan
+accuracy, log-loss y Brier binario para H y A por separado y agregados. La referencia `argmin`
+elige el equipo del jugador más cercano; su probabilidad es softmax de las distancias mínimas al
+jugador local y visitante, con una temperatura escalar calibrada minimizando log-loss H/A sobre la
+misma muestra pública mediante búsqueda áurea determinista en `T ∈ [0,01; 100]`. Esa calibración
+es in-sample y solo es una referencia descriptiva.
+
+Se ejecutan exactamente estas tres variantes, sin rejilla ni selección posterior:
+
+1. **Vecino único.** Probabilidad H/A por softmax de distancias mínimas por equipo con escala fija
+   1,84 m; `confidence = exp(-d_min / 1,84 m)`. La clase dura es el equipo del jugador más cercano.
+2. **Voto top-3.** Peso gaussiano `exp(-d² / (2 × 1,84²))` sobre los tres jugadores más cercanos,
+   con la mezcla de contexto vigente 0,80 voto, 0,10 centroide y 0,10 densidad a 10 m. Conserva la
+   fórmula actual de `confidence` basada en masa del voto y rapidez.
+3. **Sin densidad.** Top-5 vigente y centroide, se elimina el término de densidad; los pesos
+   restantes se renormalizan a 8/9 y 1/9. Conserva la `confidence` vigente.
+
+La curva de selective prediction se reporta para el artefacto actual con cortes predefinidos
+`max(p_home,p_away) >= 0,55 / 0,60 / 0,70 / 0,80`: cobertura sobre los frames elegibles y accuracy
+entre los cubiertos. Se reporta aparte la misma curva con el campo `confidence`, que expresa peso
+del job y no debe confundirse con `max(p)`. Si ninguna variante mejora al `argmin` calibrado en
+log-loss, la conclusión de B5 será no concluyente: conservar `argmin` más su confianza para #6, sin
+seleccionar una variante por accuracy ni por spellF1 crudo.
+
+**Resultado de la corrida preregistrada.** Reproducir con
+`python tools/ablate_emision.py --output /tmp/ablation34.json`. En 5.640 frames H/A con balón,
+la temperatura calibrada in-sample del `argmin` fue 2,857 m. `Log-loss` total es la media sobre
+frames; H/A muestra pérdida por etiqueta verdadera. Brier es la media de los errores binarios
+one-vs-rest de H y A; al condicionar a H/A y normalizar sus dos probabilidades, ambos Brier por
+clase son iguales.
+
+| Variante | Accuracy | Log-loss | Log-loss H/A | Brier H/A |
+|---|---:|---:|---:|---:|
+| `argmin` con temperatura calibrada | 0,7784 | 0,4705 | 0,4220 / 0,5470 | 0,1557 / 0,1557 |
+| (a) vecino único, sigma 1,84 m | 0,7784 | 0,4952 | 0,4394 / 0,5830 | 0,1589 / 0,1589 |
+| (b) voto top-3 + contexto | 0,7617 | 0,5254 | 0,4750 / 0,6049 | 0,1705 / 0,1705 |
+| (c) top-5 + centroide, sin densidad | 0,7631 | 0,5433 | 0,4918 / 0,6245 | 0,1735 / 0,1735 |
+| top-5 + contexto actual | 0,7606 | 0,5228 | 0,4717 / 0,6031 | 0,1701 / 0,1701 |
+
+Ninguna variante mejora log-loss o Brier del comparador. La accuracy de (a) iguala el argmin, y
+las otras quedan por debajo. Por el criterio preregistrado, **B5 no demuestra una emisión mejor**;
+para #6 se conserva `argmin` con abstención/confianza por distancia. No se elige variante por
+accuracy ni se atribuye mejora de spellF1 sin #35.
+
+En la emisión actual, `max(p_home,p_away)` ordena accuracy al reducir cobertura:
+
+| Corte | Cobertura | Accuracy cubierta |
+|---:|---:|---:|
+| 0,55 | 0,914 | 0,785 |
+| 0,60 | 0,862 | 0,795 |
+| 0,70 | 0,766 | 0,819 |
+| 0,80 | 0,646 | 0,837 |
+
+La curva separada del campo `confidence` es menos estable (corte 0,55: 0,645/0,818; 0,60:
+0,628/0,820; 0,70: 0,580/0,824; 0,80: 0,465/0,807, cobertura/accuracy). Por lo tanto, la curva
+de `max(p)` no valida la confianza entregada por el job. Los 391 frames vivos sin balón quedan
+fuera de la puntuación H/A; la emisión los abstiene con confianza cero.
