@@ -545,3 +545,24 @@ canónicos (`make submission`, `make validate`, `make score`) no cambian.
 **Costo.** CI puntúa dos veces — el `demo` de `smooth125` y F0a — unos 5 s más. El número es del
 slice público de 17 posesiones: sirve para comprobar alineación y formato, nunca como prueba de
 generalización ni para elegir entre versiones.
+
+---
+
+## 22. La abstención se propaga y sale `X`, no la decide el orden de columnas
+
+**Decidido.** Cuando todos los artefactos tienen `confidence = 0` en un frame, `combine()` conserva
+esa condición (probabilidades uniformes, `confidence = 0`) y `decide()` emite `X` antes de aplicar
+`--abstain-below`. Un `--weight` explícito sigue contando ese artefacto: es un opt-in deliberado,
+no un desempate.
+
+**Por qué.** Ticket #44. B5 sin balón emite `p_home = p_away = 0,49`, `p_dead = 0,02` con
+`confidence = 0`; el promedio no ponderado y el `argmax` por orden de `PROB_COLUMNS` convertían
+"sin opinión" en `H`. Artefacto del clon de validación
+(`sha256 f55ec7f343a2…`, 199.319 filas): 64.643 frames sin balón dentro de los medios tiempos,
+los 64.643 salían `H`; ahora salen `X` (0 `H`/`A`/`D`). Fuera de los medios tiempos, otros 21.188
+pasan de `H` a `X`. Slice público con el scorer oficial, sin tocar pesos ni umbrales: `macroF1`
+0,4322 → **0,4573**, `spellF1` 0,0405 → **0,0441**, predicciones `A` intactas (49.524).
+
+**Costo.** Un artefacto que use `confidence = 0` para "poco fiable" en vez de "sin opinión" ahora
+se abstiene en vez de votar; ese es el contrato que AGENTS.md ya declaraba, y `--weight` permite
+forzarlo. La medición es del slice público de 17 posesiones: la mejora no se declara generalización.

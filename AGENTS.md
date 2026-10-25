@@ -64,7 +64,8 @@ frame,p_home,p_away,p_dead,confidence
 - `frame`: 0..199318, one row each, in order. Length comes from `games.source_frames()`.
 - `p_home`, `p_away`, `p_dead`: probabilities in `[0, 1]` summing to 1 per row.
 - `confidence`: how much this job wants its opinion to count, `[0, 1]`. `0` means "I abstain on this
-  frame" and the assembler gives it no weight.
+  frame" and the assembler gives it no weight. If every artifact abstains on a frame, the assembler
+  emits `X` for it; a label is never chosen by the order of the probability columns.
 - A job that only produces hard labels uses `tools/onehot.py` to emit its table.
 
 Name the file after the job: `artifacts/dead_ball.csv`, `artifacts/possession.csv`. The assembler
