@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import platform
@@ -114,7 +115,7 @@ def _comparison_metrics(comparison: dict[str, object]) -> dict[str, object]:
     }
 
 
-def verify() -> str:
+def verify(*, strict_versions: bool = False) -> str:
     manifest = json.loads(MANIFEST.read_text())
     expected_hashes = manifest["hashes_sha256"]
     if not ARTIFACT.is_file():
@@ -128,10 +129,14 @@ def verify() -> str:
         )
 
     versions = _current_versions()
-    if versions != manifest["versions"]:
-        raise ValueError(
-            f"runtime versions differ: expected {manifest['versions']}, got {versions}"
+    expected_versions = manifest["versions_diagnostic"]
+    if versions != expected_versions:
+        message = (
+            f"runtime versions differ (diagnostic): expected {expected_versions}, got {versions}"
         )
+        if strict_versions:
+            raise ValueError(message)
+        print(f"WARN verify-b6: {message}", file=sys.stderr)
 
     _make_baseline()
     _make_postprocessed()
@@ -160,8 +165,15 @@ def verify() -> str:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--strict-versions",
+        action="store_true",
+        help="fail when Python, NumPy, or pandas versions differ from the manifest",
+    )
+    args = parser.parse_args()
     try:
-        manifest_hash = verify()
+        manifest_hash = verify(strict_versions=args.strict_versions)
     except (OSError, KeyError, ValueError) as error:
         print(f"FAIL verify-b6: {error}", file=sys.stderr)
         return 1

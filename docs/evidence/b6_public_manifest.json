@@ -13,11 +13,12 @@
     "runs/postprocessed.csv": "1e1a8c6c2e1e52d45b90291442c921c29dcf7030d07432a5f74b3130e175ce5d",
     "runs/postprocess_comparison.json": "edcd1cf6066153ea7a81dfbf84a6228a6491ea8576b3454d35c67fd30b08555f"
   },
-  "versions": {
+  "versions_diagnostic": {
     "python": "3.12.3",
     "numpy": "2.5.4",
     "pandas": "3.0.6"
   },
+  "versions_note": "Diagnostic versions from the recorded run, not pinned requirements. The dependency pin is tracked in issue #9; version mismatches warn by default and can be made fatal with --strict-versions.",
   "comparison": {
     "n_gt": 17,
     "n_pred_before": 128,
