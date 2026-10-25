@@ -255,3 +255,29 @@ sobre la premisa contraria.
 corregida, falla en `load()` hasta actualizar `FINGERPRINTS`. Es intencional — un error al cargar es
 preferible a un número silenciosamente falso aguas abajo. El coste real: 3 s y 230 MB por proceso la
 primera vez, compartido después por caché y con los arrays en solo lectura.
+
+---
+
+## 15. El grafo del código es una ayuda de lectura, no una dependencia
+
+**Decidido.** `make graph` construye `graphify-out/` con `graphify extract . --code-only`, y ese
+directorio está en `.gitignore`. Graphify no entra en `pyproject.toml`, ni en `make dev`, ni en
+`make ci`, ni en el camino que regenera la submission.
+
+**Por qué.** El artefacto que se entrega tiene que poder regenerarse con Python 3.12, numpy y pandas
+(regla 8 de `AGENTS.md`); graphify arrastra su propio árbol de tree-sitters y no aporta nada a ese
+camino. Instalarlo como herramienta aparte (`uv tool install graphifyy`) mantiene el entorno del
+harness pequeño y reproducible.
+
+No se commitea el grafo por dos razones concretas: queda obsoleto en el siguiente commit, y un
+`graph.json` de medio megabyte revisado como si fuera código esconde el diff de cuatro líneas que
+importa. `GRAPH_REPORT.md` sí nombre el commit del que se construyó, que es la forma honesta de
+saber si hay que rehacerlo.
+
+El pase semántico (docs, PDFs, imágenes) queda apagado: requiere clave de LLM, mete un modelo en
+medio de un repo cuya regla es que las etiquetas salgan de código determinista, y añadiría bordes
+`INFERRED` que aquí nadie necesita. El grafo es 97% `EXTRACTED` justamente por eso.
+
+**Coste.** 2,4 s y 576 nodos para este repo, sin red. Quien quiera nombres de comunidades legibles
+tiene que configurar un backend; sin él, el informe dice "Community N" y sigue sirviendo para
+navegar. Y es un mapa, no una verdad: un god node es una invitación a leer `file:line`.
