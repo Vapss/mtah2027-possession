@@ -1,0 +1,85 @@
+name: pr-validator
+
+# Despierta al validador automático (agente OpenBot "Amoeba") en cada PR nuevo.
+# El validador comenta el PR con un veredicto APTO / APTO CON CAMBIOS / NO APTO.
+# No aprueba ni mergea: solo comenta.
+#
+# Secrets necesarios (Settings → Secrets and variables → Actions):
+#   OPENBOT_PR_WEBHOOK_URL     URL del webhook de la rutina "Validar PRs de mtah2027-possession"
+#   OPENBOT_PR_WEBHOOK_SECRET  secreto de firma de esa rutina (se genera en Routines)
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-validator-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  notify:
+    if: ${{ github.event.pull_request.draft == false }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build payload
+        env:
+          REPO: ${{ github.repository }}
+          ACTION: ${{ github.event.action }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TITLE: ${{ github.event.pull_request.title }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+        run: |
+          python3 - <<'PY'
+          import datetime
+          import json
+          import os
+
+          payload = {
+              "type": "pr_validation",
+              "occurredAt": datetime.datetime.now(datetime.timezone.utc).strftime(
+                  "%Y-%m-%dT%H:%M:%SZ"
+              ),
+              "data": {
+                  "repository": {"full_name": os.environ["REPO"]},
+                  "action": os.environ["ACTION"],
+                  "pull_request": {
+                      "number": int(os.environ["PR_NUMBER"]),
+                      "title": os.environ["TITLE"],
+                      "head": {"sha": os.environ["HEAD_SHA"]},
+                      "draft": os.environ["DRAFT"].lower() == "true",
+                  },
+              },
+          }
+          # Sin salto final: la firma se calcula sobre los bytes exactos que se envían.
+          with open("payload.json", "wb") as fh:
+              fh.write(json.dumps(payload).encode())
+          PY
+
+      - name: Sign and deliver
+        env:
+          WEBHOOK_URL: ${{ secrets.OPENBOT_PR_WEBHOOK_URL }}
+          WEBHOOK_SECRET: ${{ secrets.OPENBOT_PR_WEBHOOK_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WEBHOOK_URL}" ] || [ -z "${WEBHOOK_SECRET}" ]; then
+            echo "::warning::OPENBOT_PR_WEBHOOK_URL o OPENBOT_PR_WEBHOOK_SECRET sin configurar; no se despierta al validador."
+            exit 0
+          fi
+          TS="$(date +%s)"
+          DID="gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          { printf '%s.%s.' "${TS}" "${DID}"; cat payload.json; } > signing-input.bin
+          SIG="$(openssl dgst -sha256 -hmac "${WEBHOOK_SECRET}" -hex < signing-input.bin | sed 's/^.*= //')"
+          curl -sS --fail-with-body \
+            --retry 2 --retry-delay 10 --retry-connrefused \
+            -X POST "${WEBHOOK_URL}" \
+            -H 'content-type: application/json' \
+            -H "x-openbot-timestamp: ${TS}" \
+            -H "x-openbot-delivery-id: ${DID}" \
+            -H "x-openbot-signature: sha256=${SIG}" \
+            --data-binary @payload.json
+          echo
+          echo "Validador despierto para el PR #${{ github.event.pull_request.number }}."
