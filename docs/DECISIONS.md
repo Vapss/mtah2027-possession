@@ -524,3 +524,32 @@ La evidencia de esos artefactos está fijada en
 comparación desde `artifacts/possession.csv`, y falla si cualquier versión, métrica o SHA-256 cambia.
 La regeneración de ese artefacto exige el bundle táctico licenciado. La diferencia entre 128 y la
 nota anterior de 129 se debe a la política explícita `confidence=0 → X`, no a un cambio de emisión.
+
+## 22. Los tramos de hueco no llevan política propia: el slice no puede decidir ninguno
+
+**Decidido.** La política de un hueco de balón es la misma en los cuatro tramos del ticket (`≤25`,
+`26–125`, `126–500`, `>500` frames): **arrastrar el estado, nunca `D` por ausencia de balón**. La
+tabla por tramo existe como diagnóstico reproducible (`tools/band_gaps.py` →
+`docs/analysis/ball-gap-bands.md`), no como fuente de umbrales. La regla se aplicó mecánicamente con
+el criterio pre-registrado en #10: un tramo se declara medido solo si tiene un hueco puntuado que
+parta una posesión o contenga una transición, mueve ≥2 posesiones en el mismo sentido, alcanza
+`|Δ| ≥ 0,04` y sobrevive a quitar cualquiera de sus huecos uno a uno.
+
+**Por qué.** Medido, y el resultado es que **ningún tramo pasa**. El único que mueve `spellF1` es
+126–500 (+0,05491, 2 discordancias), y ese Δ se cae a **+0,01588 con 0 discordancias** al quitar un
+solo hueco: el de 232 frames en [17.047, 17.279), dentro de la posesión #14. Los otros tres tramos
+dan Δ exactamente `0,00000` porque sus huecos no tocan un solo frame puntuado: 26–125 tiene 1 hueco
+en todo el partido y >500 tiene 44 (el **67% del déficit de balón**, 43.292 frames) y ninguno cae en
+la ventana pública. `D` en el hueco, que es la alternativa que la tabla compara, pierde o empata en
+todos los tramos donde se puede medir: −0,00740 en ≤25 y +0,02680 frente a +0,05491 en 126–500.
+
+Además, en la cadena que se entrega `fill` y `X` empatan **exactamente** en `spellF1`: el scorer
+oficial rellena `X` con la etiqueta previa del medio tiempo. La única diferencia entre las dos es
+`macroF1`, que no decide.
+
+**Coste.** El tramo con más frames es el que no se puede medir, y su política queda decidida por
+principio (decisión 16), no por dato: si arrastrar el estado es peor que otra cosa en huecos de más
+de 500 frames, este repositorio no puede saberlo con el slice público. Toda la evidencia local
+descansa en 4 posesiones GT (#1, #2, #5, #14) de las 17 del slice. Y el `p90` de 845 frames dice que
+el tramo grande no es un caso raro: es donde está el trabajo. Cualquier barrido de cortes de banda
+sobre esta muestra encuentra lo que quiera; por eso los cortes son los del ticket y no se barren.
