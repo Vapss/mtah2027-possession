@@ -524,3 +524,33 @@ La evidencia de esos artefactos está fijada en
 comparación desde `artifacts/possession.csv`, y falla si cualquier versión, métrica o SHA-256 cambia.
 La regeneración de ese artefacto exige el bundle táctico licenciado. La diferencia entre 128 y la
 nota anterior de 129 se debe a la política explícita `confidence=0 → X`, no a un cambio de emisión.
+
+## 21. El jackknife por posesión se lee también por clase de duración
+
+**Decidido.** `tools/compare_submissions.py` conserva el jackknife leave-one-possession-out de #29
+(17 folds: se quita una posesión verdadera, se conservan todas las predicciones y se vuelve a
+ejecutar el emparejamiento completo). Añade el desglose pre-registrado de #8 en dos clases de
+duración: **corta < 4 s** y **larga ≥ 4 s**. En el slice público son 6 y 11 de 17.
+
+Para que el desglose no invente una segunda regla de emparejamiento, cada clase usa el mismo match
+greedy uno-a-uno y los mismos IoU que el scorer. En la clase `c`:
+
+- `TP_c` y `FN_c` son posesiones verdaderas de esa clase emparejadas y perdidas;
+- `FP_global = n_pred - TP_total` es el mismo para las dos clases y para A/B;
+- `spellF1_c = 2·TP_c / (2·TP_c + FN_c + FP_global)`.
+
+Así `TP_corta + TP_larga = TP_total` y `FN_corta + FN_larga = FN_total`, y una predicción espuria
+baja las dos F1 sin mover ningún `TP`. El delta por clase es el que decide si un cambio movió las
+cortas, las largas o ambas; el agregado oficial sigue siendo el número de aceptación. El bootstrap
+no se usa como test: es una cota marginal de cada submission y ya lo produce `tools/score.py`.
+
+**Uso.** `python tools/compare_submissions.py A.csv B.csv --gt public --class-breakdown` imprime,
+por fold y en agregado, `spellF1`, TP/FP/FN y el desglose `by_possession_class`, además de las 17
+banderas por posesión a IoU 0,3 / 0,5 / 0,7 y del test de signos separado. La tabla JSON es la que
+#14 adjunta al ledger. El comando no escribe submissions ni ledger. Sin el flag, la salida queda
+igual que antes: el manifiesto de B6 hashea ese JSON y no debe invalidarse por un cambio de otro
+carril.
+
+**Coste.** Con 17 posesiones (6 cortas, 11 largas) una clase tiene todavía menos muestra que el
+total: los deltas por clase son diagnóstico de sensibilidad, no prueba de generalización al partido
+completo. Un delta agregado se sigue citando con `n_discordant` y declarando `n=17`.
