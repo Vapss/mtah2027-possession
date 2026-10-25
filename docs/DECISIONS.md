@@ -518,3 +518,9 @@ make lint
 make test
 make guard
 ```
+
+La evidencia de esos artefactos está fijada en
+`docs/evidence/b6_public_manifest.json`; `make verify-b6` reconstruye baseline, salida y
+comparación desde `artifacts/possession.csv`, y falla si cualquier versión, métrica o SHA-256 cambia.
+La regeneración de ese artefacto exige el bundle táctico licenciado. La diferencia entre 128 y la
+nota anterior de 129 se debe a la política explícita `confidence=0 → X`, no a un cambio de emisión.

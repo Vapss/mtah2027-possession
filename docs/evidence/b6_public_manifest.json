@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "base_commit": "d9e0bfb",
+  "run_requires_licensed_bundle": "Yes. Regenerating artifacts/possession.csv requires the licensed tactical bundle; generated CSVs stay ignored under artifacts/ and runs/.",
+  "baseline_policy": "Argmin of p_home/p_away; rows with confidence=0 become X. This policy explains the 128 count here versus the earlier 129 note; it is not an emission-code change.",
+  "commands": [
+    "python tools/emision.py --output artifacts/possession.csv",
+    "make verify-b6"
+  ],
+  "hashes_sha256": {
+    "artifacts/possession.csv": "f55ec7f343a29e96d996bd6594f4fa1cfa8a147f2a39c2080b42a4b5edbcc99c",
+    "runs/argmin_baseline.csv": "3a402d4236acb8deb25e71453792b7fa31c6bd5abbfa1cbf03e1e85d401ff701",
+    "runs/postprocessed.csv": "1e1a8c6c2e1e52d45b90291442c921c29dcf7030d07432a5f74b3130e175ce5d",
+    "runs/postprocess_comparison.json": "edcd1cf6066153ea7a81dfbf84a6228a6491ea8576b3454d35c67fd30b08555f"
+  },
+  "versions": {
+    "python": "3.12.3",
+    "numpy": "2.5.4",
+    "pandas": "3.0.6"
+  },
+  "comparison": {
+    "n_gt": 17,
+    "n_pred_before": 128,
+    "n_pred_after": 50,
+    "delta_mean_spell_f1": 0.1409366958311889,
+    "n_discordant": 2,
+    "sign_test_p": 0.5,
+    "by_iou": {
+      "0.3": {
+        "before": {"tp": 9, "fp": 119, "fn": 8, "precision": 0.0703125, "recall": 0.5294117647058824, "f1": 0.12413793103448276},
+        "after": {"tp": 15, "fp": 35, "fn": 2, "precision": 0.3, "recall": 0.8823529411764706, "f1": 0.44776119402985076}
+      },
+      "0.5": {
+        "before": {"tp": 2, "fp": 126, "fn": 15, "precision": 0.015625, "recall": 0.11764705882352941, "f1": 0.027586206896551724},
+        "after": {"tp": 4, "fp": 46, "fn": 13, "precision": 0.08, "recall": 0.23529411764705882, "f1": 0.11940298507462688}
+      },
+      "0.7": {
+        "before": {"tp": 0, "fp": 128, "fn": 17, "precision": 0.0, "recall": 0.0, "f1": 0.0},
+        "after": {"tp": 2, "fp": 48, "fn": 15, "precision": 0.04, "recall": 0.11764705882352941, "f1": 0.05970149253731344}
+      }
+    }
+  }
+}
