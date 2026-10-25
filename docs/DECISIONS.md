@@ -226,3 +226,32 @@ ball-recovery problem either.
 **Cost.** We are deliberately leaving a possible gain unexplored, and we cannot prove the decision
 right -- only that it cannot be proven locally. That is the honest state; the alternative is
 spending 25% of the effort on a signal no experiment in this repository can score.
+
+---
+
+## 14. El lector ATD valida la huella del export, no solo su forma
+
+**Decidido.** `tools/atd.py` es el único módulo que conoce el formato del tracking crudo. Además de
+la estructura (ids `1..N` consecutivos, `N = games.source_frames()`, 46 slots × 3 canales, el balón
+en el último campo), al cargar compara la huella medida de la entrega: 113.488 frames con balón
+presente, mediana de 22 slots ocupados en juego y 12 en el descanso.
+
+La presencia del balón se decide por `x` e `y`, y la forma se valida **por slot**, no por el total
+del registro: un slot con cuatro canales y otro con dos suma lo mismo y desplazaría en silencio todas
+las coordenadas siguientes.
+
+**Por qué.** Leer el balón del primer campo de cada línea da **40,0%** de presencia y un hueco
+fantasma de 52.239 frames; del último da los 113.488 / 199.319 (56,9%) correctos. Y exigir los tres
+canales daría **5,0%**: solo 9.909 de los 113.488 balones presentes traen `z` (8,7%), porque el
+export solo rellena la tercera coordenada cuando el balón está en el aire.
+
+De paso, la premisa del issue #28 sobre el descanso es falsa: la mediana no es "casi nadie" sino
+**12 jugadores**, y el balón se detecta en **18.961 de los 20.156 frames** de descanso (94%). Eso
+importa para #27 y para el stream A: el tracking no se detiene, así que ni "sin jugadores" ni "sin
+balón" discriminan balón muerto. El lector lo deja como test explícito para que nadie lo reconstruya
+sobre la premisa contraria.
+
+**Coste.** Las cifras están atadas a este partido y a esta exportación: otro partido, o una entrega
+corregida, falla en `load()` hasta actualizar `FINGERPRINTS`. Es intencional — un error al cargar es
+preferible a un número silenciosamente falso aguas abajo. El coste real: 3 s y 230 MB por proceso la
+primera vez, compartido después por caché y con los arrays en solo lectura.
