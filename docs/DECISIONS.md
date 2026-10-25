@@ -524,3 +524,24 @@ La evidencia de esos artefactos está fijada en
 comparación desde `artifacts/possession.csv`, y falla si cualquier versión, métrica o SHA-256 cambia.
 La regeneración de ese artefacto exige el bundle táctico licenciado. La diferencia entre 128 y la
 nota anterior de 129 se debe a la política explícita `confidence=0 → X`, no a un cambio de emisión.
+
+---
+
+## 21. F0a corre aislado y fija el valor público
+
+**Decidido.** `make f0a` ejecuta la cadena completa — `onehot` del baseline `smooth50` →
+`assemble` → validador oficial → `score` — dentro de `runs/f0a/`, falla si el `spellF1` no es
+`0,325581` o el `macroF1` no es `0,620733`, y exige que artefacto y submission reconstruidos
+desde cero sean byte-idénticos. El ledger recibe una línea por corrida.
+
+**Por qué.** F0a (#20) existe para cerrar el riesgo "no sabemos si el pipeline funciona" antes de
+modelar. Un run que solo "sale bien" no protege de eso: fijar el valor publicado convierte un
+cambio involuntario en la ruta de ensamblado en un fallo con dos números, y deja explícito que el
+diagnóstico es el pipeline, no el modelo. El directorio propio evita sobrescribir
+`artifacts/possession.csv`, que es el artefacto real del bundle licenciado y la entrada de
+`make verify-b6`: pisarlo con un baseline destruiría evidencia de otro carril. Los comandos
+canónicos (`make submission`, `make validate`, `make score`) no cambian.
+
+**Costo.** CI puntúa dos veces — el `demo` de `smooth125` y F0a — unos 5 s más. El número es del
+slice público de 17 posesiones: sirve para comprobar alineación y formato, nunca como prueba de
+generalización ni para elegir entre versiones.
