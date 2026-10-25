@@ -152,6 +152,7 @@ over the full match; the two are not interchangeable.
 ## Where things live
 
 ```
+tools/atd.py          the raw tracking reader: frames(), players(frame), ball() + the export's invariants
 tools/contract.py     the two formats and the checks for them
 tools/assemble.py     artifacts -> submission. The only writer.
 tools/onehot.py       frame,label -> artifact, for existing label files
