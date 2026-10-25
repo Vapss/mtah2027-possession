@@ -525,7 +525,7 @@ comparación desde `artifacts/possession.csv`, y falla si cualquier versión, m�
 La regeneración de ese artefacto exige el bundle táctico licenciado. La diferencia entre 128 y la
 nota anterior de 129 se debe a la política explícita `confidence=0 → X`, no a un cambio de emisión.
 
-## 22. Los tramos de hueco no llevan política propia: el slice no puede decidir ninguno
+## 24. Los tramos de hueco no llevan política propia: el slice no puede decidir ninguno
 
 **Decidido.** La política de un hueco de balón es la misma en los cuatro tramos del ticket (`≤25`,
 `26–125`, `126–500`, `>500` frames): **arrastrar el estado, nunca `D` por ausencia de balón**. La
