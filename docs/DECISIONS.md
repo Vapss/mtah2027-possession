@@ -488,8 +488,11 @@ pre-registrado de #22.
 `python tools/emision.py --output artifacts/possession.csv`; H/A toma el argmin del artefacto y las
 filas con `confidence=0` se emiten como X. Los archivos reproducibles `runs/argmin_baseline.csv`,
 `runs/argmin_baseline_metrics.json` y `runs/postprocess_comparison.json` son locales e ignorados
-por Git. La comparación usa `tools/compare_submissions.py` y el scorer oficial sobre el slice
-público (17 posesiones); no prueba generalización al partido completo.
+por Git. SHA-256 del baseline: `3a402d4236acb8deb25e71453792b7fa31c6bd5abbfa1cbf03e1e85d401ff701`.
+La comparación usa `tools/compare_submissions.py` y el scorer oficial sobre el slice público (17
+posesiones); no prueba generalización al partido completo. El baseline no contiene etiquetas D,
+por lo que la regla D es un no-op en esta comparación y solo se ejerce mediante sus pruebas
+sintéticas.
 
 | IoU | Antes TP/FP/FN | Antes P/R/F1 | Después TP/FP/FN | Después P/R/F1 |
 |---:|---:|---:|---:|---:|
@@ -500,8 +503,9 @@ público (17 posesiones); no prueba generalización al partido completo.
 El conteo baja de 128 a 50 predicciones, frente a 17 posesiones GT; `n_pred` es diagnóstico, no
 objetivo de aceptación. El delta medio pareado de `spellF1` es **+0,14094**, con `n_discordant=2`
 (2 victorias, 0 derrotas; test exacto de signos p=0,5, diagnóstico por posesión, no prueba del
-delta). Todos los IoU suben, pero el slice público es pequeño y su ruido impide declarar una mejora
-en el partido completo. No se ajustaron parámetros después de medir.
+delta). La magnitud supera la referencia de ruido de ~0,04 del partido completo, pero el slice
+público solo tiene 17 posesiones y 2 discordancias; no establece generalización al partido completo.
+No se ajustaron parámetros después de medir.
 
 Reproducción (con el bundle táctico disponible):
 
