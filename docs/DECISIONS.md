@@ -286,3 +286,36 @@ de `make ci`: quien no lo tenga instalado tiene que poder correr el harness igua
 **Coste.** 2,4 s y 576 nodos para este repo, sin red. Quien quiera nombres de comunidades legibles
 tiene que configurar un backend; sin él, el informe dice "Community N" y sigue sirviendo para
 navegar. Y es un mapa, no una verdad: un god node es una invitación a leer `file:line`.
+
+---
+
+## 16. `D` no se detecta por el balón, se decide por estado
+
+**Decidido.** Ningún job etiqueta `D` a partir de un umbral del track del balón. Las señales de
+balón (ausencia, fuera de campo, velocidad, distancia al jugador) entran como **disparadores de
+precisión** dentro de un modelo con memoria de estado; el stream A (#5, #10, #16) se construye
+sobre contexto: reanudaciones, fuera de juego, saques, celebraciones.
+
+**Por qué.** Medido en la ventana pública (7.500 frames, 1.469 de `D`, 4 tramos), y reproducible con
+`python tools/characterize_d.py` (documento en `docs/analysis/d-characterization.md`):
+
+| señal | P(D \| señal) | P(señal \| D) | lift |
+|---|---:|---:|---:|
+| balón fuera del campo | 98,1% | 7,1% | 5,01 |
+| balón ausente | 55,8% | 33,6% | 2,85 |
+| `SET PIECES` | 56,1% | 45,4% | 2,86 |
+| balón lento (<1 m/s) | 19,4% | 6,7% | 0,99 |
+| balón a >5 m del jugador | 27,3% | 23,6% | 1,39 |
+| `BUILD UP` (control) | 9,2% | 2,0% | 0,47 |
+
+Los tramos de `D` duran 5,5 / 20,4 / 18,3 / 14,5 s (mediana 16,4 s): es estructura, no ruido de
+frame. El balón dentro de `D` rueda a 2,70 m/s de mediana (frente a 5,74 vivo) y está a 2,89 m del
+jugador más cercano (frente a 1,65 m): se mueve más despacio y más lejos, pero **ni está quieto ni
+está solo**, así que "balón parado" y "balón perdido" no son la misma cosa que `D`.
+
+`BUILD UP` está en la tabla como control: si algún día su lift sube de 1, la medición está mal.
+
+**Coste.** El techo de las señales de balón es bajo por construcción: la mejor de todas (fuera de
+campo) cubre el 7,1% de `D`. Y la ventana pública es la parte del partido con más balón detectado
+(88,2% frente a 56,9%), así que ahí la cobertura está sobrestimada; en el partido completo estas
+señales cubrirán aún menos. Lo que queda es contexto, y el contexto hay que modelarlo.
