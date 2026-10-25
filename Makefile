@@ -13,6 +13,7 @@ GRAPH_OUT ?= graphify-out
 POSTPROCESS_INPUT ?= runs/argmin_baseline.csv
 POSTPROCESS_OUTPUT ?= runs/postprocessed.csv
 F0A_WORKDIR ?= runs/f0a
+ARTIFACT ?= $(ARTIFACTS)/possession.csv
 
 .PHONY: help venv install dev test lint fmt guard ingest demo submission validate score score-baselines graph graph-check postprocess verify-b6 f0a ci clean
 
@@ -48,8 +49,9 @@ postprocess:  ## apply the fixed #35 cleanup to a frame,label CSV
 verify-b6:  ## reproduce B6 public evidence and compare hashes and metrics to its manifest
 	$(PY) tools/verify_b6.py
 
-f0a:  ## run #20 F0a end to end: artifact -> submission -> validate -> score, pinned
+f0a:  ## run #20 F0a end to end: pinned baseline, then a job artifact when present
 	$(PY) tools/f0a.py --workdir $(F0A_WORKDIR)
+	$(PY) tools/f0a.py --artifact $(ARTIFACT)
 
 ingest:  ## unpack the download zips into data/ -- idempotent, never clobbers a tracked file
 	$(PY) tools/ingest.py

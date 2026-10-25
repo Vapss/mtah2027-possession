@@ -57,4 +57,48 @@ def test_f0a_refuses_a_workspace_with_another_artifact(tmp_path) -> None:
     (artifacts / "possession.csv").write_text("frame,p_home,p_away,p_dead,confidence\n")
 
     with pytest.raises(ValueError, match="clean --workdir"):
-        f0a.build_submission(f0a.BASELINE, tmp_path)
+        f0a.build_submission(f0a.BASELINE, tmp_path, encode=True)
+
+
+def test_f0a_scores_a_job_artifact_without_pinning_its_score(tmp_path, artifact_factory) -> None:
+    source = tmp_path / "possession.csv"
+    artifact_factory(p_home=0.10, p_away=0.80, p_dead=0.10, confidence=1.0).to_csv(
+        source, index=False, lineterminator="\n"
+    )
+    ledger = tmp_path / "ledger.jsonl"
+
+    code = f0a.main(
+        [
+            "--artifact",
+            str(source),
+            "--workdir",
+            str(tmp_path / "work"),
+            "--ledger",
+            str(ledger),
+            "--bootstrap",
+            "0",
+        ]
+    )
+
+    assert code == 0
+    entry = json.loads(ledger.read_text(encoding="utf-8").strip().splitlines()[-1])
+    assert entry["note"].startswith("f0a artifact ")
+    assert len(entry["submissions"]) == 1
+    assert entry["submissions"][0]["submission"] == "submission"
+    assert (tmp_path / "work" / "artifacts" / "possession.csv").is_file()
+
+
+def test_f0a_skips_a_missing_artifact_instead_of_failing(tmp_path, capsys) -> None:
+    ledger = tmp_path / "ledger.jsonl"
+
+    code = f0a.main(["--artifact", str(tmp_path / "missing.csv"), "--ledger", str(ledger)])
+
+    assert code == 0
+    assert "SKIP f0a artifact" in capsys.readouterr().out
+    assert not ledger.exists()
+
+
+def test_f0a_without_pins_accepts_whatever_the_model_scores() -> None:
+    row = pd.Series({"spell_f1_mean": 0.01, "macro_f1": 0.02})
+
+    f0a.check_expected(row, expected_spell_f1=None, expected_macro_f1=None, tolerance=1e-6)

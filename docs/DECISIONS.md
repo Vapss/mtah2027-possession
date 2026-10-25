@@ -527,28 +527,34 @@ nota anterior de 129 se debe a la política explícita `confidence=0 → X`, no 
 
 ---
 
-## 21. F0a corre aislado y fija el valor público
+## 22. F0a corre aislado y fija el valor público
 
 **Decidido.** `make f0a` ejecuta la cadena completa — `onehot` del baseline `smooth50` →
 `assemble` → validador oficial → `score` — dentro de `runs/f0a/`, falla si el `spellF1` no es
 `0,325581` o el `macroF1` no es `0,620733`, y exige que artefacto y submission reconstruidos
-desde cero sean byte-idénticos. El ledger recibe una línea por corrida.
+desde cero sean byte-idénticos. El ledger recibe una línea por corrida. Después corre la misma
+cadena con `artifacts/possession.csv` (`--artifact`, o `make f0a ARTIFACT=...`) en
+`runs/f0a/artifact/`: esa corrida no fija métricas —el número es del modelo, no del ensamblado— y
+su nota lleva el SHA-256 del artefacto. Si el artefacto no existe (bundle licenciado ausente), se
+salta con un mensaje y no falla.
 
 **Por qué.** F0a (#20) existe para cerrar el riesgo "no sabemos si el pipeline funciona" antes de
 modelar. Un run que solo "sale bien" no protege de eso: fijar el valor publicado convierte un
 cambio involuntario en la ruta de ensamblado en un fallo con dos números, y deja explícito que el
-diagnóstico es el pipeline, no el modelo. El directorio propio evita sobrescribir
+diagnóstico es el pipeline, no el modelo. El baseline prueba la fontanería; el artefacto real
+prueba la cadena con el modelo dentro y deja en el ledger el número que de verdad se va a
+entregar. El directorio propio evita sobrescribir
 `artifacts/possession.csv`, que es el artefacto real del bundle licenciado y la entrada de
 `make verify-b6`: pisarlo con un baseline destruiría evidencia de otro carril. Los comandos
 canónicos (`make submission`, `make validate`, `make score`) no cambian.
 
-**Costo.** CI puntúa dos veces — el `demo` de `smooth125` y F0a — unos 5 s más. El número es del
-slice público de 17 posesiones: sirve para comprobar alineación y formato, nunca como prueba de
-generalización ni para elegir entre versiones.
+**Costo.** CI puntúa tres veces — el `demo` de `smooth125`, el baseline de F0a y el artefacto si
+está — unos 10 s más. Los números son del slice público de 17 posesiones: sirven para comprobar
+alineación y formato, nunca como prueba de generalización ni para elegir entre versiones.
 
 ---
 
-## 22. La abstención se propaga y sale `X`, no la decide el orden de columnas
+## 23. La abstención se propaga y sale `X`, no la decide el orden de columnas
 
 **Decidido.** Cuando todos los artefactos tienen `confidence = 0` en un frame, `combine()` conserva
 esa condición (probabilidades uniformes, `confidence = 0`) y `decide()` emite `X` antes de aplicar

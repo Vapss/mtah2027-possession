@@ -54,7 +54,38 @@ codificar un baseline ya publicado, una diferencia señala la ruta de ensamblado
 `assemble`), no un cambio de modelo. También falla si la reconstrucción no es byte-idéntica o si
 el validador rechaza el archivo.
 
+## Correr con el artefacto real (#34)
+
+El baseline demuestra la fontanería. Para dejar en el ledger el número de la cadena real, la misma
+corrida acepta un artefacto de trabajo:
+
+```bash
+make f0a ARTIFACT=artifacts/possession.csv
+# o, sin pasar por make:
+.venv/bin/python tools/f0a.py --artifact artifacts/possession.csv
+```
+
+Copia el artefacto a `runs/f0a/artifact/artifacts/`, lo ensambla, lo valida y lo puntúa; exige
+reconstrucción byte-idéntica y escribe una línea con `note: "f0a artifact <sha256>"`. No fija
+métricas: son del modelo, no de la ruta de ensamblado. **Si el artefacto no existe imprime
+`SKIP f0a artifact: ...` y termina con exit 0**, porque sin el bundle licenciado no hay nada que
+medir; el chequeo fijado del baseline sigue corriendo igual.
+
+Medición del artefacto del clon de validación (`sha256 f55ec7f3…`, 199.319 filas, con el
+ensamblador de #44):
+
+| métrica | valor |
+|---|---:|
+| `spellF1` | 0,044138 |
+| `macroF1` | 0,457324 |
+| posesiones predichas | 128 (GT 17) |
+| submission SHA-256 | `3a402d4236acb8deb25e71453792b7fa31c6bd5abbfa1cbf03e1e85d401ff701` |
+
+Son cifras del slice público de 17 posesiones y de un artefacto concreto: diagnóstico, no
+generalización. Otro artefacto B5 da otro número.
+
 ## Por qué un directorio propio
+
 
 `make demo` no limpia `artifacts/`, y `make submission` combina **todos** los `*.csv` que
 encuentre. En un worktree con un artefacto previo, el score canónico puntúa una mezcla: medido en

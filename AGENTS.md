@@ -84,7 +84,7 @@ make demo          # encode a shipped baseline as an artifact (no match data nee
 make submission    # artifacts/*.csv -> submissions/submission.csv
 make validate      # the organisers' own validator over submissions/
 make score         # score submissions/ with --bootstrap 1000, append to runs/ledger.jsonl
-make f0a           # #20 F0a: shipped baseline -> artifact -> submission -> validate -> score, pinned
+make f0a           # #20 F0a: pinned baseline chain + the #34 artifact when present
 make guard         # licensed data / oversized file check
 make ci            # everything above, in order
 make graph-check   # build the code graph and prove it cannot be committed (CI runs this too)
