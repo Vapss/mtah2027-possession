@@ -525,6 +525,90 @@ comparación desde `artifacts/possession.csv`, y falla si cualquier versión, m�
 La regeneración de ese artefacto exige el bundle táctico licenciado. La diferencia entre 128 y la
 nota anterior de 129 se debe a la política explícita `confidence=0 → X`, no a un cambio de emisión.
 
+## 21. El jackknife por posesión se lee también por clase de duración
+
+**Decidido.** `tools/compare_submissions.py` conserva el jackknife leave-one-possession-out de #29
+(17 folds: se quita una posesión verdadera, se conservan todas las predicciones y se vuelve a
+ejecutar el emparejamiento completo). Añade el desglose pre-registrado de #8 en dos clases de
+duración: **corta < 4 s** y **larga ≥ 4 s**. En el slice público son 6 y 11 de 17.
+
+Para que el desglose no invente una segunda regla de emparejamiento, cada clase usa el mismo match
+greedy uno-a-uno y los mismos IoU que el scorer. En la clase `c`:
+
+- `TP_c` y `FN_c` son posesiones verdaderas de esa clase emparejadas y perdidas;
+- `FP_global = n_pred - TP_total` es el mismo para las dos clases y para A/B;
+- `spellF1_c = 2·TP_c / (2·TP_c + FN_c + FP_global)`.
+
+Así `TP_corta + TP_larga = TP_total` y `FN_corta + FN_larga = FN_total`, y una predicción espuria
+baja las dos F1 sin mover ningún `TP`. `spellF1_c` **no es el `spellF1` oficial**: se emite con
+`official: false` y `metric: class_restricted_spell_f1_shared_fp`, y se acompaña de
+`recall_c = TP_c / n_gt_c`, que no depende de `FP_global`. Los F1 por clase **no son aditivos** y no
+suman el agregado; solo `TP` y `FN` son una descomposición exacta. El delta por clase indica si un
+cambio movió las cortas, las largas o ambas; el agregado oficial sigue siendo el número de
+aceptación. El bootstrap no se usa como test: es una cota marginal de cada submission y ya lo
+produce `tools/score.py`.
+
+**Uso.** `python tools/compare_submissions.py A.csv B.csv --gt public --class-breakdown` imprime,
+por fold y en agregado, `spellF1`, TP/FP/FN y el desglose `by_possession_class`, además de las 17
+banderas por posesión a IoU 0,3 / 0,5 / 0,7 y del test de signos separado. La tabla JSON es la que
+#14 adjunta al ledger. El comando no escribe submissions ni ledger. Sin el flag, la salida queda
+igual que antes: el manifiesto de B6 hashea ese JSON y no debe invalidarse por un cambio de otro
+carril.
+
+**Coste.** Con 17 posesiones (6 cortas, 11 largas) una clase tiene todavía menos muestra que el
+total: los deltas por clase son diagnóstico de sensibilidad, no prueba de generalización al partido
+completo. Un delta agregado se sigue citando con `n_discordant` y declarando `n=17`.
+
+---
+
+## 22. F0a corre aislado y fija el valor público
+
+**Decidido.** `make f0a` ejecuta la cadena completa — `onehot` del baseline `smooth50` →
+`assemble` → validador oficial → `score` — dentro de `runs/f0a/`, falla si el `spellF1` no es
+`0,325581` o el `macroF1` no es `0,620733`, y exige que artefacto y submission reconstruidos
+desde cero sean byte-idénticos. El ledger recibe una línea por corrida. Después corre la misma
+cadena con `artifacts/possession.csv` (`--artifact`, o `make f0a ARTIFACT=...`) en
+`runs/f0a/artifact/`: esa corrida no fija métricas —el número es del modelo, no del ensamblado— y
+su nota lleva el SHA-256 del artefacto. Si el artefacto no existe (bundle licenciado ausente), se
+salta con un mensaje y no falla.
+
+**Por qué.** F0a (#20) existe para cerrar el riesgo "no sabemos si el pipeline funciona" antes de
+modelar. Un run que solo "sale bien" no protege de eso: fijar el valor publicado convierte un
+cambio involuntario en la ruta de ensamblado en un fallo con dos números, y deja explícito que el
+diagnóstico es el pipeline, no el modelo. El baseline prueba la fontanería; el artefacto real
+prueba la cadena con el modelo dentro y deja en el ledger el número que de verdad se va a
+entregar. El directorio propio evita sobrescribir
+`artifacts/possession.csv`, que es el artefacto real del bundle licenciado y la entrada de
+`make verify-b6`: pisarlo con un baseline destruiría evidencia de otro carril. Los comandos
+canónicos (`make submission`, `make validate`, `make score`) no cambian.
+
+**Costo.** CI puntúa tres veces — el `demo` de `smooth125`, el baseline de F0a y el artefacto si
+está — unos 10 s más. Los números son del slice público de 17 posesiones: sirven para comprobar
+alineación y formato, nunca como prueba de generalización ni para elegir entre versiones.
+
+---
+
+## 23. La abstención se propaga y sale `X`, no la decide el orden de columnas
+
+**Decidido.** Cuando todos los artefactos tienen `confidence = 0` en un frame, `combine()` conserva
+esa condición (probabilidades uniformes, `confidence = 0`) y `decide()` emite `X` antes de aplicar
+`--abstain-below`. Un `--weight` explícito sigue contando ese artefacto: es un opt-in deliberado,
+no un desempate.
+
+**Por qué.** Ticket #44. B5 sin balón emite `p_home = p_away = 0,49`, `p_dead = 0,02` con
+`confidence = 0`; el promedio no ponderado y el `argmax` por orden de `PROB_COLUMNS` convertían
+"sin opinión" en `H`. Artefacto del clon de validación
+(`sha256 f55ec7f343a2…`, 199.319 filas): 64.643 frames sin balón dentro de los medios tiempos,
+los 64.643 salían `H`; ahora salen `X` (0 `H`/`A`/`D`). Fuera de los medios tiempos, otros 21.188
+pasan de `H` a `X`. Slice público con el scorer oficial, sin tocar pesos ni umbrales: `macroF1`
+0,4322 → **0,4573**, `spellF1` 0,0405 → **0,0441**, predicciones `A` intactas (49.524).
+
+**Costo.** Un artefacto que use `confidence = 0` para "poco fiable" en vez de "sin opinión" ahora
+se abstiene en vez de votar; ese es el contrato que AGENTS.md ya declaraba, y `--weight` permite
+forzarlo. La medición es del slice público de 17 posesiones: la mejora no se declara generalización.
+
+---
+
 ## 24. Los tramos de hueco no llevan política propia: el slice no puede decidir ninguno
 
 **Decidido.** La política de un hueco de balón es la misma en los cuatro tramos del ticket (`≤25`,

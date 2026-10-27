@@ -12,9 +12,11 @@ touching the deliverable.
     python tools/assemble.py --x-outside-halves      # abstain outside the two playing halves
 
 Combination rule: each artifact votes with its `confidence` column (or an explicit
-`--weight name=value`), so a job that is sure counts more than one that is not. If every
-weight for a frame is zero the frame falls back to an unweighted mean -- an artifact that
-abstains everywhere must not turn the output into a division by zero.
+`--weight name=value`), so a job that is sure counts more than one that is not. When every
+weight for a frame is zero, no artifact has an opinion there: the combined table keeps that
+condition (uniform probabilities, confidence 0) and `decide` emits `X`. Filling the row with
+an unweighted mean would turn "no opinion" into a vote for whichever probability column the
+argmax sees first.
 """
 
 from __future__ import annotations
@@ -43,6 +45,7 @@ from tools.contract import (  # noqa: E402
 DEFAULT_ARTIFACTS = REPO_ROOT / "artifacts"
 DEFAULT_OUT = REPO_ROOT / "submissions" / "submission.csv"
 DEFAULT_CONFIG = REPO_ROOT / "configs" / "assemble_default.json"
+UNIFORM = 1.0 / len(PROB_COLUMNS)
 
 
 def load_config(path: str | Path | None) -> dict:
@@ -88,20 +91,16 @@ def combine(
         numerator += weight[:, None] * probability
         denominator += weight
 
-    unweighted = np.mean(
-        np.stack(
-            [tables[name][list(PROB_COLUMNS)].to_numpy(dtype=float) for name in sorted(tables)]
-        ),
-        axis=0,
-    )
-    zero = denominator <= 0.0
+    no_opinion = denominator <= 0.0
     combined = np.where(
-        zero[:, None], unweighted, numerator / np.where(zero, 1.0, denominator)[:, None]
+        no_opinion[:, None],
+        UNIFORM,
+        numerator / np.where(no_opinion, 1.0, denominator)[:, None],
     )
 
     out = pd.DataFrame(combined, columns=list(PROB_COLUMNS))
     out.insert(0, "frame", np.arange(N_FRAMES))
-    out["confidence"] = out[list(PROB_COLUMNS)].max(axis=1)
+    out["confidence"] = np.where(no_opinion, 0.0, combined.max(axis=1))
     return out
 
 
@@ -114,6 +113,12 @@ def decide(
     probability = artifact[list(PROB_COLUMNS)].to_numpy(dtype=float)
     best = probability.argmax(axis=1)
     labels = np.array(["H", "A", "D"])[best]
+
+    # confidence 0 is "no artifact had an opinion", not a weak vote. Checking it before any
+    # threshold keeps the label independent of PROB_COLUMNS order (a 0.49/0.49 tie would
+    # otherwise become H) and of --abstain-below, which stays a probability threshold.
+    no_opinion = artifact["confidence"].to_numpy(dtype=float) <= 0.0
+    labels[no_opinion] = "X"
 
     below = probability.max(axis=1) < abstain_below
     labels[below] = "X"

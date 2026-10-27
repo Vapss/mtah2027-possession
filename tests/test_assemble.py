@@ -49,13 +49,46 @@ def test_explicit_weight_overrides_confidence(artifact_factory) -> None:
     assert set(decide(combined)["label"]) == {"H"}
 
 
-def test_all_zero_confidence_falls_back_to_unweighted_mean(artifact_factory) -> None:
-    silent = artifact_factory(p_home=1.0, p_away=0.0, p_dead=0.0, confidence=0.0)
+def test_all_artifacts_abstaining_becomes_x_not_a_column_order_vote(artifact_factory) -> None:
+    # B5's no-ball row: two equal probabilities and confidence 0. Argmax on column order would
+    # pick p_home, which is how tens of thousands of no-ball frames used to become H.
+    silent = artifact_factory(p_home=0.49, p_away=0.49, p_dead=0.02, confidence=0.0)
 
     combined = combine({"silent.csv": silent})
+    labels = decide(combined)["label"]
 
     assert not combined.isna().any().any()
-    assert set(decide(combined)["label"]) == {"H"}
+    assert set(combined["confidence"]) == {0.0}
+    assert set(labels) == {"X"}
+
+
+def test_a_real_tie_with_an_opinion_is_not_x(artifact_factory) -> None:
+    tied = artifact_factory(p_home=0.50, p_away=0.50, p_dead=0.0, confidence=1.0)
+
+    labels = decide(combine({"tied.csv": tied}))["label"]
+
+    assert set(labels) == {"H"}  # still resolved by column order, but it is an opinion
+    assert "X" not in set(labels)
+
+
+def test_two_artifacts_decide_by_the_one_with_an_opinion(artifact_factory) -> None:
+    silent = artifact_factory(p_home=0.49, p_away=0.49, p_dead=0.02, confidence=0.0)
+    speaks_away = artifact_factory(p_home=0.05, p_away=0.90, p_dead=0.05, confidence=0.7)
+
+    combined = combine({"silent.csv": silent, "speaks_away.csv": speaks_away})
+    labels = decide(combined)["label"]
+
+    assert set(labels) == {"A"}
+    assert (combined["confidence"] > 0.0).all()
+
+
+def test_explicit_weight_counts_an_otherwise_silent_artifact(artifact_factory) -> None:
+    """An explicit --weight is a deliberate opt-in, not a tie-break: it must still produce H/A/D."""
+    silent = artifact_factory(p_home=0.49, p_away=0.49, p_dead=0.02, confidence=0.0)
+
+    labels = decide(combine({"silent.csv": silent}, weights={"silent.csv": 1.0}))["label"]
+
+    assert set(labels) == {"H"}
 
 
 def test_abstain_below_marks_frames_as_x(artifact_factory) -> None:

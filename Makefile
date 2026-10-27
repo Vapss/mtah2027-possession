@@ -12,8 +12,10 @@ GRAPHIFY ?= graphify
 GRAPH_OUT ?= graphify-out
 POSTPROCESS_INPUT ?= runs/argmin_baseline.csv
 POSTPROCESS_OUTPUT ?= runs/postprocessed.csv
+F0A_WORKDIR ?= runs/f0a
+ARTIFACT ?= $(ARTIFACTS)/possession.csv
 
-.PHONY: help venv install dev test lint fmt guard ingest demo submission validate score score-baselines graph graph-check postprocess verify-b6 ci clean
+.PHONY: help venv install dev test lint fmt guard ingest demo submission validate score score-baselines graph graph-check postprocess verify-b6 f0a ci clean
 
 help:  ## list the targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sed 's/:.*## /\t/' | expand -t22
@@ -46,6 +48,10 @@ postprocess:  ## apply the fixed #35 cleanup to a frame,label CSV
 
 verify-b6:  ## reproduce B6 public evidence and compare hashes and metrics to its manifest
 	$(PY) tools/verify_b6.py
+
+f0a:  ## run #20 F0a end to end: pinned baseline, then a job artifact when present
+	$(PY) tools/f0a.py --workdir $(F0A_WORKDIR)
+	$(PY) tools/f0a.py --artifact $(ARTIFACT)
 
 ingest:  ## unpack the download zips into data/ -- idempotent, never clobbers a tracked file
 	$(PY) tools/ingest.py
@@ -87,7 +93,7 @@ graph:  ## build the code graph in $(GRAPH_OUT)/ -- optional dev tool, nothing l
 	$(GRAPHIFY) export html
 	@echo "read $(GRAPH_OUT)/GRAPH_REPORT.md, or open $(GRAPH_OUT)/graph.html"
 
-ci: lint test guard demo submission validate score  ## exactly what GitHub Actions runs
+ci: lint test guard demo submission validate score f0a  ## exactly what GitHub Actions runs
 
 clean:  ## remove generated outputs (never touches data/ or evaluation/results/)
 	rm -rf $(ARTIFACTS) runs $(GRAPH_OUT) $(SUBMISSIONS)/*.csv $(SUBMISSIONS)/*.tmp
