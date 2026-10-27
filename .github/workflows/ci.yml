@@ -41,6 +41,9 @@ jobs:
       - name: Score and record
         run: make score PY=.venv/bin/python
 
+      - name: Close the F0a chain
+        run: make f0a PY=.venv/bin/python
+
       - name: Upload the scoreboard and ledger
         if: always()
         uses: actions/upload-artifact@v4
