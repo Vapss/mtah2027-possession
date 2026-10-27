@@ -2,6 +2,11 @@
 
 The official scorer remains authoritative. The sign test below asks only which submission matches
 more individual ground-truth possessions at IoU 0.5; it is not a significance test for spellF1.
+
+The jackknife leaves one ground-truth possession out at a time, keeps every prediction, and
+rematches, so it also charges spurious predictions and reassignments. Its short/long split is a
+decomposition of the same official counts, not a second matching rule: the global spurious count
+is shared by both classes, so only the possessions that actually moved can change a class score.
 """
 
 from __future__ import annotations
@@ -94,11 +99,160 @@ def match_flags_by_iou(
     }
 
 
+POSSESSION_CLASSES = ("short", "long")
+CLASS_BOUNDARY_FRAMES = 4 * pm.FPS
+CLASS_DEFINITION = (
+    "GT possessions split by duration: short < 4 s, long >= 4 s. "
+    "spellF1_c = 2*TP_c / (2*TP_c + FN_c + FP_global), where FP_global is the number of "
+    "predicted spells left unmatched against all GT classes; it is shared by both classes "
+    "and by both submissions, so a class delta cannot be manufactured by re-splitting FPs. "
+    "This is NOT the official spellF1: official=false. Class F1s are not additive and do not "
+    "sum to the aggregate; only TP_c and FN_c form an exact decomposition of TP_total/FN_total."
+)
+CLASS_METRIC = "class_restricted_spell_f1_shared_fp"
+CLASS_ADDITIVITY = (
+    "Class F1s are not additive and do not sum to the aggregate spellF1; only TP_c and "
+    "FN_c are an exact decomposition (TP_short + TP_long = TP_total, and likewise FN)."
+)
+
+
+def duration_class(spell: tuple[int, int, int]) -> str:
+    """Short or long, from the GT spell's frame duration. 4 s is the pre-registered cut."""
+    start, stop, _team = spell
+    return "short" if stop - start < CLASS_BOUNDARY_FRAMES else "long"
+
+
+def class_spell_scores(
+    gt_spells: list[tuple[int, int, int]], pred_spells: list[tuple[int, int, int]]
+) -> dict[str, Any]:
+    """Class-restricted spell scores with the global spurious count charged to each class.
+
+    TP_c + FN_c = n_gt_c and TP_short + TP_long = TP_total. The class F1 is therefore a
+    decomposition of the official counts, not a second matching rule: the same greedy one-to-one
+    match at the same IoUs produces every number.
+    """
+    overlaps = pm.spell_overlaps(gt_spells, pred_spells)
+    flags_by_iou = {
+        f"{threshold:.1f}": pm.matched_gt_flags(overlaps, len(gt_spells), threshold)
+        for threshold in pm.SPELL_IOUS
+    }
+    labels = [duration_class(spell) for spell in gt_spells]
+    n_pred = len(pred_spells)
+    classes: dict[str, Any] = {}
+    for name in POSSESSION_CLASSES:
+        indices = [index for index, label in enumerate(labels) if label == name]
+        per_iou: dict[str, Any] = {}
+        scores = []
+        recalls = []
+        for key, flags in flags_by_iou.items():
+            n_gt = len(indices)
+            matched = int(flags[indices].sum())
+            missed = n_gt - matched
+            spurious_global = n_pred - int(flags.sum())
+            precision = matched / (matched + spurious_global) if matched + spurious_global else 0.0
+            recall = matched / n_gt if n_gt else 0.0
+            f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+            per_iou[key] = {
+                "official": False,
+                "metric": CLASS_METRIC,
+                "n_gt": n_gt,
+                "n_matched": matched,
+                "n_missed": missed,
+                "n_spurious_global": spurious_global,
+                "recall": recall,
+                "spell_f1": f1,
+            }
+            scores.append(f1)
+            recalls.append(recall)
+        classes[name] = {
+            "official": False,
+            "metric": CLASS_METRIC,
+            "n_gt": len(indices),
+            "mean_recall": float(np.mean(recalls)) if recalls else 0.0,
+            "mean_spell_f1": float(np.mean(scores)) if scores else 0.0,
+            "per_iou": per_iou,
+        }
+    return {
+        "official": False,
+        "metric": CLASS_METRIC,
+        "additivity": CLASS_ADDITIVITY,
+        "definition": CLASS_DEFINITION,
+        "classes": classes,
+    }
+
+
+def compare_class_scores(
+    gt_spells: list[tuple[int, int, int]],
+    pred_a: list[tuple[int, int, int]],
+    pred_b: list[tuple[int, int, int]],
+) -> dict[str, Any]:
+    """Short/long A-vs-B spell deltas from the same full prediction sets."""
+    scores_a = class_spell_scores(gt_spells, pred_a)
+    scores_b = class_spell_scores(gt_spells, pred_b)
+    classes: dict[str, Any] = {}
+    for name in POSSESSION_CLASSES:
+        class_a = scores_a["classes"][name]
+        class_b = scores_b["classes"][name]
+        per_iou: dict[str, Any] = {}
+        for key, row_a in class_a["per_iou"].items():
+            row_b = class_b["per_iou"][key]
+            per_iou[key] = {
+                "official": False,
+                "metric": CLASS_METRIC,
+                "a": {
+                    field: row_a[field]
+                    for field in (
+                        "n_matched",
+                        "n_missed",
+                        "n_spurious_global",
+                        "recall",
+                        "spell_f1",
+                    )
+                },
+                "b": {
+                    field: row_b[field]
+                    for field in (
+                        "n_matched",
+                        "n_missed",
+                        "n_spurious_global",
+                        "recall",
+                        "spell_f1",
+                    )
+                },
+                "delta_matched_b_minus_a": row_b["n_matched"] - row_a["n_matched"],
+                "delta_recall_b_minus_a": row_b["recall"] - row_a["recall"],
+                "delta_spell_f1_b_minus_a": row_b["spell_f1"] - row_a["spell_f1"],
+            }
+        classes[name] = {
+            "official": False,
+            "metric": CLASS_METRIC,
+            "n_gt": class_a["n_gt"],
+            "a": {
+                "mean_recall": class_a["mean_recall"],
+                "mean_spell_f1": class_a["mean_spell_f1"],
+            },
+            "b": {
+                "mean_recall": class_b["mean_recall"],
+                "mean_spell_f1": class_b["mean_spell_f1"],
+            },
+            "delta_mean_recall_b_minus_a": (class_b["mean_recall"] - class_a["mean_recall"]),
+            "delta_mean_spell_f1_b_minus_a": (class_b["mean_spell_f1"] - class_a["mean_spell_f1"]),
+            "per_iou": per_iou,
+        }
+    return {
+        "official": False,
+        "metric": CLASS_METRIC,
+        "additivity": CLASS_ADDITIVITY,
+        "definition": CLASS_DEFINITION,
+        "classes": classes,
+    }
+
+
 def sign_diagnostic(
     gt_spells: list[tuple[int, int, int]],
     pred_a: list[tuple[int, int, int]],
     pred_b: list[tuple[int, int, int]],
-) -> dict[str, int | float | str]:
+) -> dict[str, Any]:
     """Exact two-sided sign test on per-GT match status at the headline IoU only."""
     threshold = pm.SPELL_IOU_HEADLINE
     key = f"{threshold:.1f}"
@@ -120,10 +274,10 @@ def sign_diagnostic(
         bucket["delta_matched_b_minus_a"] = dict.fromkeys(flags_a_by_iou, 0)
     for index, (start, stop, team) in enumerate(gt_spells):
         duration_frames = stop - start
-        duration_class = "short" if duration_frames < 4 * pm.FPS else "long"
+        duration = duration_class((start, stop, team))
         headline_a, headline_b = bool(flags_a[index]), bool(flags_b[index])
         outcome = "tie" if headline_a == headline_b else "a" if headline_a else "b"
-        bucket = by_duration[duration_class]
+        bucket = by_duration[duration]
         bucket["wins_a" if outcome == "a" else "wins_b" if outcome == "b" else "ties"] += 1
         per_possession.append(
             {
@@ -133,7 +287,7 @@ def sign_diagnostic(
                 "team": pm.LABELS[team],
                 "duration_frames": duration_frames,
                 "duration_seconds": duration_frames / pm.FPS,
-                "duration_class": duration_class,
+                "duration_class": duration,
                 "matched_a_by_iou": {
                     iou: bool(flags[index]) for iou, flags in flags_a_by_iou.items()
                 },
@@ -163,8 +317,18 @@ def sign_diagnostic(
     }
 
 
-def compare_codes(gt_codes: np.ndarray, codes_a: np.ndarray, codes_b: np.ndarray) -> dict[str, Any]:
-    """Official comparison, jackknife over GT possessions, and a separate sign diagnostic."""
+def compare_codes(
+    gt_codes: np.ndarray,
+    codes_a: np.ndarray,
+    codes_b: np.ndarray,
+    *,
+    include_class_breakdown: bool = False,
+) -> dict[str, Any]:
+    """Official comparison, jackknife over GT possessions, and a separate sign diagnostic.
+
+    The short/long breakdown is opt-in so the default JSON stays byte-identical for the B6
+    evidence manifest, which hashes this comparison's output.
+    """
     if len(gt_codes) != len(codes_a) or len(gt_codes) != len(codes_b):
         raise ValueError("ground truth and both submissions must have the same number of frames")
     runs = pm.valid_runs(gt_codes)
@@ -215,34 +379,36 @@ def compare_codes(gt_codes: np.ndarray, codes_a: np.ndarray, codes_b: np.ndarray
             key: score_b["per_iou"][key]["spell_f1"] - score_a["per_iou"][key]["spell_f1"]
             for key in score_a["per_iou"]
         }
-        jackknife.append(
-            {
-                "excluded_gt_possession": excluded + 1,
-                "spell_f1_a": score_a["mean_spell_f1"],
-                "spell_f1_b": score_b["mean_spell_f1"],
-                "delta_mean_spell_f1": score_b["mean_spell_f1"] - score_a["mean_spell_f1"],
-                "delta_by_iou": fold_delta_by_iou,
-                "counts_by_iou": {
-                    key: {
-                        "a": {
-                            metric: score_a["per_iou"][key][metric]
-                            for metric in ("n_matched", "n_missed", "n_spurious")
-                        },
-                        "b": {
-                            metric: score_b["per_iou"][key][metric]
-                            for metric in ("n_matched", "n_missed", "n_spurious")
-                        },
-                    }
-                    for key in score_a["per_iou"]
-                },
-            }
-        )
+        replicate = {
+            "excluded_gt_possession": excluded + 1,
+            "spell_f1_a": score_a["mean_spell_f1"],
+            "spell_f1_b": score_b["mean_spell_f1"],
+            "delta_mean_spell_f1": score_b["mean_spell_f1"] - score_a["mean_spell_f1"],
+            "delta_by_iou": fold_delta_by_iou,
+            "counts_by_iou": {
+                key: {
+                    "a": {
+                        metric: score_a["per_iou"][key][metric]
+                        for metric in ("n_matched", "n_missed", "n_spurious")
+                    },
+                    "b": {
+                        metric: score_b["per_iou"][key][metric]
+                        for metric in ("n_matched", "n_missed", "n_spurious")
+                    },
+                }
+                for key in score_a["per_iou"]
+            },
+        }
+        if include_class_breakdown:
+            replicate["n_gt_remaining"] = len(remaining)
+            replicate["by_possession_class"] = compare_class_scores(remaining, pred_a, pred_b)
+        jackknife.append(replicate)
     jackknife_deltas = [row["delta_mean_spell_f1"] for row in jackknife]
     full_delta = official_b["mean_f1"] - official_a["mean_f1"]
     has_positive = any(delta > 0 for delta in jackknife_deltas)
     has_negative = any(delta < 0 for delta in jackknife_deltas)
 
-    return {
+    result: dict[str, Any] = {
         "n_gt_possessions": len(gt_spells),
         "a": {"n_pred": len(pred_a), "mean_spell_f1": official_a["mean_f1"]},
         "b": {"n_pred": len(pred_b), "mean_spell_f1": official_b["mean_f1"]},
@@ -266,13 +432,26 @@ def compare_codes(gt_codes: np.ndarray, codes_a: np.ndarray, codes_b: np.ndarray
             "also penalizes all unmatched predicted spells."
         ),
     }
+    if include_class_breakdown:
+        result["by_possession_class"] = compare_class_scores(gt_spells, pred_a, pred_b)
+        result["bootstrap_note"] = (
+            "Bootstrap intervals from tools/score.py are marginal bounds for one submission, "
+            "not a paired test between two systems."
+        )
+    return result
 
 
-def compare_files(path_a: str | Path, path_b: str | Path, gt_path: str | Path) -> dict[str, Any]:
+def compare_files(
+    path_a: str | Path,
+    path_b: str | Path,
+    gt_path: str | Path,
+    *,
+    include_class_breakdown: bool = False,
+) -> dict[str, Any]:
     gt = read_codes(gt_path, games.source_frames(), "ground truth")
     a = read_codes(path_a, len(gt), "submission")
     b = read_codes(path_b, len(gt), "submission")
-    return compare_codes(gt, a, b)
+    return compare_codes(gt, a, b, include_class_breakdown=include_class_breakdown)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -280,9 +459,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("submission_a")
     parser.add_argument("submission_b")
     parser.add_argument("--gt", default="public", help="public, private, or a frame,label CSV path")
+    parser.add_argument(
+        "--class-breakdown",
+        action="store_true",
+        help="add the pre-registered short/long split (#8) to the JSON",
+    )
     args = parser.parse_args(argv)
     try:
-        result = compare_files(args.submission_a, args.submission_b, resolve_ground_truth(args.gt))
+        result = compare_files(
+            args.submission_a,
+            args.submission_b,
+            resolve_ground_truth(args.gt),
+            include_class_breakdown=args.class_breakdown,
+        )
     except (OSError, ValueError) as error:
         print(f"comparison failed: {error}", file=sys.stderr)
         return 1
