@@ -1,6 +1,6 @@
 # A2 — Estructura de los 150 huecos de balón
 
-Generado por `python tools/band_gaps.py --write docs/analysis/ball-gap-bands.md` desde el commit `ec9938ef`. No se edita a mano.
+Generado por `python tools/band_gaps.py --ship artifacts/possession.csv --write docs/analysis/ball-gap-bands.md` desde el commit `b1c8e0b5`. No se edita a mano.
 
 Ventana pública: frames **11.185..18.684** (7.500 frames). Base: `evaluation/results/baseline_smooth50.csv`.
 

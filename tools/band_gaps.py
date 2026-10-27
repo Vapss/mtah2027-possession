@@ -329,6 +329,18 @@ def _relative(path: str) -> str:
         return Path(path).name
 
 
+def _command(evidence: dict) -> str:
+    """The command that regenerates the document, including `--ship` when it was used.
+
+    Printing only the no-ship invocation would be a doc that cannot reproduce itself: section 3
+    exists only with `--ship`, so the printed command has to carry it.
+    """
+    command = "python tools/band_gaps.py"
+    if "ship" in evidence:
+        command += f" --ship {_relative(evidence['ship']['base'])}"
+    return command + " --write docs/analysis/ball-gap-bands.md"
+
+
 def _policy_cell(row: dict | None) -> str:
     if not row:
         return "— | — | — | — | —"
@@ -346,7 +358,7 @@ def report(evidence: dict, commit: str | None = None) -> str:
     lines = [
         "# A2 — Estructura de los 150 huecos de balón",
         "",
-        "Generado por `python tools/band_gaps.py --write docs/analysis/ball-gap-bands.md` desde"
+        "Generado por `" + _command(evidence) + "` desde"
         f" el commit `{commit or 'desconocido'}`. No se edita a mano.",
         "",
         f"Ventana pública: frames **{_num(window[0])}..{_num(window[1] - 1)}**"

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from tools.band_gaps import apply_policy, band_label, band_of_gaps, decide
+from tools.band_gaps import _command, apply_policy, band_label, band_of_gaps, decide
 
 RUNS = [(0, 100)]
 
@@ -118,3 +118,12 @@ def test_decide_rejects_a_result_that_dies_with_one_gap() -> None:
     assert verdict == "no medible localmente"
     assert "depende de un hueco" in reason
     assert "0,01600" in reason
+
+
+def test_the_document_prints_the_command_that_actually_reproduces_it() -> None:
+    """Section 3 only exists with --ship, so the printed command must carry it."""
+    without_ship = _command({"anchor": {}})
+    assert without_ship == "python tools/band_gaps.py --write docs/analysis/ball-gap-bands.md"
+    with_ship = _command({"anchor": {}, "ship": {"base": "artifacts/possession.csv"}})
+    assert "--ship artifacts/possession.csv" in with_ship
+    assert with_ship.endswith("--write docs/analysis/ball-gap-bands.md")
