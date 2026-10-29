@@ -271,7 +271,8 @@ def report(sample: Sample, fps: int, commit: str | None = None) -> str:
     runs_d = runs(labels, "D")
     durations = duration_table(runs_d, fps, n)
     median_seconds = float(np.median([d.seconds for d in durations])) if durations else float("nan")
-    doc_path = DEFAULT_DOC.relative_to(REPO_ROOT)
+    # POSIX separators: the printed command must not depend on the OS that generated the document.
+    doc_path = DEFAULT_DOC.relative_to(REPO_ROOT).as_posix()
 
     lines = [
         "# A0 — Qué es `D`, medido",
