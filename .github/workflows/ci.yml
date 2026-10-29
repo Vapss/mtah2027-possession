@@ -15,8 +15,9 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Create the pinned environment from uv.lock
-        # --frozen fails if uv.lock is stale against pyproject.toml, instead of re-resolving.
-        run: uv sync --frozen
+        # --locked fails if uv.lock is stale against pyproject.toml (--frozen would not notice).
+        # Exact sync on purpose: CI builds the reproduction environment and nothing else.
+        run: uv sync --locked
 
       - name: Lint
         run: .venv/bin/ruff check tools tests
