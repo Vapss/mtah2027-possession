@@ -786,3 +786,49 @@ paso sigue corriendo como proceso propio con el mismo intérprete, como lo corre
 **Coste.** Construir dos veces cuesta el doble de tiempo, y el test que lo hace necesita el bundle,
 así que CI no lo ejecuta. Antes del freeze (#26), `make repro` se corre a mano en el entorno fijado
 de la decisión 27; su hash es el que se archiva con la entrega.
+
+---
+
+## 29. El motor (#6) asigna la posesión al último balón controlado, con umbrales físicos pre-registrados
+
+**Decidido.** `tools/engine.py` etiqueta cada frame con el equipo del **último control**: un frame es
+de control para un equipo cuando el balón está observado, su jugador más cercano está a ≤ `radius_m`,
+el rival no está igual de cerca y el balón va a ≤ `speed_mps`. Entre controles se arrastra el estado
+dentro de cada medio tiempo, y un cambio necesita `dwell` frames seguidos de control rival, fechado
+al primero. Es la definición de `CHALLENGE.md`: la posesión cambia cuando el rival gana posesión
+*controlada*; en balones disputados o sueltos se queda con el último equipo. El motor no emite `D`
+(lo hará el stream de balón muerto, #16).
+
+**Valores, fijados por física antes del barrido:** `radius_m = 1,5` (alcance más ruido del tracking;
+la distancia mediana balón→jugador es 1,84 m), `speed_mps = 5` (una conducción rápida; un pase va a
+10 m/s o más), `dwell = 1` (sin espera: un control ya es control).
+
+**Por qué este diseño, medido antes de escribirlo** (slice público, frames vivos con balón):
+
+| balón | acierto del jugador más cercano |
+|---|---:|
+| < 2 m/s | 91,1% |
+| 10–20 m/s | 66,4% |
+| > 20 m/s | 38,8% |
+| jugador a < 1 m | 90,6% |
+| jugador a 4–8 m | 62,0% |
+
+Con el balón en vuelo, el jugador más cercano suele ser un rival que pasa cerca: esa es la raíz del
+parpadeo que fragmenta el `argmin`. El control filtra exactamente eso.
+
+**Exploración ya hecha (declarada).** Antes de este pre-registro se probaron 5 configuraciones en el
+análisis exploratorio: (1,0 m, 4 m/s, 1), (1,5, 5, 1), (1,5, 5, 5), (2,0, 6, 5), (1,5, 5, 10), con
+`spellF1` público entre 0,366 y 0,451. La configuración elegida por prior es la segunda (0,4390),
+no la de mayor número (0,4513, dentro del ruido).
+
+**Pre-registro del barrido** (#22), escrito antes de correrlo:
+
+- Rejilla: `radius_m` ∈ {1,0; 1,5; 2,0} × `speed_mps` ∈ {3; 5; 7} × `dwell` ∈ {1; 5; 12}: 27
+  configuraciones.
+- Por configuración: `spellF1` y `macroF1` públicos, Δ pareado y `n_discordant` frente al default,
+  posesiones/min en el partido, y acuerdo con el Smart Tagging en el partido y en los bloques con
+  menos balón (7, 9, 11, 18), que es la única señal independiente fuera del slice.
+- **Regla de selección:** se entrega el default. Solo se sustituye si otra configuración le gana con
+  ≥ 6 posesiones discordantes en el mismo sentido (test de signos p ≤ 0,031) **y** no empeora el
+  acuerdo con el Smart Tagging ni rompe la estructura de un bloque (decisión 26). Si no, el barrido es
+  un mapa de sensibilidad: dice si el default está en una meseta o en un pico.
