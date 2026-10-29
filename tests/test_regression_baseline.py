@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from _bundle import requires_bundle
@@ -21,22 +22,32 @@ def _lines(path: Path) -> list[bytes]:
 
 
 @requires_bundle
-def test_baseline_regenerates_committed_results(repo_root, tmp_path) -> None:
-    # Regenerate into tmp_path, never over evaluation/results: on a mismatch the committed files
-    # would be left modified in the working tree, one `git add .` away from a bad commit.
-    subprocess.run(
-        [sys.executable, "starter/baseline.py", "--out", str(tmp_path)],
-        cwd=repo_root,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+def test_baseline_regenerates_committed_results(repo_root) -> None:
+    # Regenerate into a scratch directory, never over evaluation/results: on a mismatch the
+    # committed files would be left modified in the working tree, one `git add .` away from a bad
+    # commit. The scratch lives under the gitignored runs/, not pytest's tmp_path, because
+    # baseline.py calls os.path.relpath(out, repo) and that raises on Windows when the checkout
+    # and %TEMP% sit on different drives.
+    scratch_root = repo_root / "runs"
+    scratch_root.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=scratch_root) as scratch:
+        out = Path(scratch)
+        subprocess.run(
+            [sys.executable, "starter/baseline.py", "--out", str(out)],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        _assert_same_baselines(repo_root / "evaluation" / "results", out)
 
-    committed = sorted((repo_root / "evaluation" / "results").glob("baseline_*.csv"))
-    assert [p.name for p in committed] == sorted(p.name for p in tmp_path.glob("*.csv"))
+
+def _assert_same_baselines(committed_dir: Path, out: Path) -> None:
+    committed = sorted(committed_dir.glob("baseline_*.csv"))
+    assert [p.name for p in committed] == sorted(p.name for p in out.glob("*.csv"))
 
     for path in committed:
-        expected, got = _lines(path), _lines(tmp_path / path.name)
+        expected, got = _lines(path), _lines(out / path.name)
         first = next((i for i, (e, g) in enumerate(zip(expected, got), start=1) if e != g), None)
         assert first is None and len(expected) == len(got), (
             f"starter/baseline.py no longer reproduces {path.name}: "
