@@ -48,6 +48,7 @@ postprocess:  ## apply the fixed #35 cleanup to a frame,label CSV
 	$(PY) tools/postprocess.py $(POSTPROCESS_INPUT) $(POSTPROCESS_OUTPUT)
 
 backup:  ## safety-net entry: baseline smooth50 with ball gaps carried -> $(SUBMISSIONS)/backup.csv
+	@case "$(BACKUP_DIR)" in runs/?*) ;; *) echo "BACKUP_DIR must be a subdirectory of runs/"; exit 1;; esac
 	rm -rf $(BACKUP_DIR) && mkdir -p $(BACKUP_DIR)/artifacts
 	$(PY) starter/baseline.py --window 50 --out $(BACKUP_DIR)
 	$(PY) tools/ball_gaps.py $(BACKUP_DIR)/baseline_smooth50.csv $(BACKUP_DIR)/smooth50_gaps.csv

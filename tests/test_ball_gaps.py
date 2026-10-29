@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import sys
-
 import numpy as np
 import pandas as pd
 import pytest
 
-from tools.ball_gaps import REPO_ROOT, ball_gaps, fill_artifact, fill_ball_gaps, half_runs
+from tools.ball_gaps import REPO_ROOT, ball_gaps, fill_ball_gaps, half_runs
 
 
 def labels(*parts: tuple[str, int]) -> list[str]:
@@ -62,6 +60,16 @@ def test_x_between_the_gap_and_its_predecessor_is_skipped_not_carried() -> None:
     assert fill_ball_gaps(source, ball, [(0, 8)]) == labels(("H", 1), ("X", 1), ("H", 4), ("A", 2))
 
 
+def test_a_gap_carries_from_the_input_not_from_an_earlier_fill() -> None:
+    # An `X` with the ball in play separates two gaps. Skipping it reaches the first gap, whose
+    # frames this pass has already rewritten to `H`; the carry must be the input's `D`.
+    ball = present((True, 2), (False, 2), (True, 1), (False, 2), (True, 1))
+    source = labels(("H", 2), ("D", 2), ("X", 1), ("D", 2), ("A", 1))
+    assert fill_ball_gaps(source, ball, [(0, 8)]) == labels(
+        ("H", 2), ("H", 2), ("X", 1), ("D", 2), ("A", 1)
+    )
+
+
 def test_gap_at_the_head_of_a_half_is_left_alone() -> None:
     ball = present((False, 3), (True, 4))
     source = labels(("X", 3), ("H", 4))
@@ -79,18 +87,6 @@ def test_fill_does_not_cross_a_half_boundary() -> None:
     source = labels(("H", 3), ("D", 3), ("A", 3))
     runs = [(0, 3), (6, 9)]
     assert fill_ball_gaps(source, ball, runs) == source
-
-
-def test_bands_restrict_the_fill_without_changing_the_definition() -> None:
-    ball = present((True, 2), (False, 6), (True, 2), (False, 2), (True, 2))
-    source = labels(("A", 2), ("D", 6), ("H", 2), ("D", 2), ("A", 2))
-    assert ball_gaps(ball, [(0, 14)]) == [(2, 8), (10, 12)]
-    assert fill_ball_gaps(source, ball, [(0, 14)], bands=[(5, 10)]) == labels(
-        ("A", 8), ("H", 2), ("D", 2), ("A", 2)
-    )
-    assert fill_ball_gaps(source, ball, [(0, 14)], bands=[(1, 2)]) == labels(
-        ("A", 2), ("D", 6), ("H", 4), ("A", 2)
-    )
 
 
 def test_fill_is_idempotent() -> None:
@@ -114,80 +110,14 @@ def test_half_runs_match_the_two_video_blocks() -> None:
     assert half_runs() == [(11185, 90652), (110808, 190198)]
 
 
-def artifact(rows: list[tuple[float, float, float, float]]) -> pd.DataFrame:
-    return pd.DataFrame(
-        [
-            {
-                "frame": index,
-                "p_home": p_home,
-                "p_away": p_away,
-                "p_dead": p_dead,
-                "confidence": confidence,
-            }
-            for index, (p_home, p_away, p_dead, confidence) in enumerate(rows)
-        ]
-    )
-
-
-def test_artifact_repeats_the_base_and_only_speaks_inside_gaps() -> None:
-    ball = present((True, 3), (False, 3), (True, 3))
-    base = artifact(
-        [(0.8, 0.18, 0.02, 0.8)] * 3 + [(0.49, 0.49, 0.02, 0.0)] * 3 + [(0.1, 0.88, 0.02, 0.88)] * 3
-    )
-    result = fill_artifact(base, ball, [(0, 9)])
-    # Inside the gap the predecessor row is carried, confidence included.
-    assert np.allclose(
-        result.loc[3:5, ["p_home", "p_away", "p_dead"]].to_numpy(), [[0.8, 0.18, 0.02]] * 3
-    )
-    assert result.loc[3:5, "confidence"].tolist() == [0.8, 0.8, 0.8]
-    # Outside it the job abstains, and the probabilities are the base's own: the assembler's
-    # zero-weight fallback then reproduces the base row instead of inventing a tie-break.
-    outside = [0, 1, 2, 6, 7, 8]
-    assert result.loc[outside, "confidence"].tolist() == [0.0] * 6
-    assert np.allclose(
-        result.loc[outside, ["p_home", "p_away", "p_dead"]].to_numpy(),
-        base.loc[outside, ["p_home", "p_away", "p_dead"]].to_numpy(),
-    )
-
-
-def test_artifact_carries_d_when_the_predecessor_decides_d() -> None:
-    ball = present((True, 4), (False, 4), (True, 4))
-    base = artifact(
-        [(0.4, 0.4, 0.2, 0.4)] * 2
-        + [(0.02, 0.02, 0.96, 0.96)] * 2
-        + [(0.49, 0.49, 0.02, 0.0)] * 4
-        + [(0.6, 0.38, 0.02, 0.6)] * 4
-    )
-    result = fill_artifact(base, ball, [(0, 12)])
-    assert result.loc[4:7, "p_dead"].tolist() == [0.96] * 4
-    assert result.loc[4:7, "confidence"].tolist() == [0.96] * 4
-
-
-def test_artifact_does_not_fill_the_head_of_a_half() -> None:
-    ball = present((False, 3), (True, 4))
-    base = artifact([(0.49, 0.49, 0.02, 0.0)] * 3 + [(0.7, 0.28, 0.02, 0.7)] * 4)
-    result = fill_artifact(base, ball, [(0, 7)])
-    assert result["confidence"].tolist() == [0.0] * 7
-
-
-def test_artifact_frame_column_is_preserved() -> None:
-    ball = present((True, 2), (False, 2), (True, 2))
-    base = artifact(
-        [(0.7, 0.28, 0.02, 0.7)] * 2 + [(0.49, 0.49, 0.02, 0.0)] * 2 + [(0.7, 0.28, 0.02, 0.7)] * 2
-    )
-    base["frame"] = base["frame"] + 100
-    assert fill_artifact(base, ball, [(0, 6)])["frame"].tolist() == list(range(100, 106))
-
-
-def test_anchor_numbers_of_the_ticket_are_reproduced() -> None:
+def test_anchor_numbers_of_the_ticket_are_reproduced(monkeypatch) -> None:
     """`baseline_smooth50` + fill must hit the +0.055 the issue quotes, or the definition drifted.
 
     The ticket's anchor is the only public evidence that this rule does anything: 0.3256 -> 0.3805
     on `spellF1`, 0.6207 -> 0.5105 on `macroF1`. If a future change to the gap definition, the run
     boundaries or the carry rule moves these, the PR is not measuring what it says it measures.
     """
-    sys.path.insert(0, str(REPO_ROOT / "evaluation"))
-    import pandas as pd
+    monkeypatch.syspath_prepend(str(REPO_ROOT / "evaluation"))
     import possession_metrics as pm
 
     from tools.ball_gaps import _ball_present
