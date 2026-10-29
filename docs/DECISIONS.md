@@ -690,8 +690,12 @@ a cuenta, y la tasa de posesiones queda cerca del prior físico (3,75 frente a ~
 partido y escribe `docs/analysis/blocks.md`. Cada medio tiempo de `games.half_video_blocks` se corta
 en bloques consecutivos de 7.500 frames desde su primer frame; el último de cada medio es más corto
 (3,0 y 2,9 min). El bloque 1 coincide exactamente con la ventana pública (11.185..18.684). Por
-bloque: balón detectado, posesiones que empiezan en él y su tasa por minuto, duración mediana, `%D`,
-`%H`, y la cobertura y el acuerdo del Smart Tagging. Las abstenciones se rellenan como las rellena
+bloque: balón detectado, posesiones que empiezan en él, su tasa por minuto y su duración media (la
+referencia de 14,2 s es una media, así que no se compara con una mediana), la parte del bloque que
+cubre la posesión más larga que lo toca, `%D`, `%H`, y la cobertura y el acuerdo del Smart Tagging.
+La columna de la posesión más larga existe porque contar cada posesión en su bloque de inicio
+esconde justo el fallo que se busca: una posesión arrastrada que empieza en un bloque y llena el
+siguiente deja en este solo unos fragmentos cortos. Las abstenciones se rellenan como las rellena
 el scorer antes de contar nada. No se lee ningún ground truth.
 
 **Qué vota el Smart Tagging** (`smart_tagging.possession_votes`, reutilizable por #6): una fase
@@ -712,8 +716,11 @@ decisión de release (#26) se toma sin él.
 
 - El bloque público es el más fácil: 88,2% de balón, frente a 19,9–36,9% en los bloques 7, 9, 11
   y 18.
-- En esos bloques el respaldo baja a 1,0–1,8 posesiones/min con medianas de 20–25 s: el arrastre
-  estira posesiones a través de huecos largos.
+- En esos bloques el respaldo baja a 1,0–1,8 posesiones/min con duraciones medias de 33–44 s
+  (`smooth50`: 4,7–10,6 s), y una sola posesión cubre el **77,2%** del bloque 18 y el 70,8% del 7
+  (`smooth50`: 7,5% y 14,0%). El arrastre estira posesiones a través de huecos largos. En el
+  partido, la duración media del respaldo es 16,0 s frente a 7,2 s de `smooth50` y la referencia
+  de 14,2 s.
 - Su acuerdo con el Smart Tagging en el partido es **62,2%**, por debajo del 67,2% de `smooth50`, y
   cae a 24,8% en el bloque 11 y 30,9% en el 18. El arrastre copia el equipo anterior durante huecos
   que el slice no puede medir (decisión 24); el Smart Tagging dice que ahí se equivoca a menudo.

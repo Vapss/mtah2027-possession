@@ -58,7 +58,7 @@ backup:  ## safety-net entry: baseline smooth50 with ball gaps carried -> $(SUBM
 	$(PY) tools/assemble.py --artifacts $(BACKUP_DIR)/artifacts -o $(SUBMISSIONS)/backup.csv --json $(BACKUP_DIR)/summary.json
 	$(PY) evaluation/validate_submission.py $(SUBMISSIONS)/backup.csv
 
-blocks: backup  ## #36 structural report of $(BLOCKS_INPUTS) in 22 five-minute blocks -> $(BLOCKS_DOC)
+blocks:  ## #36 structural report of $(BLOCKS_INPUTS) in 22 blocks -> $(BLOCKS_DOC) (run `make backup` first)
 	$(PY) tools/blocks.py $(BLOCKS_INPUTS) --write $(BLOCKS_DOC)
 
 verify-b6:  ## reproduce B6 public evidence and compare hashes and metrics to its manifest

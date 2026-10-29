@@ -151,7 +151,9 @@ DEFENDING = frozenset(
     }
 )
 # The export's spelling, not the club's: the file says "Atletic Club". 0 is home (H), 1 is away (A).
-TEAMS = {"Barcelona": 0, "Atletic Club": 1}
+# Keys are case-folded and looked up case-folded: tag values are title case in this export, and
+# DATA.md warns that an exact match is how a lookup goes silently empty.
+TEAMS = {"barcelona": 0, "atletic club": 1}
 
 
 def possession_votes(instances: list[dict]) -> np.ndarray:
@@ -164,7 +166,7 @@ def possession_votes(instances: list[dict]) -> np.ndarray:
     """
     votes = np.zeros((N_FRAMES, 2), dtype=np.int16)
     for instance in instances:
-        team = TEAMS.get((instance.get("tags") or {}).get("Team"))
+        team = TEAMS.get(str((instance.get("tags") or {}).get("Team") or "").strip().casefold())
         code = (instance.get("code") or "").strip().upper()
         if team is None or (code not in ATTACKING and code not in DEFENDING):
             continue

@@ -42,7 +42,17 @@ def test_a_possession_belongs_to_the_block_where_it_starts() -> None:
     rows = bl.measure(lab, np.ones(20, dtype=bool), no_votes(20), cut, [(0, 20)])
     assert [r.possessions for r in rows] == [2, 0, 2]
     # The A spell starts in block 1 and runs into block 2: its full length counts, 12 frames.
-    assert rows[0].median_s == pytest.approx(np.median([8, 12]) / bl.FPS)
+    assert rows[0].mean_s == pytest.approx(np.mean([8, 12]) / bl.FPS)
+
+
+def test_a_carried_possession_shows_in_the_block_it_fills() -> None:
+    # One H spell starts in block 1 and covers all of block 2, where nothing starts.
+    lab = labels(("A", 5), ("H", 15))
+    cut = bl.blocks([(1, 0, 20)], size=10)
+    rows = bl.measure(lab, np.ones(20, dtype=bool), no_votes(20), cut, [(0, 20)])
+    assert rows[1].possessions == 0
+    assert rows[1].longest == pytest.approx(1.0)
+    assert rows[0].longest == pytest.approx(5 / 10)
 
 
 def test_abstention_inside_a_possession_does_not_split_it() -> None:
@@ -85,8 +95,11 @@ def test_votes_name_the_side_with_the_ball() -> None:
         {"code": "SET PIECES", "tags": {"Team": "Barcelona"}, "start_frame": 5, "end_frame": 6},
         {"code": "BUILD UP", "tags": {"Team": "N/A"}, "start_frame": 6, "end_frame": 7},
     ]
+    instances.append(
+        {"code": "BUILD UP", "tags": {"Team": " barcelona "}, "start_frame": 7, "end_frame": 8}
+    )
     votes = st.possession_votes(instances)[:8]
-    assert votes[:, 0].tolist() == [1, 1, 0, 0, 0, 0, 0, 0]
+    assert votes[:, 0].tolist() == [1, 1, 0, 0, 0, 0, 0, 1]  # case and spaces ignored
     assert votes[:, 1].tolist() == [0, 1, 2, 1, 0, 0, 0, 0]
 
 
@@ -97,6 +110,32 @@ def test_report_names_its_command_and_carries_no_absolute_path() -> None:
     assert "`python tools/blocks.py demo.csv`" in text and "abc1234" in text
     assert "1★" in text and "**partido**" in text
     assert ":\\" not in text and str(bl.REPO_ROOT) not in text
+
+
+def test_a_submission_with_no_possession_is_reported_not_raised() -> None:
+    cut = bl.blocks([(1, 0, 20)], size=10)
+    rows = bl.measure(labels(("D", 20)), np.ones(20, dtype=bool), no_votes(20), cut, [(0, 20)])
+    text = bl.report({"all_d": rows}, cut, "python tools/blocks.py all_d.csv")
+    assert "bloques sin ninguna posesión: 2" in text
+
+
+def test_commit_is_marked_dirty_when_the_code_differs_from_head(monkeypatch) -> None:
+    class Done:
+        def __init__(self, stdout: str) -> None:
+            self.stdout, self.returncode = stdout, 0
+
+    def fake(status: str):
+        return lambda cmd, **_: Done("abc12345\n" if "rev-parse" in cmd else status)
+
+    monkeypatch.setattr(bl.subprocess, "run", fake(""))
+    assert bl._git_commit() == "abc12345"
+    monkeypatch.setattr(bl.subprocess, "run", fake("?? tools/new_job.py\n"))
+    assert bl._git_commit() == "abc12345-dirty"
+
+
+def test_inputs_with_the_same_file_name_are_refused(capsys) -> None:
+    assert bl.main(["runs/a/backup.csv", "submissions/backup.csv"]) == 1
+    assert "share a file name" in capsys.readouterr().err
 
 
 @requires_bundle

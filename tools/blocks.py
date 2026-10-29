@@ -28,7 +28,11 @@ How each column is computed
   (`possession_metrics.fill_abstentions`) before anything is counted, so an `X` inside a possession
   does not split it.
 - A possession is a maximal `H` or `A` run inside a half (`possession_metrics.possession_spells`).
-  It belongs to the block where it starts, and its duration is its full length, even past the block.
+  It is counted in the block where it starts, with its full length, even past the block -- so the
+  count and the mean say how often possessions *begin*.
+- That alone would hide the failure this report is for: one possession carried across a long gap
+  starts in one block and fills the next, which then shows a few short fragments. `larga` is the
+  share of the block covered by the longest possession that overlaps it, clipped to the block.
 - `%D` is per frame inside the block; `%H` is over the frames labelled `H` or `A`.
 - Smart Tagging: a frame is *covered* when its phases vote for exactly one side
   (`smart_tagging.possession_votes`); *agreement* is the share of covered `H`/`A` frames whose label
@@ -52,7 +56,7 @@ sys.path.insert(0, str(REPO_ROOT))
 import games  # noqa: E402
 from tools import atd  # noqa: E402
 from tools import smart_tagging as st  # noqa: E402
-from tools.contract import check_submission, read_submission  # noqa: E402
+from tools.contract import read_submission  # noqa: E402
 
 sys.path.insert(0, str(REPO_ROOT / "evaluation"))
 import possession_metrics as pm  # noqa: E402
@@ -60,9 +64,9 @@ import possession_metrics as pm  # noqa: E402
 FPS = games.GAMES[games.GAME]["fps"]
 BLOCK_FRAMES = 5 * 60 * FPS
 # From the public slice (17 possessions in 5 minutes, mean 354,8 frames): an anchor, not a target.
+# It is a mean, so the report shows the mean duration next to it, never the median.
 REFERENCE_RATE = 3.4
 REFERENCE_SECONDS = 14.2
-DEFAULT_DOC = REPO_ROOT / "docs" / "analysis" / "blocks.md"
 
 
 @dataclass(frozen=True)
@@ -84,7 +88,8 @@ class Row:
     ball: float
     possessions: int
     rate: float
-    median_s: float
+    mean_s: float
+    longest: float
     dead: float
     home: float
     st_cover: float
@@ -121,6 +126,7 @@ def _row(
     index = np.concatenate([np.arange(a, b) for a, b in spans])
     codes = filled[index]
     lengths = [b - a for a, b, _ in spells if any(s <= a < e for s, e in spans)]
+    clipped = [sum(max(0, min(b, e) - max(a, s)) for s, e in spans) for a, b, _ in spells]
     minutes = len(index) / FPS / 60
     alive = (codes == pm.H) | (codes == pm.A)
 
@@ -134,7 +140,8 @@ def _row(
         ball=_share(present[index]),
         possessions=len(lengths),
         rate=len(lengths) / minutes if minutes else float("nan"),
-        median_s=float(np.median(lengths)) / FPS if lengths else float("nan"),
+        mean_s=float(np.mean(lengths)) / FPS if lengths else float("nan"),
+        longest=max(clipped, default=0) / len(index) if len(index) else float("nan"),
         dead=_share(codes == pm.D),
         home=float((codes == pm.H).sum() / alive.sum()) if alive.any() else float("nan"),
         st_cover=_share(single),
@@ -203,9 +210,11 @@ def report(
         f"{_dec(REFERENCE_RATE, 1)} posesiones/min, {_dec(REFERENCE_SECONDS, 1)} s de media.",
         "",
         "Columnas: `balón` = frames con balón detectado; `pos/min` = posesiones que empiezan en",
-        "el bloque por minuto; `med` = duración mediana; `%H` sobre los frames `H`/`A`; `ST cob` =",
-        "frames donde el Smart Tagging vota por un solo equipo; `ST acuerdo` = de esos, los que la",
-        "submission etiqueta con ese equipo.",
+        "el bloque por minuto; `media` = su duración media; `larga` = parte del bloque que cubre",
+        "la posesión más larga que lo toca (una posesión arrastrada desde el bloque anterior sale",
+        "aquí, no en `pos`); `%H` sobre los frames `H`/`A`; `ST cob` = frames donde el Smart",
+        "Tagging vota por un solo equipo; `ST acuerdo` = de esos, los que la submission etiqueta",
+        "con ese equipo.",
     ]
     names = list(measured)
     lines += ["", "## Comparación: posesiones por minuto", ""]
@@ -224,15 +233,18 @@ def report(
 
     for name, rows in measured.items():
         lines += ["", f"## `{name}`", ""]
-        lines.append("| bloque | balón | pos | pos/min | med | %D | %H | ST cob | ST acuerdo |")
-        lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
+        lines.append(
+            "| bloque | balón | pos | pos/min | media | larga | %D | %H | ST cob | ST acuerdo |"
+        )
+        lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
         for row in rows:
             cells = [
                 row.label,
                 _pct(row.ball),
                 str(row.possessions),
                 _dec(row.rate),
-                f"{_dec(row.median_s, 1)} s",
+                f"{_dec(row.mean_s, 1)} s",
+                _pct(row.longest),
                 _pct(row.dead),
                 _pct(row.home),
                 _pct(row.st_cover),
@@ -241,24 +253,43 @@ def report(
             if row.label == "partido":
                 cells = [f"**{cell}**" for cell in cells]
             lines.append("| " + " | ".join(cells) + " |")
-        spread = [row.rate for row in rows[:-1] if row.possessions]
-        lines += [
-            "",
-            f"Rango de posesiones/min entre bloques: {_dec(min(spread))} .. {_dec(max(spread))}.",
-        ]
+        # Every block counts, empty ones included: a block with no possession is the broken
+        # structure this report exists to show, so it must not drop out of the range.
+        per_block = rows[:-1]
+        if per_block:
+            rates = [row.rate for row in per_block]
+            empty = sum(1 for row in per_block if row.possessions == 0)
+            lines += [
+                "",
+                f"Rango de posesiones/min entre bloques: {_dec(min(rates))} .. {_dec(max(rates))}; "
+                f"bloques sin ninguna posesión: {empty}.",
+            ]
     return "\n".join(lines) + "\n"
 
 
+# The paths whose state decides the numbers. A change anywhere else (docs, tests) does not.
+CODE_PATHS = ("tools", "evaluation", "starter", "games.py", "configs")
+
+
 def _git_commit() -> str | None:
+    """HEAD, marked `-dirty` when the code that produced the numbers is not what HEAD holds.
+
+    Untracked files count: a new module that only exists in the working tree is exactly the case
+    where the named commit cannot reproduce the document.
+    """
+
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", "-C", str(REPO_ROOT), *args], capture_output=True, text=True)
+
     try:
-        done = subprocess.run(
-            ["git", "-C", str(REPO_ROOT), "rev-parse", "--short=8", "HEAD"],
-            capture_output=True,
-            text=True,
-        )
+        head = git("rev-parse", "--short=8", "HEAD")
+        status = git("status", "--porcelain", "--", *CODE_PATHS)
     except OSError:
         return None
-    return done.stdout.strip() if done.returncode == 0 else None
+    if head.returncode != 0:
+        return None
+    dirty = status.returncode != 0 or bool(status.stdout.strip())
+    return head.stdout.strip() + ("-dirty" if dirty else "")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -268,16 +299,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--commit", default=None, help="commit to name in the header")
     args = parser.parse_args(argv)
 
+    names = [Path(path).stem for path in args.submissions]
+    clash = sorted({name for name in names if names.count(name) > 1})
+    if clash:
+        print(f"two inputs share a file name, the report would drop one: {clash}", file=sys.stderr)
+        return 1
+
     try:
         runs = [(start, stop) for _half, start, stop in halves()]
         cut = blocks(halves())
         present = atd.load(games.DEFAULT_SOURCE).ball()[1]
         votes = st.possession_votes(st.load())
         measured = {}
-        for path in args.submissions:
-            frame = check_submission(read_submission(path), path)
-            labels = frame.iloc[:, 1].astype(str).str.strip().str.upper().tolist()
-            measured[Path(path).stem] = measure(labels, present, votes, cut, runs)
+        for name, path in zip(names, args.submissions):
+            # read_submission validates; label_codes strips and upper-cases.
+            labels = read_submission(path).iloc[:, 1].tolist()
+            measured[name] = measure(labels, present, votes, cut, runs)
     except (OSError, ValueError) as problem:
         print(f"cannot build the block report: {problem}", file=sys.stderr)
         return 1
