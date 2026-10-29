@@ -18,19 +18,18 @@ BACKUP_DIR ?= runs/backup
 BLOCKS_INPUTS ?= evaluation/results/baseline_smooth50.csv $(SUBMISSIONS)/backup.csv
 BLOCKS_DOC ?= docs/analysis/blocks.md
 
-.PHONY: help venv install dev test lint fmt guard ingest demo submission validate score score-baselines graph graph-check postprocess verify-b6 f0a backup blocks ci clean
+.PHONY: help install dev test lint fmt guard ingest demo submission validate score score-baselines graph graph-check postprocess verify-b6 f0a backup blocks ci clean
 
 help:  ## list the targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sed 's/:.*## /\t/' | expand -t22
 
-venv:  ## create the pinned environment (Python 3.12, not the system interpreter)
-	uv venv --python 3.12 .venv
+# Both build .venv from uv.lock (#9): Python 3.12, numpy 2.5.4, pandas 3.0.6. --frozen refuses to
+# run if the lock is out of date with pyproject.toml instead of silently re-resolving it.
+install:  ## the pinned runtime from uv.lock -- numpy and pandas
+	uv sync --frozen --no-dev
 
-install: venv  ## runtime dependencies only -- numpy and pandas
-	uv pip install --python $(PY) -r requirements.txt
-
-dev: install  ## runtime plus pytest and ruff
-	uv pip install --python $(PY) -r requirements-dev.txt
+dev:  ## the pinned runtime plus pytest and ruff
+	uv sync --frozen
 
 test:  ## run the harness test suite
 	$(PYTEST) -q

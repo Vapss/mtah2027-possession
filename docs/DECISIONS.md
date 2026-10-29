@@ -730,3 +730,26 @@ contra la ventana pública, cubre el 70,5% de los frames vivos y acierta el **68
 `argmin` del tracking acierta 77,8% en los vivos con balón). Es una segunda
 opinión independiente del tracking, no un árbitro. Y las referencias de tasa y duración salen del
 propio slice público, así que no se convierten en una banda de aceptación (#35).
+
+---
+
+## 27. El entorno de reproducción está fijado en `uv.lock` (sustituye el riesgo de la decisión 11)
+
+**Decidido.** `pyproject.toml` fija el intérprete y las dos librerías que escriben la submission
+(`requires-python = "==3.12.*"`, `numpy==2.5.4`, `pandas==3.0.6`) y `uv.lock` fija todo lo demás,
+`pytest` y `ruff` incluidos. `make install` / `make dev` y el CI construyen `.venv` con
+`uv sync --frozen`, que falla si el lock no corresponde a `pyproject.toml` en vez de volver a
+resolver en silencio. `requirements.txt` queda como lo escribieron los organizadores: es su
+referencia, no la nuestra. La sintaxis sigue siendo compatible con 3.9 (`ruff` con `target-version =
+"py39"`); lo que se fija es el entorno que regenera el archivo, no el lenguaje en que está escrito.
+
+**Por qué estas versiones.** Son las que registró la evidencia del equipo
+(`docs/evidence/b6_public_manifest.json`, F0a). Con un entorno creado solo desde el lock, en una
+máquina que antes tenía pandas 3.1.0, se reproduce todo lo publicado: la suite (230 passed), el
+respaldo de la decisión 25 con el mismo SHA-256 (`cb4eeef3617f…`), `docs/analysis/blocks.md` idéntico
+salvo la línea del comando, y F0a con su valor fijado y la reconstrucción byte a byte.
+
+**Coste.** Subir de versión es un cambio de contrato, no un mantenimiento: hay que volver a
+regenerar y comparar la submission y la evidencia fijada. Y `make verify-b6` sigue fallando con las
+versiones fijadas (el SHA-256 de `artifacts/possession.csv` no coincide, aunque las submissions que
+se derivan de él sí): la causa no son las dependencias y queda abierta aparte.

@@ -6,11 +6,18 @@ build-backend = "setuptools.build_meta"
 name = "mtah2027-possession"
 version = "0.1.0"
 description = "More than a Hack 2027 Phase 1 -- per-frame ball possession"
-requires-python = ">=3.9"
-dependencies = ["numpy", "pandas"]
+# The interpreter and the two libraries that write the submission are pinned (#9): the CSV is
+# compared byte for byte, and pandas' writer is part of that contract (DECISIONS 11, 27). The code
+# stays 3.9-compatible in syntax (ruff target below); the reproduction environment is this one.
+requires-python = "==3.12.*"
+dependencies = ["numpy==2.5.4", "pandas==3.0.6"]
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.uv]
+# A repository of scripts, not an installable package: `uv sync` only builds the environment.
+package = false
 
 [project.urls]
 Upstream = "https://github.com/metrica-sports/more-than-a-hack-2027"

@@ -77,7 +77,7 @@ reads every `*.csv` in `artifacts/` and combines them by confidence, or by an ex
 ## Commands
 
 ```bash
-make dev           # environment: Python 3.12, numpy, pandas, pytest, ruff
+make dev           # environment from uv.lock: Python 3.12, numpy 2.5.4, pandas 3.0.6, pytest, ruff
 make test          # the harness suite
 make lint          # ruff check + format --check
 make demo          # encode a shipped baseline as an artifact (no match data needed)
