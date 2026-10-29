@@ -62,8 +62,8 @@ postprocess:  ## apply the fixed #35 cleanup to a frame,label CSV
 backup:  ## safety-net entry (DECISIONS 25): smooth50 with ball gaps carried -> $(SUBMISSIONS)/backup.csv
 	$(PY) tools/backup.py --workdir $(BACKUP_DIR) --out $(SUBMISSIONS)/backup.csv
 
-repro:  ## #15 build the delivered file twice from scratch and compare SHA-256 (exit 1 if they differ)
-	$(PY) tools/repro.py
+repro:  ## #15 build the delivered file twice from scratch; compare with each other and with the delivered file
+	$(PY) tools/repro.py $(if $(wildcard $(SUBMISSIONS)/backup.csv),--against $(SUBMISSIONS)/backup.csv)
 
 blocks:  ## #36 structural report of $(BLOCKS_INPUTS) in 22 blocks -> $(BLOCKS_DOC) (run `make backup` first)
 	$(PY) tools/blocks.py $(BLOCKS_INPUTS) --write $(BLOCKS_DOC)

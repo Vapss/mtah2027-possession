@@ -9,6 +9,9 @@ from _bundle import requires_bundle
 
 from tools import backup, repro
 
+ONE = b"frame,label\n0,H\n"
+OTHER = b"frame,label\n0,A\n"
+
 
 @pytest.mark.parametrize("workdir", ["runs", ".", "submissions/x", "../elsewhere"])
 def test_backup_refuses_a_workdir_outside_runs(workdir: str) -> None:
@@ -21,27 +24,64 @@ def _fake_chain(contents: list[bytes]):
     calls = iter(contents)
 
     def build(workdir: Path, out: Path) -> Path:
-        out.parent.mkdir(parents=True, exist_ok=True)
         out.write_bytes(next(calls))
         return out
 
     return build
 
 
-def test_identical_builds_report_one_hash(monkeypatch, tmp_path, capsys) -> None:
-    monkeypatch.setitem(repro.CHAINS, "fake", _fake_chain([b"frame,label\n0,X\n"] * 2))
-    monkeypatch.setattr(repro, "WORKDIR", tmp_path)
+@pytest.fixture
+def isolated(monkeypatch, tmp_path):
+    """Point runs/ and the repro workdir at tmp_path, and prove the real ones are not touched."""
+    real = repro.WORKDIR
+    before = sorted(real.rglob("*")) if real.exists() else None
+    monkeypatch.setattr(backup, "RUNS", tmp_path.resolve())
+    monkeypatch.setattr(repro, "WORKDIR", tmp_path.resolve() / "repro")
+    yield tmp_path
+    after = sorted(real.rglob("*")) if real.exists() else None
+    assert before == after, "a fake-chain test wrote into the real runs/repro"
+
+
+def test_identical_builds_report_one_hash(monkeypatch, isolated, capsys) -> None:
+    monkeypatch.setitem(repro.CHAINS, "fake", _fake_chain([ONE, ONE]))
     assert repro.main(["--chain", "fake"]) == 0
     assert "reproducible: fake sha256" in capsys.readouterr().out
+    assert (isolated / "repro" / "a" / "submission.csv").exists()
 
 
-def test_different_builds_fail(monkeypatch, tmp_path, capsys) -> None:
-    monkeypatch.setitem(
-        repro.CHAINS, "fake", _fake_chain([b"frame,label\n0,H\n", b"frame,label\n0,A\n"])
-    )
-    monkeypatch.setattr(repro, "WORKDIR", tmp_path)
+def test_different_builds_fail(monkeypatch, isolated, capsys) -> None:
+    monkeypatch.setitem(repro.CHAINS, "fake", _fake_chain([ONE, OTHER]))
     assert repro.main(["--chain", "fake"]) == 1
     assert "NOT reproducible" in capsys.readouterr().err
+
+
+def test_builds_that_agree_but_differ_from_the_delivered_file_fail(
+    monkeypatch, isolated, capsys
+) -> None:
+    delivered = isolated / "delivered.csv"
+    delivered.write_bytes(OTHER)
+    monkeypatch.setitem(repro.CHAINS, "fake", _fake_chain([ONE, ONE]))
+    assert repro.main(["--chain", "fake", "--against", str(delivered)]) == 1
+    assert "no longer regenerates the delivered file" in capsys.readouterr().err
+
+    delivered.write_bytes(ONE)
+    monkeypatch.setitem(repro.CHAINS, "fake", _fake_chain([ONE, ONE]))
+    assert repro.main(["--chain", "fake", "--against", str(delivered)]) == 0
+
+
+def test_each_build_starts_from_an_empty_directory(monkeypatch, isolated) -> None:
+    seen = []
+
+    def build(workdir: Path, out: Path) -> Path:
+        seen.append(sorted(p.name for p in workdir.iterdir()))
+        (workdir / "cache.bin").write_bytes(b"stale")
+        out.write_bytes(ONE)
+        return out
+
+    monkeypatch.setitem(repro.CHAINS, "fake", build)
+    repro.repro("fake")
+    repro.repro("fake")
+    assert seen == [[], [], [], []]
 
 
 @requires_bundle
