@@ -886,3 +886,28 @@ posesiones/min frente a 3,75 con el respaldo estirando posesiones en los huecos 
 cambia su cadena por defecto a `engine` (decisión 28) y `make repro` compara con
 `submissions/engine.csv`. El respaldo se mantiene construible con `make backup` como red de seguridad
 hasta el freeze (#26).
+
+---
+
+## 31. Dos correcciones de principio a la cadena entregada, tras la revisión de #52 (pre-registro)
+
+La revisión de código de #52 encontró dos reglas que contradicen principios ya escritos. Se adoptan
+**por principio**, escritas aquí antes de medir su efecto. La medición solo las revierte si pierden
+posesiones en el pareado frente a I1 (`wins_a > wins_b`) o rompen la estructura de un bloque
+(decisión 26).
+
+1. **Un balón fuera del campo no se controla.** `engine.control` aceptaba un balón observado fuera
+   del rectángulo de juego: un jugador que lo recoge para sacar cambiaba la posesión. Un balón fuera
+   del campo no está en juego (es la premisa del carril D), así que no hay control. La reanudación ya
+   da la posesión a quien saca (decisión 30).
+2. **Menos de un segundo fuera del campo no abre una parada.** El carril D aplica ese mínimo
+   (`untagged_min_out_s`) solo a la variante sin etiqueta, con la razón escrita en su código: es ruido
+   del tracking en la línea, no un balón fuera. En V2, un parpadeo así hasta 40 s antes de una
+   reanudación de falta, sin que el balón haya salido de verdad, abre una parada de hasta 40 s. Se
+   aplica el mismo mínimo a V2.
+
+Además, sin cambiar la entrega con `dwell = 1`: la reanudación **fuerza** el cambio de posesión en el
+decodificador en lugar de inyectarse como un frame de control, que con `dwell > 1` no tenía efecto; y
+el barrido de la decisión 29 pasa a medir la cadena entregada, no solo el motor desnudo, y su regla de
+selección se aplica tal como está escrita (test de signos p ≤ 0,031, más ganadas que perdidas, y sin
+empeorar el acuerdo con el Smart Tagging).
