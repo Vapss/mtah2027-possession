@@ -18,7 +18,12 @@ contested or loose it stays with the last team that had it. So the engine does t
 
 No smoothing window, no duration prior, no learned weight: everything is a physical threshold fixed
 before measuring (DECISIONS 29), and frames before the first control of a half are `X` (the scorer
-back-fills them). `D` is not decided here; that is the dead-ball stream's job (#16).
+back-fills them).
+
+The delivered chain (`run`, DECISIONS 30) adds two things from the dead-ball stream (#16,
+`tools/dead_ball.py`): each stoppage, from the ball leaving the pitch to the tagged restart, is `D`;
+and **a restart is a control** -- the team that takes a throw-in, a corner, a free kick or a goal
+kick has the ball, so the restart frame counts as that team's control before decoding.
 """
 
 from __future__ import annotations
@@ -137,17 +142,61 @@ def halves() -> list[tuple[int, int]]:
     return [(start, stop + 1) for _half, start, stop in games.half_video_blocks(games.GAME)]
 
 
-def run(params: Params = DEFAULT) -> tuple[pd.DataFrame, dict]:
-    """The engine over the delivered match: labels as a frame,label table, and aggregates."""
+def restart_controls(instances: list[dict]) -> list[tuple[int, int]]:
+    """`(frame, team)` for every tagged restart whose `Team` is known: the restart is a control.
+
+    The frame is the dead-ball stream's restart frame (`dead_ball.restarts`), so the stoppage it
+    closes and the control it opens meet on the same frame.
+    """
+    from tools import dead_ball
+    from tools import smart_tagging as st
+
+    found = []
+    for instance in instances:
+        if (instance.get("code") or "").strip().upper() != "SET PIECES":
+            continue
+        team = st.TEAMS.get(str((instance.get("tags") or {}).get("Team") or "").strip().casefold())
+        if team is not None:
+            found.append((dead_ball.restarts([instance])[0].frame, team))
+    return sorted(found)
+
+
+def with_restarts(ctrl: np.ndarray, controls: list[tuple[int, int]], runs) -> np.ndarray:
+    """A copy of `ctrl` with each restart frame inside a run set to its restarting team."""
+    out = ctrl.copy()
+    for frame, team in controls:
+        if any(start <= frame < stop for start, stop in runs):
+            out[frame] = team
+    return out
+
+
+def run(
+    params: Params = DEFAULT, *, dead: bool = True, restarts: bool = True
+) -> tuple[pd.DataFrame, dict]:
+    """The delivered chain over the match (DECISIONS 30): labels and aggregates.
+
+    `dead=False, restarts=False` is the bare engine of DECISIONS 29; `restarts=False` is I0.
+    """
+    from tools import dead_ball
+    from tools import smart_tagging as st
+
     f = features(atd.load("tactical"), emision.team_slots())
     ctrl = control(f, params)
+    if restarts:
+        ctrl = with_restarts(ctrl, restart_controls(st.load()), halves())
     state = decode(ctrl, halves(), params.dwell)
     table = pd.DataFrame({"frame": np.arange(len(state)), "label": labels(state)})
+    if dead:
+        mask = dead_ball.dead_mask(dead_ball.load_evidence(), halves(), "out")
+        table = dead_ball.apply_dead(table, mask)
     inside = np.zeros(len(state), dtype=bool)
     for start, stop in halves():
         inside[start:stop] = True
     summary = {
         "params": params.__dict__,
+        "dead": dead,
+        "restarts": restarts,
+        "dead_share": float((table["label"].to_numpy() == "D")[inside].mean()),
         "control_frames_share": float((ctrl != NONE)[inside].mean()),
         "labelled_share": float((state != NONE)[inside].mean()),
         "home_share": float((state == 0).sum() / max(1, (state != NONE).sum())),
@@ -196,14 +245,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--radius", type=float, default=Params.radius_m)
     parser.add_argument("--speed", type=float, default=Params.speed_mps)
     parser.add_argument("--dwell", type=int, default=Params.dwell)
+    parser.add_argument("--bare", action="store_true", help="the engine alone: no D, no restarts")
+    parser.add_argument("--no-restarts", action="store_true", help="I0: D but no restart control")
     args = parser.parse_args(argv)
     params = Params(args.radius, args.speed, args.dwell)
+    chain = {"dead": not args.bare, "restarts": not (args.bare or args.no_restarts)}
     try:
         if args.build:
             out = build(args.build, args.submission, params)
             print(f"wrote {out}")
             return 0
-        table, summary = run(params)
+        table, summary = run(params, **chain)
         if args.labels:
             check_submission(table, args.labels)
             args.labels.parent.mkdir(parents=True, exist_ok=True)

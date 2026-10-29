@@ -11,8 +11,8 @@ time-stamped or path-dependent. It does not catch code that changed after the fi
 both builds would agree on the new output. `--against` closes that, by also comparing with the
 delivered file.
 
-The delivered chain is the backup (DECISIONS 25) until a model replaces it; when that happens,
-`CHAINS` gets the new builder and `--chain` its name, and the default moves with the decision.
+The delivered chain is the engine (DECISIONS 30); the backup (DECISIONS 25) stays as the safety net.
+A future chain enters `CHAINS` and the default moves with the decision that adopts it.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ CHAINS = {"backup": backup.build, "engine": engine.build}
 WORKDIR = backup.RUNS / "repro"
 
 
-def repro(chain: str = "backup", workdir: Path | None = None) -> tuple[str, str]:
+def repro(chain: str = "engine", workdir: Path | None = None) -> tuple[str, str]:
     """Build `chain` twice in `workdir`/a and `workdir`/b; return both SHA-256 digests.
 
     `workdir` is read at call time, not bound as a default, so a test can point WORKDIR elsewhere.
@@ -49,7 +49,7 @@ def repro(chain: str = "backup", workdir: Path | None = None) -> tuple[str, str]
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Build the delivered file twice and compare")
-    parser.add_argument("--chain", choices=sorted(CHAINS), default="backup")
+    parser.add_argument("--chain", choices=sorted(CHAINS), default="engine")
     parser.add_argument("--against", type=Path, help="delivered file the builds must also equal")
     args = parser.parse_args(argv)
     try:

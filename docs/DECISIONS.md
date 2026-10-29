@@ -861,3 +861,28 @@ no la de mayor número (0,4513, dentro del ruido).
   eso, se entrega I0.
 - Se reporta además, como comprobación de la premisa, en cuántas reanudaciones del slice el `Team`
   del Smart Tagging coincide con el equipo del ground truth justo después.
+
+**Resultado** (medido después del pre-registro, slice público y partido completo):
+
+| cadena | spellF1 | macroF1 | posesiones/min | `D` en el partido | acuerdo ST |
+|---|---:|---:|---:|---:|---:|
+| motor solo (decisión 29) | 0,4390 | 0,5113 | 3,25 | 0% | 74,0% |
+| I0 = motor + `D` | 0,4667 | 0,7082 | 3,63 | 12,3% | 73,0% |
+| **I1 = I0 + reanudación como control** | **0,4585** | 0,7066 | 3,59 | 12,3% | 73,1% |
+
+I1 frente a I0: Δ −0,0081 con **0 posesiones discordantes** (cambian bordes, no posesiones) y
+ningún bloque roto. **Por la regla pre-registrada se entrega I1**, aunque I0 tenga un número
+ligeramente mayor: elegir a posteriori el número más alto es exactamente lo que el pre-registro
+existe para impedir. La premisa (quien reanuda tiene el balón) solo se pudo comprobar en una
+reanudación del slice, y se cumple; descansa sobre todo en el reglamento, no en esta muestra.
+
+**Coste.** El recall de `D` es bajo (0,384): solo hay 59 reanudaciones etiquetadas, y una parada sin
+salida del balón del campo (una falta en juego) no se detecta. El bloque con más `D` llega a 41,8%,
+por encima del 19,6% del slice; es el de una celebración de gol, y queda como límite conocido.
+
+**La entrega candidata pasa a ser el motor (I1).** Supera al respaldo de la decisión 25 en el slice
+(0,4585 frente a 0,3805) y en estructura: acuerdo con el Smart Tagging 73,1% frente a 62,2%, y 3,59
+posesiones/min frente a 3,75 con el respaldo estirando posesiones en los huecos largos. `tools/repro.py`
+cambia su cadena por defecto a `engine` (decisión 28) y `make repro` compara con
+`submissions/engine.csv`. El respaldo se mantiene construible con `make backup` como red de seguridad
+hasta el freeze (#26).

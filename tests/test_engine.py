@@ -58,9 +58,35 @@ def test_labels_are_h_a_and_x() -> None:
     assert engine.labels(np.array([0, 1, NONE], dtype=np.int8)).tolist() == ["H", "A", "X"]
 
 
-@requires_bundle
-def test_the_default_engine_reproduces_its_public_score() -> None:
-    """DECISIONS 29 anchors: spellF1 0,4390 on the public slice, 87,2% team accuracy on live."""
+def test_a_restart_is_a_control_of_the_team_that_takes_it() -> None:
+    instances = [
+        {
+            "code": "SET PIECES",
+            "tags": {"Team": "Atletic Club", "Type": "Throw In"},
+            "start_frame": 100,
+            "end_frame": 300,
+        },
+        {
+            "code": "SET PIECES",
+            "tags": {"Team": "N/A", "Type": "Throw In"},
+            "start_frame": 400,
+            "end_frame": 500,
+        },
+        {"code": "BUILD UP", "tags": {"Team": "Barcelona"}, "start_frame": 0, "end_frame": 50},
+    ]
+    controls = engine.restart_controls(instances)
+    # One known team, at the dead-ball stream's restart frame (5 s into the tag), away = 1.
+    assert controls == [(100 + 5 * engine.FPS, 1)]
+
+
+def test_restart_controls_outside_the_runs_are_ignored() -> None:
+    ctrl = np.full(10, NONE, dtype=np.int8)
+    out = engine.with_restarts(ctrl, [(2, 1), (8, 0)], [(0, 5)])
+    assert out.tolist() == [NONE, NONE, 1] + [NONE] * 7
+    assert ctrl.tolist() == [NONE] * 10  # the input is not modified
+
+
+def _public_score(table) -> tuple[float, float]:
     import sys
 
     import pandas as pd
@@ -68,14 +94,26 @@ def test_the_default_engine_reproduces_its_public_score() -> None:
     sys.path.insert(0, str(engine.REPO_ROOT / "evaluation"))
     import possession_metrics as pm
 
-    table, _summary = engine.run()
-    gt = pm.label_codes(
-        pd.read_csv(
-            engine.REPO_ROOT / "evaluation" / "gt" / "BAR-ATH_possession_gt_public.csv"
-        ).label
-    )
+    gt_path = engine.REPO_ROOT / "evaluation" / "gt" / "BAR-ATH_possession_gt_public.csv"
+    gt = pm.label_codes(pd.read_csv(gt_path).label)
     codes = pm.label_codes(table.label.tolist())
-    assert round(float(pm.evaluate(gt, codes)["spell_f1_mean"]), 4) == 0.4390
     live = np.isin(gt, [pm.H, pm.A])
     filled = pm.fill_abstentions(codes, pm.valid_runs(gt))
-    assert round(float(np.mean(filled[live] == gt[live])), 3) == 0.872
+    return float(pm.evaluate(gt, codes)["spell_f1_mean"]), float(np.mean(filled[live] == gt[live]))
+
+
+@requires_bundle
+def test_the_bare_engine_reproduces_its_public_score() -> None:
+    """DECISIONS 29 anchors: spellF1 0,4390 on the public slice, 87,2% team accuracy on live."""
+    spell, accuracy = _public_score(engine.run(dead=False, restarts=False)[0])
+    assert round(spell, 4) == 0.4390
+    assert round(accuracy, 3) == 0.872
+
+
+@requires_bundle
+def test_the_delivered_chain_reproduces_its_public_score() -> None:
+    """DECISIONS 30 anchors: I0 (with D) 0,4667 and I1 (D + restart control, delivered) 0,4585."""
+    assert round(_public_score(engine.run(restarts=False)[0])[0], 4) == 0.4667
+    table, summary = engine.run()
+    assert round(_public_score(table)[0], 4) == 0.4585
+    assert round(summary["dead_share"], 3) == 0.123

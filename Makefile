@@ -21,7 +21,7 @@ POSTPROCESS_OUTPUT ?= runs/postprocessed.csv
 F0A_WORKDIR ?= runs/f0a
 ARTIFACT ?= $(ARTIFACTS)/possession.csv
 BACKUP_DIR ?= runs/backup
-BLOCKS_INPUTS ?= evaluation/results/baseline_smooth50.csv $(SUBMISSIONS)/backup.csv
+BLOCKS_INPUTS ?= evaluation/results/baseline_smooth50.csv $(SUBMISSIONS)/backup.csv $(SUBMISSIONS)/engine.csv
 BLOCKS_DOC ?= docs/analysis/blocks.md
 
 .PHONY: help install dev starter test lint fmt guard ingest demo submission validate score score-baselines graph graph-check postprocess verify-b6 f0a backup repro engine engine-sweep blocks ci clean
@@ -63,7 +63,7 @@ backup:  ## safety-net entry (DECISIONS 25): smooth50 with ball gaps carried -> 
 	$(PY) tools/backup.py --workdir $(BACKUP_DIR) --out $(SUBMISSIONS)/backup.csv
 
 repro:  ## #15 build the delivered file twice from scratch; compare with each other and with the delivered file
-	$(PY) tools/repro.py $(if $(wildcard $(SUBMISSIONS)/backup.csv),--against $(SUBMISSIONS)/backup.csv)
+	$(PY) tools/repro.py $(if $(wildcard $(SUBMISSIONS)/engine.csv),--against $(SUBMISSIONS)/engine.csv)
 
 engine:  ## #6 possession engine (DECISIONS 29): artifact -> assemble -> $(SUBMISSIONS)/engine.csv
 	$(PY) tools/engine.py --build runs/engine --submission $(SUBMISSIONS)/engine.csv
@@ -71,7 +71,7 @@ engine:  ## #6 possession engine (DECISIONS 29): artifact -> assemble -> $(SUBMI
 engine-sweep:  ## #6 the pre-registered sensitivity sweep -> docs/analysis/engine-sensitivity.md
 	$(PY) tools/engine_sweep.py --write docs/analysis/engine-sensitivity.md
 
-blocks:  ## #36 structural report of $(BLOCKS_INPUTS) in 22 blocks -> $(BLOCKS_DOC) (run `make backup` first)
+blocks:  ## #36 structural report of $(BLOCKS_INPUTS) in 22 blocks -> $(BLOCKS_DOC) (run `make backup engine` first)
 	$(PY) tools/blocks.py $(BLOCKS_INPUTS) --write $(BLOCKS_DOC)
 
 verify-b6:  ## reproduce B6 public evidence and compare hashes and metrics to its manifest
