@@ -24,10 +24,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from tools import backup  # noqa: E402
+from tools import backup, engine  # noqa: E402
 from tools.f0a import _sha256 as sha256  # noqa: E402
 
-CHAINS = {"backup": backup.build}
+CHAINS = {"backup": backup.build, "engine": engine.build}
 WORKDIR = backup.RUNS / "repro"
 
 
