@@ -14,8 +14,9 @@ POSTPROCESS_INPUT ?= runs/argmin_baseline.csv
 POSTPROCESS_OUTPUT ?= runs/postprocessed.csv
 F0A_WORKDIR ?= runs/f0a
 ARTIFACT ?= $(ARTIFACTS)/possession.csv
+BACKUP_DIR ?= runs/backup
 
-.PHONY: help venv install dev test lint fmt guard ingest demo submission validate score score-baselines graph graph-check postprocess verify-b6 f0a ci clean
+.PHONY: help venv install dev test lint fmt guard ingest demo submission validate score score-baselines graph graph-check postprocess verify-b6 f0a backup ci clean
 
 help:  ## list the targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sed 's/:.*## /\t/' | expand -t22
@@ -45,6 +46,14 @@ guard:  ## refuse to proceed if licensed data or an oversized file is about to b
 
 postprocess:  ## apply the fixed #35 cleanup to a frame,label CSV
 	$(PY) tools/postprocess.py $(POSTPROCESS_INPUT) $(POSTPROCESS_OUTPUT)
+
+backup:  ## safety-net entry: baseline smooth50 with ball gaps carried -> $(SUBMISSIONS)/backup.csv
+	rm -rf $(BACKUP_DIR) && mkdir -p $(BACKUP_DIR)/artifacts
+	$(PY) starter/baseline.py --window 50 --out $(BACKUP_DIR)
+	$(PY) tools/ball_gaps.py $(BACKUP_DIR)/baseline_smooth50.csv $(BACKUP_DIR)/smooth50_gaps.csv
+	$(PY) tools/onehot.py $(BACKUP_DIR)/smooth50_gaps.csv -o $(BACKUP_DIR)/artifacts/backup.csv
+	$(PY) tools/assemble.py --artifacts $(BACKUP_DIR)/artifacts -o $(SUBMISSIONS)/backup.csv --json $(BACKUP_DIR)/summary.json
+	$(PY) evaluation/validate_submission.py $(SUBMISSIONS)/backup.csv
 
 verify-b6:  ## reproduce B6 public evidence and compare hashes and metrics to its manifest
 	$(PY) tools/verify_b6.py
