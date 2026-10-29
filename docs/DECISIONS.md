@@ -832,3 +832,32 @@ no la de mayor número (0,4513, dentro del ruido).
   ≥ 6 posesiones discordantes en el mismo sentido (test de signos p ≤ 0,031) **y** no empeora el
   acuerdo con el Smart Tagging ni rompe la estructura de un bloque (decisión 26). Si no, el barrido es
   un mapa de sensibilidad: dice si el default está en una meseta o en un pico.
+
+---
+
+## 30. Integración del motor: balón muerto del carril D y la reanudación como control (pre-registro)
+
+**Contexto.** Los dos carriles paralelos de #6 terminaron y el coordinador reprodujo sus números:
+
+- **Carril F (formación en huecos): negativo.** El clasificador de formación acierta 80,4% en
+  bloques no vistos, pero el acuerdo con el Smart Tagging en los frames de hueco solo pasa de 71,3%
+  a 72,9%, bajo el umbral pre-registrado de +2 puntos, y una variante baja el `spellF1` público
+  (−0,029). No entra en la cadena; se conserva como evidencia (`docs/proposals/lane-f.md`).
+- **Carril D (balón muerto, #16): positivo.** Cada parada es un intervalo desde la salida del balón
+  del campo hasta la reanudación del Smart Tagging (variante V2 `out`). Sobre el motor: `spellF1`
+  0,4390 → 0,4667, precisión de `D` 0,907, recall 0,384, 12,3% de `D` en el partido. V3 y V4 empatan
+  en el slice y no pasan el filtro de bloques (decisión 26) (`docs/proposals/lane-d.md`).
+
+**Pre-registro de la integración**, escrito antes de medirla:
+
+- **I0** = motor + máscara `D` V2. Es lo que ya está medido.
+- **I1** = I0 + **la reanudación es un control**: en el frame de reanudación de cada `SET PIECES`
+  con `Team` conocido, ese equipo controla el balón (se inyecta en `engine.control` antes de decodificar).
+  Es la regla del fútbol, no un parámetro: quien saca un lateral, un córner, una falta o un saque de
+  puerta tiene el balón. Hoy el motor arrastra el equipo de antes de la parada hasta el siguiente
+  control.
+- **Regla de selección:** se entrega I1, por principio, salvo que en el slice pierda posesiones en el
+  pareado frente a I0 (`wins_a > wins_b`) o rompa la estructura de un bloque (decisión 26). Si pasa
+  eso, se entrega I0.
+- Se reporta además, como comprobación de la premisa, en cuántas reanudaciones del slice el `Team`
+  del Smart Tagging coincide con el equipo del ground truth justo después.
