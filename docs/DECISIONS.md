@@ -766,3 +766,23 @@ versiones fijadas, incluso con el parche exacto de Python que registró la evide
 `artifacts/possession.csv` no coincide, aunque las submissions que
 se derivan de él sí). La causa no son las dependencias: queda el sistema operativo (la evidencia se
 generó en Linux) o el bundle, y se investiga aparte.
+
+---
+
+## 28. `make repro` construye la entrega dos veces desde cero, y la entrega es una cadena en Python
+
+**Decidido.** `tools/repro.py` (#15) construye la cadena entregada dos veces, cada una en su propio
+directorio borrado bajo `runs/repro/`, y compara los dos archivos byte a byte: sale con 0 e imprime
+un solo SHA-256 si coinciden, y con 1 si no. Hoy la cadena entregada es el respaldo de la decisión
+25, que pasa a vivir en `tools/backup.py`; `make backup` y `make repro` solo lo llaman. Cuando un
+modelo sustituya al respaldo, entra en `repro.CHAINS` y el default cambia con esa decisión.
+
+**Por qué en Python y no solo en el Makefile.** `make` no viene en un Windows de serie, y la regla 3
+del concurso dice que el repositorio regenera el archivo, no que lo regenera en Linux. Con la cadena
+en un módulo, la reproducción es `python tools/backup.py` en cualquier sistema, el test puede
+construirla dos veces, y el Makefile no lleva una segunda copia de los pasos que pueda divergir. Cada
+paso sigue corriendo como proceso propio con el mismo intérprete, como lo correría `make`.
+
+**Coste.** Construir dos veces cuesta el doble de tiempo, y el test que lo hace necesita el bundle,
+así que CI no lo ejecuta. Antes del freeze (#26), `make repro` se corre a mano en el entorno fijado
+de la decisión 27; su hash es el que se archiva con la entrega.

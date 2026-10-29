@@ -24,7 +24,7 @@ BACKUP_DIR ?= runs/backup
 BLOCKS_INPUTS ?= evaluation/results/baseline_smooth50.csv $(SUBMISSIONS)/backup.csv
 BLOCKS_DOC ?= docs/analysis/blocks.md
 
-.PHONY: help install dev starter test lint fmt guard ingest demo submission validate score score-baselines graph graph-check postprocess verify-b6 f0a backup blocks ci clean
+.PHONY: help install dev starter test lint fmt guard ingest demo submission validate score score-baselines graph graph-check postprocess verify-b6 f0a backup repro blocks ci clean
 
 help:  ## list the targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sed 's/:.*## /\t/' | expand -t22
@@ -59,14 +59,11 @@ guard:  ## refuse to proceed if licensed data or an oversized file is about to b
 postprocess:  ## apply the fixed #35 cleanup to a frame,label CSV
 	$(PY) tools/postprocess.py $(POSTPROCESS_INPUT) $(POSTPROCESS_OUTPUT)
 
-backup:  ## safety-net entry: baseline smooth50 with ball gaps carried -> $(SUBMISSIONS)/backup.csv
-	@case "$(BACKUP_DIR)" in runs/?*) ;; *) echo "BACKUP_DIR must be a subdirectory of runs/"; exit 1;; esac
-	rm -rf $(BACKUP_DIR) && mkdir -p $(BACKUP_DIR)/artifacts
-	$(PY) starter/baseline.py --window 50 --out $(BACKUP_DIR)
-	$(PY) tools/ball_gaps.py $(BACKUP_DIR)/baseline_smooth50.csv $(BACKUP_DIR)/smooth50_gaps.csv
-	$(PY) tools/onehot.py $(BACKUP_DIR)/smooth50_gaps.csv -o $(BACKUP_DIR)/artifacts/backup.csv
-	$(PY) tools/assemble.py --artifacts $(BACKUP_DIR)/artifacts -o $(SUBMISSIONS)/backup.csv --json $(BACKUP_DIR)/summary.json
-	$(PY) evaluation/validate_submission.py $(SUBMISSIONS)/backup.csv
+backup:  ## safety-net entry (DECISIONS 25): smooth50 with ball gaps carried -> $(SUBMISSIONS)/backup.csv
+	$(PY) tools/backup.py --workdir $(BACKUP_DIR) --out $(SUBMISSIONS)/backup.csv
+
+repro:  ## #15 build the delivered file twice from scratch; compare with each other and with the delivered file
+	$(PY) tools/repro.py $(if $(wildcard $(SUBMISSIONS)/backup.csv),--against $(SUBMISSIONS)/backup.csv)
 
 blocks:  ## #36 structural report of $(BLOCKS_INPUTS) in 22 blocks -> $(BLOCKS_DOC) (run `make backup` first)
 	$(PY) tools/blocks.py $(BLOCKS_INPUTS) --write $(BLOCKS_DOC)
