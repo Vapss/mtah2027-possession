@@ -48,6 +48,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 import games  # noqa: E402
 from tools import atd  # noqa: E402
+from tools.ball_gaps import ball_gaps, half_runs  # noqa: E402  -- the one gap definition
 from tools.compare_submissions import compare_codes  # noqa: E402
 
 sys.path.insert(0, str(REPO_ROOT / "evaluation"))
@@ -64,35 +65,6 @@ POLICIES = ("fill", "D", "X")
 # The full-match noise band (DECISIONS 3). The public slice's own band is 0.33 and is reported too.
 DECIDING_BAND = 0.04
 GRADED_BAND = 0.33
-
-
-def half_runs() -> list[tuple[int, int]]:
-    """The two half-time video blocks as half-open `(start, stop)` spans."""
-    return [(start, stop + 1) for _half, start, stop in games.half_video_blocks(games.GAME)]
-
-
-def ball_gaps(present: np.ndarray, runs: list[tuple[int, int]]) -> list[tuple[int, int]]:
-    """Maximal `[start, stop)` runs with no observed ball, restricted to `runs`.
-
-    The definition is #5's, pre-registered there: presence is `x` and `y` both present, a `z` alone
-    is not a detection, and a ball observed outside the pitch is still an observation. Frames
-    outside the half blocks are not gaps -- the tracking's silence there means "not in play yet",
-    not "ball lost".
-    """
-    gaps: list[tuple[int, int]] = []
-    for start, stop in runs:
-        if start < 0 or stop > len(present) or stop <= start:
-            raise ValueError(f"run {start, stop} is outside {len(present)} frames")
-        missing = ~present[start:stop]
-        edges = np.diff(missing.astype(np.int8))
-        opens = np.flatnonzero(edges == 1) + 1
-        closes = np.flatnonzero(edges == -1) + 1
-        if missing[0]:
-            opens = np.concatenate(([0], opens))
-        if missing[-1]:
-            closes = np.concatenate([closes, [len(missing)]])
-        gaps.extend((start + int(a), start + int(b)) for a, b in zip(opens, closes, strict=True))
-    return gaps
 
 
 def band_label(length: int) -> str:

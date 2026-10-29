@@ -637,3 +637,47 @@ de 500 frames, este repositorio no puede saberlo con el slice público. Toda la 
 descansa en 4 posesiones GT (#1, #2, #5, #14) de las 17 del slice. Y el `p90` de 845 frames dice que
 el tramo grande no es un caso raro: es donde está el trabajo. Cualquier barrido de cortes de banda
 sobre esta muestra encuentra lo que quiera; por eso los cortes son los del ticket y no se barren.
+
+---
+
+## 25. La entrega de respaldo es `smooth50` con los huecos arrastrados, y no predice `D`
+
+**Decidido.** `make backup` produce `submissions/backup.csv`, la entrega que se manda si ningún
+modelo propio la supera antes del freeze (#26). La cadena regenera todo desde el bundle, sin
+parámetros nuevos: `starter/baseline.py --window 50` → `tools/ball_gaps.py` (la regla de #5,
+escrita por Bruno en el PR #42; se recupera solo el modo `frame,label`, con el valor a arrastrar
+leído de la entrada, y la definición de hueco pasa a ser la única del repositorio) → `tools/onehot.py` →
+`tools/assemble.py` → validador oficial. Dos corridas desde cero dan el mismo archivo
+(`sha256 cb4eeef3617f…`).
+
+**Por qué esta y no otra.** De los cuatro baselines, `smooth50` es el que mejor rinde en el partido
+completo (0,2433, el suelo publicado); `smooth125` gana en el slice y pierde en el partido, que es
+justo la trampa que documenta `EVALUATION.md`. Sobre `smooth50`, arrastrar la etiqueta en los huecos
+de balón es la regla medida que sube `spellF1` sin barrer nada (decisión 12). Elegirla es una
+decisión por prior, no por el mejor número del slice, y no se puede sostener de otro modo: la
+decisión 24 mostró que el Δ cae a **+0,01588 con 0 discordancias** si se quita un solo hueco (232
+frames, dentro de la posesión #14). El número es dirección, no evidencia. La cadena propia B5 + B6 queda por debajo
+(0,1851 en el slice), así que no puede ser el respaldo.
+
+Medido en el slice público (17 posesiones; dirección, no generalización):
+
+| submission | spellF1 | macroF1 | posesiones | TP @ IoU 0,5 |
+|---|---:|---:|---:|---:|
+| `baseline_smooth50` | 0,3256 | 0,6207 | 26 | 7 |
+| **respaldo** | **0,3805** | 0,5105 | 24 | 9 |
+
+Δ pareado **+0,0549**, `n_discordant = 2` (2–0), bootstrap 5–95 de `spellF1` 0,2537 .. 0,5073.
+Estructura en los dos medios tiempos del partido completo, sin ground truth:
+
+| submission | % `D` | posesiones/min | mediana | spells < 2 s |
+|---|---:|---:|---:|---:|
+| `baseline_smooth50` | 32,3% | 5,61 | 4,6 s | 31% |
+| respaldo | **0,0%** | 3,75 | 7,9 s | 15% |
+
+**Coste.** El respaldo **no predice ningún `D`**: el único `D` del baseline venía de "no veo el
+balón", y el relleno lo elimina entero. Cambian 54.707 frames, no solo los `D`: un cambio de equipo
+que el baseline ponía dentro de un hueco se desplaza al final del hueco. Cada parada real se funde con las
+posesiones vecinas: `H D H` en la verdad se convierte en una sola posesión `H`. En el slice eso sale
+a cuenta, y la tasa de posesiones queda cerca del prior físico (3,75 frente a ~3,4 por minuto, contra
+5,61 de `smooth50`), pero el `D` real queda sin resolver; es trabajo de #16 y del motor (#6). El
+`macroF1` baja 0,11, el precio esperado (decisión 12).
