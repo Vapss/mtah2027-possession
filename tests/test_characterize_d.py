@@ -152,6 +152,8 @@ def test_the_report_names_the_sample_and_every_claim() -> None:
     # Two D runs of 2 frames each at 25 fps, and the share of the window they cover.
     assert "| 2 | 0,08 s |" in text
     assert "66,7%" in text
+    # The printed command is the same on every OS: a Windows run must not write backslashes.
+    assert "--write docs/analysis/d-characterization.md`" in text
 
 
 def test_cli_without_the_bundle_explains_itself(tmp_path, monkeypatch, capsys) -> None:
