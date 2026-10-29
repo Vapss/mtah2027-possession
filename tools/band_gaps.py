@@ -322,9 +322,13 @@ def _pct(value: float, digits: int = 1) -> str:
 
 
 def _relative(path: str) -> str:
-    """Repository-relative name: outputs never carry an absolute path (AGENTS.md rule 8)."""
+    """Repository-relative name: outputs never carry an absolute path (AGENTS.md rule 8).
+
+    POSIX separators, so the document is byte-identical whether it was generated on Windows or
+    Linux -- the same convention as `guard_data.py` and `ingest.py`.
+    """
     try:
-        return str(Path(path).resolve().relative_to(REPO_ROOT))
+        return Path(path).resolve().relative_to(REPO_ROOT).as_posix()
     except ValueError:
         return Path(path).name
 
