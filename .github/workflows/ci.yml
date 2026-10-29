@@ -14,11 +14,10 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
-      - name: Create the pinned environment
-        run: uv venv --python 3.12 .venv
-
-      - name: Install dependencies
-        run: uv pip install --python .venv/bin/python -r requirements.txt -r requirements-dev.txt
+      - name: Create the pinned environment from uv.lock
+        # --locked fails if uv.lock is stale against pyproject.toml (--frozen would not notice).
+        # Exact sync on purpose: CI builds the reproduction environment and nothing else.
+        run: uv sync --locked
 
       - name: Lint
         run: .venv/bin/ruff check tools tests

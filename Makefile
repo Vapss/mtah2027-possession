@@ -1,9 +1,15 @@
 # Every command the team runs lives here. If a step is only in someone's shell history, it did
 # not happen.
 
-PY ?= .venv/bin/python
-RUFF ?= .venv/bin/ruff
-PYTEST ?= .venv/bin/pytest
+# uv puts the venv's executables in bin/ on Linux and macOS and in Scripts/ on Windows.
+ifeq ($(OS),Windows_NT)
+VENV_BIN ?= .venv/Scripts
+else
+VENV_BIN ?= .venv/bin
+endif
+PY ?= $(VENV_BIN)/python
+RUFF ?= $(VENV_BIN)/ruff
+PYTEST ?= $(VENV_BIN)/pytest
 
 ARTIFACTS ?= artifacts
 SUBMISSIONS ?= submissions
@@ -18,19 +24,23 @@ BACKUP_DIR ?= runs/backup
 BLOCKS_INPUTS ?= evaluation/results/baseline_smooth50.csv $(SUBMISSIONS)/backup.csv
 BLOCKS_DOC ?= docs/analysis/blocks.md
 
-.PHONY: help venv install dev test lint fmt guard ingest demo submission validate score score-baselines graph graph-check postprocess verify-b6 f0a backup blocks ci clean
+.PHONY: help install dev starter test lint fmt guard ingest demo submission validate score score-baselines graph graph-check postprocess verify-b6 f0a backup blocks ci clean
 
 help:  ## list the targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sed 's/:.*## /\t/' | expand -t22
 
-venv:  ## create the pinned environment (Python 3.12, not the system interpreter)
-	uv venv --python 3.12 .venv
+# All three build .venv from uv.lock (#9, DECISIONS 27); the versions live in pyproject.toml and
+# .python-version, nowhere else. --locked fails when uv.lock no longer matches pyproject.toml
+# (--frozen would install the stale lock without a word). --inexact only adds: one target never
+# uninstalls what another put there.
+install:  ## the pinned runtime from uv.lock -- numpy and pandas
+	uv sync --locked --no-dev --inexact
 
-install: venv  ## runtime dependencies only -- numpy and pandas
-	uv pip install --python $(PY) -r requirements.txt
+dev:  ## the pinned runtime plus pytest and ruff
+	uv sync --locked --inexact
 
-dev: install  ## runtime plus pytest and ruff
-	uv pip install --python $(PY) -r requirements-dev.txt
+starter:  ## dev plus the notebook stack for starter/ (kloppy, matplotlib, notebook)
+	uv sync --locked --inexact --group starter
 
 test:  ## run the harness test suite
 	$(PYTEST) -q
