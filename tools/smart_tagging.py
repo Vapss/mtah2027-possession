@@ -126,6 +126,56 @@ def mask(instances: list[dict], codes: str | Iterable[str]) -> np.ndarray:
     return marked
 
 
+# Which phases say who has the ball. An attacking phase is tagged with the team that has it, a
+# defending phase with the team that does not. SET PIECES is a restart (the ball is dead until it is
+# taken) and GOALS names the scorer, after which the other side restarts: neither says who holds a
+# live ball, so they cast no vote.
+ATTACKING = frozenset(
+    {
+        "BUILD UP",
+        "PROGRESSION",
+        "CREATING CHANCES",
+        "ATTACKING TRANSITION",
+        "BALL IN FINAL THIRD",
+        "BALL IN THE BOX",
+        "PLAYERS IN THE BOX",
+        "LONG BALL",
+    }
+)
+DEFENDING = frozenset(
+    {
+        "DEFENDING IN ATTACKING THIRD",
+        "DEFENDING IN MIDDLE THIRD",
+        "DEFENDING IN DEFENSIVE THIRD",
+        "DEFENSIVE TRANSITION",
+    }
+)
+# The export's spelling, not the club's: the file says "Atletic Club". 0 is home (H), 1 is away (A).
+TEAMS = {"Barcelona": 0, "Atletic Club": 1}
+
+
+def possession_votes(instances: list[dict]) -> np.ndarray:
+    """`(N_FRAMES, 2)` count of phases saying home / away has the ball, frame by frame.
+
+    Overlapping phases add up, and a frame can carry votes for both sides: the phases are the
+    annotator's, not possessions, and their borders straddle hand-overs. What a split vote means is
+    the caller's decision. An instance tagged `N/A`, or with a code outside ATTACKING/DEFENDING,
+    casts nothing.
+    """
+    votes = np.zeros((N_FRAMES, 2), dtype=np.int16)
+    for instance in instances:
+        team = TEAMS.get((instance.get("tags") or {}).get("Team"))
+        code = (instance.get("code") or "").strip().upper()
+        if team is None or (code not in ATTACKING and code not in DEFENDING):
+            continue
+        owner = team if code in ATTACKING else 1 - team
+        start = max(0, int(instance["start_frame"]))
+        end = min(N_FRAMES, int(instance["end_frame"]))
+        if end > start:
+            votes[start:end, owner] += 1
+    return votes
+
+
 def summary(instances: list[dict]) -> dict[str, int]:
     """How many instances carry each code, most frequent first, ties alphabetical.
 

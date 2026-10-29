@@ -681,3 +681,45 @@ posesiones vecinas: `H D H` en la verdad se convierte en una sola posesión `H`.
 a cuenta, y la tasa de posesiones queda cerca del prior físico (3,75 frente a ~3,4 por minuto, contra
 5,61 de `smooth50`), pero el `D` real queda sin resolver; es trabajo de #16 y del motor (#6). El
 `macroF1` baja 0,11, el precio esperado (decisión 12).
+
+---
+
+## 26. El holdout estructural son 22 bloques de 5 minutos, y se lee como cordura, no como métrica
+
+**Decidido.** `make blocks` (`tools/blocks.py`) describe cada submission en los 22 bloques del
+partido y escribe `docs/analysis/blocks.md`. Cada medio tiempo de `games.half_video_blocks` se corta
+en bloques consecutivos de 7.500 frames desde su primer frame; el último de cada medio es más corto
+(3,0 y 2,9 min). El bloque 1 coincide exactamente con la ventana pública (11.185..18.684). Por
+bloque: balón detectado, posesiones que empiezan en él y su tasa por minuto, duración mediana, `%D`,
+`%H`, y la cobertura y el acuerdo del Smart Tagging. Las abstenciones se rellenan como las rellena
+el scorer antes de contar nada. No se lee ningún ground truth.
+
+**Qué vota el Smart Tagging** (`smart_tagging.possession_votes`, reutilizable por #6): una fase
+ofensiva (`BUILD UP`, `PROGRESSION`, `CREATING CHANCES`, `ATTACKING TRANSITION`, `BALL IN FINAL
+THIRD`, `BALL IN THE BOX`, `PLAYERS IN THE BOX`, `LONG BALL`) vota por su `Team`; una defensiva
+(`DEFENDING IN …`, `DEFENSIVE TRANSITION`) vota por el otro equipo. `SET PIECES` y `GOALS` no votan:
+dicen quién reanuda o quién marcó, no quién tiene un balón vivo. `N/A` no vota. Un frame cuenta
+como *cubierto* solo si todos sus votos van a un mismo equipo.
+
+**Cómo se lee.** Es un test de cordura, no una métrica: no se optimiza y no entra en ningún
+criterio de aceptación como número. Lo que sí hace es **bloquear**: una configuración que gana en el
+bloque 1★ pero deja un bloque fuera de lo físicamente plausible (sin posesiones, o con una tasa de
+otro orden de magnitud que la de sus vecinos con presencia de balón parecida) se reporta como
+regresión. El informe se adjunta a cada PR que cambie la emisión o el decodificador, y ninguna
+decisión de release (#26) se toma sin él.
+
+**Lo que ya muestra** (respaldo de la decisión 25 frente a `smooth50`):
+
+- El bloque público es el más fácil: 88,2% de balón, frente a 19,9–36,9% en los bloques 7, 9, 11
+  y 18.
+- En esos bloques el respaldo baja a 1,0–1,8 posesiones/min con medianas de 20–25 s: el arrastre
+  estira posesiones a través de huecos largos.
+- Su acuerdo con el Smart Tagging en el partido es **62,2%**, por debajo del 67,2% de `smooth50`, y
+  cae a 24,8% en el bloque 11 y 30,9% en el 18. El arrastre copia el equipo anterior durante huecos
+  que el slice no puede medir (decisión 24); el Smart Tagging dice que ahí se equivoca a menudo.
+
+**Coste.** El acuerdo con el Smart Tagging no es acierto: el Smart Tagging es automático y, medido
+contra la ventana pública, cubre el 70,5% de los frames vivos y acierta el **68,0%** de ellos (el
+`argmin` del tracking acierta 77,8% en los vivos con balón). Es una segunda
+opinión independiente del tracking, no un árbitro. Y las referencias de tasa y duración salen del
+propio slice público, así que no se convierten en una banda de aceptación (#35).
