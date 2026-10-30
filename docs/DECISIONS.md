@@ -948,3 +948,10 @@ distintos, ninguna se fuerza; es una etiqueta ambigua y no se resuelve por el or
 **Regla de selección:** se adopta salvo que pierda posesiones en el pareado frente a la cadena de la
 decisión 31 (`wins_a > wins_b`) o rompa un bloque. Y, como enseñó la decisión 31, se comprueba la
 premisa: cuántas reanudaciones del partido tienen ya un control dentro de su ventana.
+
+**Resultado.** En el slice, neutro: Δ 0,0 con 0 posesiones discordantes, y la estructura no cambia
+(3,64 posesiones/min, 12,3% de `D`, acuerdo con el Smart Tagging 73,1%). Se adopta por la regla. La
+premisa se comprueba en el partido: **10 de las 27 reanudaciones con equipo conocido ya tienen un
+control observado en su ventana**, y en 2 de esas 10 el primer control es del rival: son justo los
+casos que antes se revertían al equipo que sacaba. Se fuerzan 17 de 27. Cadena entregada: SHA-256
+`1cdab582ee6b…`.

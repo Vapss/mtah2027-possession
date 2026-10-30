@@ -40,15 +40,14 @@ def sweep() -> list[dict]:
     gt = pm.label_codes(pd.read_csv(GROUND_TRUTH).label)
     runs = engine.halves()
     cut = bl.blocks(bl.halves())
-    instances = st.load()
-    votes = st.possession_votes(instances)
-    # The delivered chain (DECISIONS 30, 31): restarts force possession and stoppages are D. Both
-    # are computed once; only the engine's thresholds move across the grid.
-    forced = engine.restart_controls(instances)
-    dead = dead_ball.dead_mask(dead_ball.load_evidence(), runs, "out")
+    votes = st.possession_votes(st.load())
+    # The delivered chain (DECISIONS 30-32): restarts and stoppages are read once; only the engine's
+    # thresholds move across the grid (which restarts apply depends on them, so the chain decides).
+    evidence = dead_ball.load_evidence()
+    dead = dead_ball.dead_mask(evidence, runs, "out")
 
     def decoded(params: engine.Params) -> np.ndarray:
-        return engine.chain_labels(f, params, forced, dead)
+        return engine.chain(f, params, evidence.restarts, dead)[2]
 
     default = engine.DEFAULT
     base = pm.label_codes(list(decoded(default)))
@@ -72,9 +71,20 @@ def sweep() -> list[dict]:
                 "rate": structure[-1].rate,
                 "st_agree": structure[-1].st_agree,
                 "st_low": float(np.mean([structure[b - 1].st_agree for b in LOW_BALL_BLOCKS])),
+                "rates": [row.rate for row in structure[:-1]],
             }
         )
     return rows
+
+
+def breaks_structure(rates: list[float], reference: list[float]) -> bool:
+    """DECISIONS 26: a block left without possessions, or an order of magnitude off the default."""
+    for rate, ref in zip(rates, reference):
+        if rate == 0 and ref > 0:
+            return True
+        if rate > 0 and ref > 0 and max(rate / ref, ref / rate) >= 10:
+            return True
+    return False
 
 
 def _dec(value: float, digits: int = 4) -> str:
@@ -126,7 +136,10 @@ def report(rows: list[dict], command: str, commit: str | None) -> str:
     beats = [
         r
         for r in others
-        if r["p"] <= 0.0313 and r["wins"] > r["losses"] and r["st_agree"] >= default["st_agree"]
+        if r["p"] <= 0.0313
+        and r["wins"] > r["losses"]
+        and r["st_agree"] >= default["st_agree"]
+        and not breaks_structure(r["rates"], default["rates"])
     ]
     spell = [r["spell_f1"] for r in others]
     lines += [
@@ -136,7 +149,8 @@ def report(rows: list[dict], command: str, commit: str | None) -> str:
         f"- `spellF1` de las otras 26 configuraciones: {_dec(min(spell))} .. {_dec(max(spell))} "
         f"(default {_dec(default['spell_f1'])}).",
         f"- Configuraciones que ganan al default según la regla (test de signos p ≤ 0,031, más "
-        f"ganadas que perdidas, sin empeorar el acuerdo con el Smart Tagging): **{len(beats)}**.",
+        f"ganadas que perdidas, sin empeorar el acuerdo con el Smart Tagging y sin romper un "
+        f"bloque): **{len(beats)}**.",
         f"- Acuerdo con el Smart Tagging: {_pct(min(r['st_agree'] for r in others))} .. "
         f"{_pct(max(r['st_agree'] for r in others))} (default {_pct(default['st_agree'])}).",
     ]

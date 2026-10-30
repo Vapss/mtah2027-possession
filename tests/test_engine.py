@@ -75,7 +75,15 @@ def test_labels_are_h_a_and_x() -> None:
     assert engine.labels(np.array([0, 1, NONE], dtype=np.int8)).tolist() == ["H", "A", "X"]
 
 
-def test_a_restart_is_a_control_of_the_team_that_takes_it() -> None:
+def _restart(frame: int, tag_start: int, team: int | None):
+    from tools.dead_ball import Restart
+
+    return Restart(frame, tag_start, "Throw-in", team)
+
+
+def test_a_restart_hands_the_ball_to_the_team_that_takes_it() -> None:
+    from tools import dead_ball
+
     instances = [
         {
             "code": "SET PIECES",
@@ -89,10 +97,22 @@ def test_a_restart_is_a_control_of_the_team_that_takes_it() -> None:
             "start_frame": 400,
             "end_frame": 500,
         },
-        {"code": "BUILD UP", "tags": {"Team": "Barcelona"}, "start_frame": 0, "end_frame": 50},
     ]
     # One known team, at the dead-ball stream's restart frame (5 s into the tag), away = 1.
-    assert engine.restart_controls(instances) == {100 + 5 * engine.FPS: 1}
+    assert engine.restart_controls(dead_ball.restarts(instances)) == {100 + 5 * engine.FPS: 1}
+
+
+def test_a_restart_already_seen_resuming_is_not_forced() -> None:
+    # DECISIONS 32: a control inside [tag_start, frame) means the game resumed; the tracking wins.
+    ctrl = np.full(20, NONE, dtype=np.int8)
+    ctrl[7] = 0
+    restarts = [_restart(10, 5, 1), _restart(18, 15, 1)]
+    assert engine.restart_controls(restarts, ctrl) == {18: 1}
+
+
+def test_two_restarts_on_one_frame_for_different_teams_are_not_forced() -> None:
+    restarts = [_restart(10, 5, 0), _restart(10, 5, 1), _restart(30, 25, 0), _restart(30, 26, 0)]
+    assert engine.restart_controls(restarts) == {30: 0}
 
 
 def _public_score(table) -> tuple[float, float]:

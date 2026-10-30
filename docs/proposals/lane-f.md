@@ -128,9 +128,17 @@ el commit `2ac2fb0`, anterior a cualquier lectura de ground truth o Smart Taggin
 
 ## 2. Cómo se reproducen los números
 
+> **Nota del coordinador.** Estos números se midieron con el motor del commit `e02437c`, antes de la
+> decisión 31, que dejó de contar como control un balón fuera del campo. Como `formation.py` entrena
+> con `engine.control`, el comando de abajo **ya no reproduce** esta tabla en el código actual: el
+> motor desnudo pasa de 0,4390 a 0,4195 y la máscara de entrenamiento cambia. Para reproducir la
+> evidencia tal como se archivó, hay que ejecutarlo sobre ese commit (`git worktree add ../lane-f
+> e02437c`). La conclusión no depende de esto: el relleno de huecos no entra en la cadena.
+
 ```bash
 export MTAH_DATA_DIR="<carpeta del bundle>"
 uv sync --locked --inexact
+mkdir -p runs/lane-f  # la redirección del shell abre el archivo antes de que Python cree la carpeta
 .venv/Scripts/python tools/formation.py --measure runs/lane-f > runs/lane-f/measure.json
 ```
 

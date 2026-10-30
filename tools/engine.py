@@ -22,8 +22,10 @@ back-fills them).
 
 The delivered chain (`run`, DECISIONS 30) adds two things from the dead-ball stream (#16,
 `tools/dead_ball.py`): each stoppage, from the ball leaving the pitch to the tagged restart, is `D`;
-and **a restart is a control** -- the team that takes a throw-in, a corner, a free kick or a goal
-kick has the ball, so the restart frame counts as that team's control before decoding.
+and **a restart hands the ball to the team that takes it** -- a throw-in, a corner, a free kick, a
+goal kick -- by forcing the state at the restart frame, whatever `dwell` is (DECISIONS 31). The
+restart frame is an estimate, so it is forced only when the tracking has not already seen the game
+resume with a control inside the restart's window (DECISIONS 32).
 """
 
 from __future__ import annotations
@@ -31,6 +33,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -163,32 +166,43 @@ def halves() -> list[tuple[int, int]]:
     return half_runs()
 
 
-def restart_controls(instances: list[dict]) -> dict[int, int]:
-    """`{frame: team}` for every tagged restart whose `Team` is known: the restart is a control.
+def restart_controls(restarts: Sequence, ctrl: np.ndarray | None = None) -> dict[int, int]:
+    """`{frame: team}`: the restarts that hand the ball to their team (DECISIONS 30, 32).
 
-    Read from the dead-ball stream's own restarts (`dead_ball.restarts`), so the stoppage a restart
-    closes and the possession it opens meet on the same frame, from one parser.
+    `restarts` are the dead-ball stream's own (`dead_ball.Restart`, carrying `team`), so a stoppage
+    and the possession it opens meet on the same frame. A restart is skipped when its team is
+    unknown, when another restart on the same frame names the other team (an ambiguous tag is not
+    resolved by XML order), or when `ctrl` already shows a control inside `[tag_start, frame)`:
+    the game has resumed and the tracking's observation beats the restart's estimated frame.
     """
-    from tools import dead_ball
+    teams: dict[int, set[int]] = {}
+    for r in restarts:
+        if r.team is None:
+            continue
+        if ctrl is not None and np.any(ctrl[r.tag_start : r.frame] != NONE):
+            continue
+        teams.setdefault(r.frame, set()).add(r.team)
+    return {frame: next(iter(team)) for frame, team in teams.items() if len(team) == 1}
 
-    return {r.frame: r.team for r in dead_ball.restarts(instances) if r.team is not None}
 
-
-def chain_labels(
+def chain(
     f: Features,
     params: Params,
-    forced: dict[int, int] | None,
+    restarts: Sequence | None,
     dead: np.ndarray | None,
-) -> np.ndarray:
-    """The delivered chain on precomputed inputs: control, decode with restarts, then `D`.
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """The delivered chain on precomputed inputs: `(ctrl, state, labels)`.
 
-    Shared by `run` and the sensitivity sweep, so the sweep measures what is delivered.
+    Control, decode with the restarts that apply under these thresholds, then `D` over the
+    stoppages. Shared by `run` and the sensitivity sweep, so the sweep measures what is delivered.
     """
-    state = decode(control(f, params), halves(), params.dwell, forced)
+    ctrl = control(f, params)
+    forced = restart_controls(restarts, ctrl) if restarts is not None else None
+    state = decode(ctrl, halves(), params.dwell, forced)
     out = labels(state)
     if dead is not None:
         out[np.asarray(dead, dtype=bool)] = "D"
-    return out
+    return ctrl, state, out
 
 
 def run(
@@ -199,15 +213,12 @@ def run(
     `dead=False, restarts=False` is the bare engine of DECISIONS 29; `restarts=False` is I0.
     """
     from tools import dead_ball
-    from tools import smart_tagging as st
 
     f = features(atd.load("tactical"), emision.team_slots())
-    forced = restart_controls(st.load()) if restarts else None
-    mask = dead_ball.dead_mask(dead_ball.load_evidence(), halves(), "out") if dead else None
-    table = pd.DataFrame({"frame": np.arange(len(f.present))})
-    table["label"] = chain_labels(f, params, forced, mask)
-    ctrl = control(f, params)
-    state = decode(ctrl, halves(), params.dwell, forced)
+    evidence = dead_ball.load_evidence() if (dead or restarts) else None
+    mask = dead_ball.dead_mask(evidence, halves(), "out") if dead else None
+    ctrl, state, lab = chain(f, params, evidence.restarts if restarts else None, mask)
+    table = pd.DataFrame({"frame": np.arange(len(lab)), "label": lab})
     inside = np.zeros(len(state), dtype=bool)
     for start, stop in halves():
         inside[start:stop] = True
@@ -245,8 +256,14 @@ def build(
     workdir = backup.wipe(workdir)
     out = out.resolve()
     artifact = workdir / "artifacts" / "engine.csv"
-    table, _summary = run(params, dead=dead, restarts=restarts)
-    write_artifact(table, artifact)
+    # Its own process, like every step of a delivered chain (DECISIONS 28): two repro builds must
+    # not share the cached tracking or any module state.
+    flags = ["--radius", params.radius_m, "--speed", params.speed_mps, "--dwell", params.dwell]
+    if not dead:
+        flags.append("--bare")
+    elif not restarts:
+        flags.append("--no-restarts")
+    _run(["tools/engine.py", "--out", artifact, *flags])
     _run(
         [
             "tools/assemble.py",
