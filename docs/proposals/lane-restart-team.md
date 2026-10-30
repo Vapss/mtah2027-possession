@@ -405,3 +405,25 @@ Lo que queda como resultado:
   cuatro. Es la única forma razonable de la regla del reglamento que queda sin medir.
 - **El margen de la decisión 40 no está aquí.** En el slice no cambia ni un frame: los 690 frames
   vivos equivocados cerca de un cambio verdadero no son de reanudaciones sin equipo.
+
+## 11. Revisión de código (PR #58)
+
+Correcciones posteriores a la medición, cada una con su prueba; **ninguna cambia un número**:
+
+- **L tras una reanudación seguida.** Cuando no se ve una salida del balón entre dos reanudaciones,
+  `dead_ball.stoppages` empieza la parada en el frame de la anterior, y L leía la posesión del frame
+  previo, la de antes de que esa reanudación la forzara. Ahora lee la del propio frame (el equipo al
+  que la anterior dio el balón). Afecta a 1 de los 307 tags sintéticos de DFL con verdad conocida
+  (L acierta 0,520 en los otros 306) y a ninguno del partido: **"`law` es casi azar" no es un
+  artefacto**. DFL re-medido: todas las tasas de acierto y victorias de la sección 8.1, iguales; las
+  cinco salidas del partido, el mismo SHA-256.
+- **`forced`** solo se atribuye a una reanudación si es la única de su frame (un segundo tag en el
+  mismo frame con el mismo equipo ya no la cuenta como forzada).
+- **`chain`** construye `D` con la definición compartida (`dead_ball_v2.dead_union`); `engine` sigue
+  siendo la cadena entregada byte a byte.
+- **Los saques de inicio de mitad en DFL** no informan del método: el primer tag sintético de cada
+  partido recibe siempre el error −2 s y cae en el primer frame de la mitad por construcción, así que
+  la ventana de P queda vacía. Las filas `kick-off-start` de 8.1 se leen así.
+
+Deuda aceptada: `infer` re-decodifica el partido por cada reanudación sin equipo y `dfl()` repite
+`infer` y la degradación (coste, no resultado; módulo de investigación).

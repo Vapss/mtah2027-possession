@@ -45,6 +45,7 @@ import argparse
 import dataclasses
 import json
 import sys
+from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -158,11 +159,18 @@ def anchors(ev: dead_ball.Evidence, runs: Sequence[tuple[int, int]]) -> list[int
     return out
 
 
-def law_team(state: np.ndarray, anchor: int | None, half_start: int) -> int | None:
-    """L: the opponents of the team in possession on the frame before the ball went out."""
+def law_team(
+    state: np.ndarray, anchor: int | None, half_start: int, after_restart: bool = False
+) -> int | None:
+    """L: the opponents of the team in possession on the frame before the ball went out.
+
+    `after_restart`: the stoppage starts on the previous restart's frame (no exit of the ball was
+    seen in between, `dead_ball.stoppages` clamps it there), so the team in possession is the one
+    that restart handed the ball to, on that frame -- not the one before it (review of PR #58).
+    """
     if anchor is None or anchor <= half_start:
         return None
-    team = int(state[anchor - 1])
+    team = int(state[anchor if after_restart else anchor - 1])
     return None if team == NONE else 1 - team
 
 
@@ -237,6 +245,7 @@ def infer(
         other = {a: b, b: a}
 
     teams = [r.team for r in restarts]
+    restart_frames = {r.frame for r in restarts}
     law: dict[int, int | None] = {}
     for i in sorted(todo, key=lambda k: (restarts[k].frame, restarts[k].tag_start)):
         r = restarts[i]
@@ -248,11 +257,15 @@ def infer(
             forced = engine.restart_controls(current, accepted)
             state = engine.decode(ctrl, runs, params.dwell, forced, switch)
             half = _half(r.frame, runs)
-            law[i] = law_team(state, anchor[i], half[0]) if half is not None else None
+            after = anchor[i] is not None and anchor[i] != r.frame and anchor[i] in restart_frames
+            law[i] = law_team(state, anchor[i], half[0], after) if half is not None else None
         teams[i] = combine(variant, r.kind, pos[i], law[i])
 
     named = tuple(dataclasses.replace(x, team=t) for x, t in zip(restarts, teams))
     forced = engine.restart_controls(named, accepted)
+    # A frame's forced team is credited to a restart only when it is the frame's one restart:
+    # another tag on the same frame naming the same team must not count as this one forced.
+    per_frame = Counter(r.frame for r in restarts)
     rows = tuple(
         {
             "index": i,
@@ -261,7 +274,9 @@ def infer(
             "pos": pos[i],
             "law": law[i],
             "team": teams[i],
-            "forced": teams[i] is not None and forced.get(restarts[i].frame) == teams[i],
+            "forced": teams[i] is not None
+            and per_frame[restarts[i].frame] == 1
+            and forced.get(restarts[i].frame) == teams[i],
         }
         for i in todo
     )
@@ -281,11 +296,12 @@ def chain(
 ) -> np.ndarray:
     """The delivered chain with this variant's restart teams: H/A/D/X for the whole match.
 
-    `D` is the delivered one (tagged stoppages united with the players' `kinematic`, as
-    `engine.delivered_dead`), which no team changes; `engine.chain` decodes with the restarts.
+    `D` is the delivered one (tagged stoppages united with the players' `kinematic`: the shared
+    `dead_ball_v2.dead_union`, as `engine.delivered_dead`), which no team changes; `engine.chain`
+    decodes with the restarts.
     """
     runs = engine.halves()
-    dead = dead_ball.dead_mask(ev, runs, "out") | np.asarray(kinematic, dtype=bool)
+    dead = dead_ball_v2.dead_union("rule", ev, kinematic, runs)
     restarts = infer(f, ev, variant, params, rt, runs).restarts
     return engine.chain(f, params, restarts, dead)[2]
 

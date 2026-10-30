@@ -106,6 +106,16 @@ def test_l_is_the_opponent_of_the_team_in_possession_when_the_ball_went_out() ->
     assert restart_team.law_team(state, None, 0) is None
 
 
+def test_l_after_a_restart_reads_the_team_that_restart_handed_the_ball_to() -> None:
+    # The stoppage starts on the previous restart's frame (no exit seen since): the team in
+    # possession is the one forced there, not the one on the frame before it.
+    state = np.full(N, NONE, dtype=np.int8)
+    state[100:450] = 0
+    state[450:] = 1  # a restart at 450 forced the away team
+    assert restart_team.law_team(state, 450, 0) == 1  # an exit at 450: the frame before
+    assert restart_team.law_team(state, 450, 0, after_restart=True) == 0
+
+
 def test_the_anchor_is_the_last_exit_of_the_ball_before_the_tag() -> None:
     _, ev = _throw_in_scene()
     assert restart_team.anchors(ev, HALF) == [450]

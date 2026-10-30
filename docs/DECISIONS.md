@@ -1257,7 +1257,9 @@ pasa todas las compuertas; la cadena entregada se mantiene** (`72c98ed4bb4a…`)
   que ya se arrastra: cambia 48 frames, ninguno del slice (banco idéntico), y el Smart Tagging coincide
   en 7 de 7 reanudaciones forzadas. `agree` da exactamente las mismas etiquetas.
 - **Ninguna nombra el saque inicial** del partido: su estimación cae en el primer frame de la mitad y
-  la ventana de `pos` queda vacía.
+  la ventana de `pos` queda vacía. En DFL, las filas de saque de inicio de mitad no dicen nada del
+  método: el primer tag sintético de cada partido recibe siempre el error −2 s y queda en el primer
+  frame de la mitad por construcción (revisión del PR #58).
 
 **Corrección de la decisión 40.** El `spellF1` oficial no ve las `X`: `fill_abstentions` las rellena
 hacia delante y, al inicio de una ventana, hacia atrás. Los 9,2 s sin estado del inicio no son una
