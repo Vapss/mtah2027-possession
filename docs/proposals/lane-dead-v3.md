@@ -1,7 +1,8 @@
 # Carril dead-v3 — dónde empieza una parada de los jugadores y quién reanuda
 
-Estado: **pre-registrado**. Las secciones 1–6 se escriben y commitean antes de correr ninguna
-variante contra el ground truth público. Todo lo que se cita aquí sale de los 7 partidos DFL/IDSSE
+Estado: **medido — resultado negativo** (sección 9). Las secciones 1–6 se escribieron y commitearon
+(`a27ebd6`) antes de correr ninguna variante contra el ground truth público; las 7–10 se añadieron
+después, en un commit aparte, sin tocar las 1–6 salvo esta línea de estado. Todo lo que se cita aquí sale de los 7 partidos DFL/IDSSE
 (estado vivo/muerto por frame) o del partido **sin** etiquetas (agregados).
 
 ## 1. Qué se propone
@@ -131,3 +132,168 @@ Referencia: **`engine`** = la cadena entregada (`bench.METHODS["engine"]`, `engi
    ordenan métodos.
 4. Si ninguna pasa, la recomendación es **mantener la cadena entregada** y el resultado se reporta
    como negativo.
+
+---
+
+*Lo que sigue se escribió después de medir. Las secciones 1–6 son las del commit `a27ebd6` sin
+cambios, salvo la línea de estado.*
+
+## 7. Cómo se reproducen los números
+
+```bash
+export MTAH_DATA_DIR=...                       # el bundle licenciado
+python tools/engine.py --labels runs/dead_v3/delivered.csv
+for v in engine onset first-control onset+first-control; do
+  python tools/dead_ball_v3.py --variant "$v" --labels "runs/dead_v3/$v.csv" --gt public
+done
+for v in onset first-control onset+first-control; do
+  python tools/compare_submissions.py runs/dead_v3/engine.csv "runs/dead_v3/$v.csv" --gt public
+done
+python tools/dead_ball_v3.py --bench
+python tools/blocks.py runs/dead_v3/engine.csv runs/dead_v3/onset.csv \
+    runs/dead_v3/first-control.csv runs/dead_v3/onset+first-control.csv
+python tools/dead_ball_v3.py --explore         # sección 2.2, sin ground truth
+# DFL (IDSSE en MTAH_EXTERNAL_DIR, la caché de tools/external.py)
+python tools/dead_ball_v3.py dfl-edges --grid  # sección 2.1
+python tools/dead_ball_v3.py dfl-score         # sección 8.4
+```
+
+**`engine` es la cadena entregada, byte a byte:** `runs/dead_v3/engine.csv` y la salida de
+`tools/engine.py --labels` tienen el mismo SHA-256, `72c98ed4bb4a…` (el repro de la decisión 36), y
+`tests/test_dead_ball_v3.py::test_the_engine_variant_reproduces_the_delivered_run` lo fija. Las
+variantes son deterministas (solo numpy): `onset` `523e019e4806…`, `first-control`
+`ecd6042ea9f1…`, `onset+first-control` `8202ae60ee8f…`. `runs/` está ignorado por Git.
+
+## 8. Mediciones
+
+### 8.1 Slice público (17 posesiones, 1.469 frames de `D`)
+
+| cadena | `spellF1` | `macroF1` | Δ pareado | `n_discordant` (IoU 0,5) | ganadas motor/variante | posesiones pred. | precisión `D` | recall `D` |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `engine` (entregada) | 0,5368 | 0,8533 | — | — | — | 21 | 0,877 | 0,897 |
+| U1 `onset` | 0,5263 | 0,8585 | **−0,0105** | 0 | 0 / 0 | 21 | 0,867 | 0,933 |
+| U2 `first-control` | 0,5368 | 0,8533 | 0,0000 | 0 | 0 / 0 | 21 | 0,877 | 0,897 |
+| U3 `onset+first-control` | 0,5263 | 0,8585 | **−0,0105** | 0 | 0 / 0 | 21 | 0,867 | 0,933 |
+
+| Δ `spellF1` por IoU frente a `engine` | 0,3 | 0,4 | 0,5 | 0,6 | 0,7 |
+|---|---:|---:|---:|---:|---:|
+| U1 `onset` / U3 | −0,0526 | −0,0526 | 0 | +0,0526 | 0 |
+| U2 `first-control` | 0 | 0 | 0 | 0 | 0 |
+
+U2 no cambia ni un frame graduado del slice: ninguna parada sin tag del bloque 1★ termina con un
+primer control distinto del equipo arrastrado. U3 = U1 en el slice por lo mismo. El jackknife de
+U1 contiene deltas de los dos signos (−0,022 .. +0,011): dirección, no prueba.
+
+Diagnóstico posterior (agregados; no cambia la selección): U1 añade 80 frames de `D` predicho en el
+slice, **54 de ellos `D` verdadero** (68%): también en la verdad de Metrica la parada empieza antes
+de lo que dice W1. El Δ negativo es una posesión corta que deja de emparejarse a IoU 0,3–0,4, y otra
+que pasa a emparejarse a IoU 0,6.
+
+### 8.2 Banco de trasplante de huecos
+
+| banco | limpio | media de donantes (n = 19) | media con < 50% de balón (n = 6) | peor donante |
+|---|---:|---:|---:|---:|
+| `engine` (entregada) | 0,5368 | 0,4351 | 0,3595 | 0,2400 |
+| U1 `onset` | 0,5263 | **0,4296** | **0,3585** | 0,2400 |
+| U2 `first-control` | 0,5368 | 0,4397 | **0,3592** | 0,2400 |
+| U3 `onset+first-control` | 0,5263 | 0,4355 | 0,3606 | 0,2400 |
+
+### 8.3 Informe de bloques (sin ground truth)
+
+| cadena | `%D` en los medios tiempos | bloque con más `D` | posesiones (partido) | pos/min | acuerdo ST |
+|---|---:|---:|---:|---:|---:|
+| `engine` (entregada) | 40,0% | 65,5% (9) | 383 | 3,62 | 77,1% |
+| U1 `onset` | 43,5% | 66,3% (9) | 372 | 3,51 | **77,8%** |
+| U2 `first-control` | 40,0% | 65,5% (9) | 369 | 3,48 | **75,9%** |
+| U3 `onset+first-control` | 43,5% | 66,3% (9) | 358 | 3,38 | 76,6% |
+
+| bloque | balón | `%D` `engine` | `%D` U1 | pos/min `engine` | U1 | U2 | U3 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 1★ | 88,2% | 20,0% | 21,1% | 4,20 | 4,20 | 4,20 | 4,20 |
+| 2 | 82,7% | 17,6% | 21,9% | 4,60 | 4,60 | 4,40 | 4,40 |
+| 3 | 76,5% | 34,4% | 41,4% | 4,20 | 3,80 | 4,00 | 3,60 |
+| 4 | 72,3% | 23,6% | 32,4% | 6,00 | 5,60 | 6,00 | 5,60 |
+| 5 | 56,0% | 47,5% | 52,5% | 3,20 | 3,20 | 3,20 | 3,20 |
+| 6 | 64,7% | 36,2% | 38,3% | 4,00 | 4,00 | 3,80 | 3,80 |
+| 7 | 36,9% | 50,5% | 51,7% | 2,00 | 2,00 | 2,00 | 2,00 |
+| 8 | 57,2% | 38,0% | 40,4% | 3,80 | 3,60 | 3,40 | 3,20 |
+| 9 | 29,0% | 65,5% | 66,3% | 1,60 | 1,60 | 1,60 | 1,60 |
+| 10 | 53,7% | 31,8% | 34,0% | 3,40 | 3,20 | 3,20 | 3,00 |
+| 11 | 19,9% | 50,6% | 54,1% | 1,01 | 0,67 | 1,01 | 0,67 |
+| 12 | 87,8% | 49,2% | 51,1% | 3,80 | 3,60 | 3,60 | 3,40 |
+| 13 | 67,4% | 35,6% | 40,2% | 4,00 | 4,00 | 3,40 | 3,40 |
+| 14 | 73,5% | 27,5% | 31,5% | 4,60 | 4,40 | 4,20 | 4,00 |
+| 15 | 45,2% | 52,5% | 55,7% | 3,20 | 3,20 | 3,20 | 3,20 |
+| 16 | 73,7% | 23,8% | 28,3% | 3,40 | 3,20 | 3,40 | 3,20 |
+| 17 | 61,0% | 35,8% | 37,6% | 4,00 | 3,80 | 3,80 | 3,60 |
+| 18 | 20,3% | 52,1% | 54,5% | 3,60 | 3,60 | 3,60 | 3,60 |
+| 19 | 48,6% | 47,2% | 50,4% | 4,00 | 4,00 | 4,00 | 4,00 |
+| 20 | 47,9% | 47,3% | 56,1% | 3,20 | 3,20 | 3,00 | 3,00 |
+| 21 | 60,0% | 57,9% | 61,5% | 3,80 | 3,80 | 3,80 | 3,80 |
+| 22 | 71,7% | 38,7% | 39,3% | 2,39 | 2,39 | 2,39 | 2,39 |
+
+U2 tiene el `%D` de `engine` en todos los bloques. Ningún bloque queda sin posesiones.
+
+### 8.4 DFL (7 partidos, motor entregado, `D` solo de los jugadores; solo informe)
+
+| cadena | `spellF1` limpio | partidos que gana a `engine` | con nuestro balón | partidos que gana | pos/min (verdad 4,58) |
+|---|---:|---:|---:|---:|---:|
+| `engine` (W1) | 0,4172 | — | 0,3062 | — | 3,49 |
+| U1 `onset` | **0,4354** | **7 de 7** | **0,3251** | **7 de 7** | 3,32 |
+| U2 `first-control` | 0,4172 | 2 de 7 | 0,3016 | 1 de 7 | 3,24 |
+| U3 `onset+first-control` | 0,4373 | 7 de 7 | 0,3223 | 7 de 7 | 3,08 |
+
+## 9. Recomendación: **mantener la cadena entregada** (resultado negativo)
+
+| compuerta | U1 `onset` | U2 `first-control` | U3 `onset+first-control` |
+|---|---|---|---|
+| G1 precisión `D` ≥ 0,85 | sí (0,867) | sí (0,877) | sí (0,867) |
+| G2 Δ ≥ 0 y `wins_a ≤ wins_b` | **no (−0,0105; 0–0)** | sí (0,0000; 0–0) | **no (−0,0105; 0–0)** |
+| G3 banco ≥ 0,4351 / 0,3595 | **no (0,4296 / 0,3585)** | **no (0,4397 / 0,3592)** | sí (0,4355 / 0,3606) |
+| G4 bloque ≤ 70%, sin vacíos, 3,4 ± 0,5 pos/min | sí (66,3%, 3,51) | sí (65,5%, 3,48) | sí (66,3%, 3,38) |
+| G5 acuerdo ST ≥ 76,1% | sí (77,8%) | **no (75,9%)** | sí (76,6%) |
+
+Ninguna pasa las cinco. Por la regla de la sección 6, **la cadena entregada no cambia**.
+
+Lo que queda como resultado, y vale más que la recomendación:
+
+- **Pregunta 1, bordes: la mitad de la hipótesis era falsa.** En DFL un tramo W1 empieza 5,4 s tarde
+  (mediana) y **termina 0,7 s antes**, no tarde. El final no hay que moverlo. El inicio se corrige
+  con una regla física fijada fuera (`onset`, 3,25 m/s): error mediano 5,4 → 0,5 s, precisión de
+  frame 0,954 → 0,919, recall 0,682 → 0,790. En el partido, el 68% del `D` que añade en el slice es
+  `D` verdadero, sube el acuerdo con el Smart Tagging (+0,7 puntos) y gana en los 7 partidos DFL con
+  y sin balón. Pero pierde en el slice (−0,0105, una posesión corta a IoU 0,3–0,4, 0 discordantes a
+  0,5) y en el banco (−0,005 / −0,001), y el pre-registro exige no bajar. **Se reporta como no
+  adoptado, no como refutado**: el banco y el slice usan las mismas 17 posesiones, y su pérdida es
+  del tamaño de una posesión.
+- **Pregunta 2, reanudación sin tag: negativa.** Cambia el poseedor tras 14 de 44 paradas sin tag,
+  no toca el slice, sube la media del banco (+0,005) pero baja la de poco balón (−0,0003) y **baja el
+  acuerdo con el Smart Tagging 1,2 puntos**: el único juez independiente del tracking dice que el
+  primer control tras una parada sin tag nombra al equipo equivocado más a menudo que el arrastre.
+  En DFL tampoco gana (2 y 1 de 7). La explicación probable (no comprobada) es que, sin balón visible
+  en la reanudación (el bloque medio tiene 59% de balón), el primer control *observado* no es el
+  saque sino un toque posterior, a menudo del rival.
+- **U3** pasa G3 y G5 (el `onset` compensa lo que U2 quita) pero hereda la pérdida del slice de U1.
+
+## 10. Limitaciones y lo que queda abierto
+
+- **El slice no puede ordenar esto.** Los Δ son de una posesión (`n_discordant` 0 a IoU 0,5,
+  jackknife de dos signos). La regla exigía "no bajar" y U1 bajó una posesión corta; con otra regla
+  (por ejemplo "no bajar más de una posesión y ganar en DFL") U1 entraría. Esa sería una decisión
+  **nueva**, pre-registrada antes de mirar nada más; aquí no se reinterpreta.
+- **Lo que sí apoya a U1 fuera del slice:** DFL 7 de 7 (+0,018 limpio, +0,019 con nuestro balón),
+  el acuerdo con el Smart Tagging (+0,7) y que el 68% del `D` añadido en el slice es verdadero. Lo
+  que la contradice: el banco (−0,005), que trasplanta huecos sobre las mismas 17 posesiones.
+- **`%D` 43,5%** con U1, frente a 40,0%: dentro del rango de la verdad DFL (41–52%) y por debajo del
+  70% en todos los bloques (máximo 66,3%), pero el `%D` verdadero de Metrica fuera del slice no se
+  conoce.
+- **El final de las paradas** no se tocó porque DFL dice que no llega tarde. Los "3,9 s de `D` al
+  inicio de una posesión" del slice que citaba el brief no son, por tanto, un final W1 tardío por
+  esta vía; pueden venir de una reanudación etiquetada (frame estimado como inicio del tag + 5 s,
+  decisión 30). No se investigó, para no leer el slice fuera del pre-registro.
+- **U2 depende del balón visible en la reanudación.** Una versión que solo fuerce cuando el primer
+  control llega pronto tras la parada (el saque, no un toque posterior) es la candidata natural; no
+  se midió y necesitaría su propio pre-registro.
+- **DFL** es Bundesliga con tracking corregido; la regla `onset` usa solo la velocidad de los
+  jugadores, cuya distribución coincide con la nuestra (dead-v2 §2.2), pero el umbral es un único
+  número sin validar frame a frame en Metrica.
