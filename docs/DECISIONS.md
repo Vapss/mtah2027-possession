@@ -1022,3 +1022,16 @@ concretas (balón aéreo, pelotazo, área llena). Es la limitación que declara 
   huecos reales, que daría verdad física para juzgarla.
 - **V3 `touch` y V5 del decodificador** (0,56 y 0,58 en el slice) se aplazan al corpus externo con
   posesión real: su riesgo es de escala temporal, que ni el slice ni el banco pueden juzgar.
+
+**Adenda: V6 sustituye a V2, condicionada al corpus externo.** El seguimiento del carril midió la
+única combinación sin escala temporal que faltaba, V6 = `mid` + `uncontested`, con una regla escrita
+por el coordinador antes de medir (adoptarla si pasa las tres compuertas frente a V2 y no baja la
+media de poco balón). La cumple: slice 0,5189 → 0,5405 (0–2 a IoU 0,5, jackknife +0,011 .. +0,022),
+banco 0,3792 → 0,3944 (poco balón 0,3021 → 0,3072), 3,25 posesiones/min, Smart Tagging 73,1%. Se
+adopta por esa regla, con una cautela declarada: las dos posesiones que gana son las mismas que ganaba
+`mid` solo, cuya regla salió de mirar las latencias del slice, y el banco usa esas mismas 17
+posesiones. **Si el corpus externo, que no está contaminado, la sitúa por debajo de V2, se revierte.**
+
+El bloque 11 (19,9% de balón) no es un problema de decodificación: una posesión de 163 s tiene balón
+en el 17,5% de sus frames, y ~78 s dependen de un duelo de 0,2 s justo tras un hueco de 69,5 s. Es un
+problema de huecos de balón.
