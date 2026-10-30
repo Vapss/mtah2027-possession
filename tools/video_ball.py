@@ -30,6 +30,7 @@ video, so they live in `runs/` (gitignored) and are never committed.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import subprocess
 import sys
@@ -300,6 +301,134 @@ def merge_ball(tracking_ball: np.ndarray, video_xy: np.ndarray, video_ok: np.nda
     return merged
 
 
+# -- the variants (pre-registered, proposal section 2) -----------------------------------------
+
+
+@dataclass(frozen=True)
+class Variant:
+    name: str
+    min_conf: float | None  # None: no video (the delivered engine, V0)
+    dead_from_video: bool = False  # V3: the dead-ball out/inside evidence also reads the video
+
+
+VARIANTS = {
+    "V0": Variant("V0", None),
+    "V1": Variant("V1", 0.2),
+    "V2": Variant("V2", 0.5),
+    "V3": Variant("V3", 0.2, dead_from_video=True),
+}
+
+
+def out_inside(ball: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """As `dead_ball.load_evidence` reads a ball: observed outside / inside the [0, 1]² pitch."""
+    x, y = ball[:, 0], ball[:, 1]
+    present = ~np.isnan(x) & ~np.isnan(y)
+    with np.errstate(invalid="ignore"):
+        off = (x < 0) | (x > 1) | (y < 0) | (y > 1)
+    return present & off, present & ~off
+
+
+def labels_with_ball(
+    variant: Variant,
+    players: np.ndarray,
+    teams,
+    ball: np.ndarray,
+    ev,
+    det: dict[str, np.ndarray] | None,
+    matrices: np.ndarray,
+    allow: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """The delivered chain (`engine.chain`, D from `dead_ball` variant `out`) on `ball` plus, for a
+    video variant, the accepted video ball in its gaps. `allow` restricts which frames the video
+    may fill (the B-joint bench). Returns `(labels, filled)`."""
+    from tools import atd, dead_ball, engine
+
+    filled = np.zeros(len(ball), dtype=bool)
+    merged = ball
+    if variant.min_conf is not None and det is not None:
+        xy, ok = video_ball(det, matrices, ball, Filter(min_conf=variant.min_conf))
+        if allow is not None:
+            ok = ok & allow
+        merged = merge_ball(ball, xy, ok)
+        filled = ok & np.isnan(ball[:, 0])
+    f = engine.features(atd.Tracking(players, merged), teams)
+    if variant.dead_from_video:
+        out, inside = out_inside(merged)
+        ev = dataclasses.replace(ev, out=out, inside=inside)
+    dead = dead_ball.dead_mask(ev, engine.halves(), "out")
+    return engine.chain(f, engine.DEFAULT, ev.restarts, dead)[2], filled
+
+
+def bench_video(
+    variant: Variant,
+    design: str,
+    players: np.ndarray,
+    teams,
+    ball: np.ndarray,
+    ev,
+    det: dict[str, np.ndarray] | None,
+    matrices: np.ndarray,
+    gt: np.ndarray,
+    cut,
+    donor_video: np.ndarray | None = None,
+) -> list[dict]:
+    """`tools/bench.py`'s transplant with the video allowed to refill the transplanted gaps.
+
+    `opt`: the video of block 1 fills wherever it passes the filter (an upper bound: block 1's
+    frames are the easy ones). `joint`: only where the donor itself had an accepted video ball on
+    that frame of its real gap, so the video's coverage has the real gaps' amount and length.
+    The filter's temporal support sees the degraded tracking, never the deleted ball.
+    """
+    import possession_metrics as pm
+
+    if design not in ("opt", "joint"):
+        raise ValueError(f"unknown bench design {design!r}")
+    window = (cut[0].start, cut[0].stop)
+    size = window[1] - window[0]
+
+    def score(b: np.ndarray, e, allow: np.ndarray | None) -> tuple[float, int]:
+        lab, filled = labels_with_ball(variant, players, teams, b, e, det, matrices, allow)
+        return float(pm.evaluate(gt, pm.label_codes(list(lab)))["spell_f1_mean"]), int(
+            filled[window[0] : window[1]].sum()
+        )
+
+    present = ~np.isnan(ball[:, 0])
+    spell, n_filled = score(ball, ev, None)
+    rows = [
+        {
+            "donor": "1★",
+            "ball": float(present[window[0] : window[1]].mean()),
+            "spell_f1": spell,
+            "filled": n_filled,
+        }
+    ]
+    for block in cut[1:]:
+        if block.stop - block.start < size:
+            continue
+        donor = present[block.start : block.start + size]
+        keep = np.ones(len(ball), dtype=bool)
+        keep[window[0] : window[1]] = donor
+        degraded = np.array(ball, dtype=float)
+        degraded[~keep, :2] = np.nan
+        ev2 = dataclasses.replace(ev, out=ev.out & keep, inside=ev.inside & keep)
+        allow = None
+        if design == "joint":
+            if donor_video is None:
+                raise ValueError("the joint design needs the donor's accepted video balls")
+            allow = np.ones(len(ball), dtype=bool)
+            allow[window[0] : window[1]] = donor_video[block.start : block.start + size]
+        spell, n_filled = score(degraded, ev2, allow)
+        rows.append(
+            {
+                "donor": str(block.index),
+                "ball": float(donor.mean()),
+                "spell_f1": spell,
+                "filled": n_filled,
+            }
+        )
+    return rows
+
+
 # -- feasibility (no ground truth) -------------------------------------------------------------
 
 
@@ -484,7 +613,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("sample", help="choose the feasibility frames (tracking only)")
     p.add_argument("--out", type=Path, required=True)
     p = sub.add_parser("detect", help="run the detector on frames (video environment)")
-    p.add_argument("--frames", type=Path, required=True, help="npz of frame arrays, or 'halves'")
+    p.add_argument("--frames", type=Path, help="npz of frame-index arrays")
+    p.add_argument("--range", type=int, nargs=2, metavar=("START", "STOP"), help="half-open")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--weights", default=DetectorConfig.weights)
     p.add_argument("--imgsz", type=int, default=DetectorConfig.imgsz)
@@ -492,6 +622,12 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("feasibility", help="detections against the tracking ball")
     p.add_argument("--frames", type=Path, required=True)
     p.add_argument("--detections", type=Path, required=True)
+    p = sub.add_parser("evaluate", help="variants on the public slice and the transplant bench")
+    p.add_argument("--detections", type=Path, required=True, help="video balls for the variants")
+    p.add_argument("--variants", nargs="+", default=list(VARIANTS), choices=sorted(VARIANTS))
+    p.add_argument("--design", choices=("opt", "joint"), default="opt")
+    p.add_argument("--labels-dir", type=Path, help="write each variant's frame,label CSV here")
+    p.add_argument("--json", type=Path, help="write the bench rows here")
     args = parser.parse_args(argv)
 
     from tools import atd
@@ -505,8 +641,10 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({k: len(v) for k, v in chosen.items()}))
         return 0
     if args.command == "detect":
-        sets = _load_npz(args.frames)
-        frames = np.unique(np.concatenate(list(sets.values())))
+        if args.range:
+            frames = np.arange(*args.range)
+        else:
+            frames = np.unique(np.concatenate(list(_load_npz(args.frames).values())))
         config = DetectorConfig(weights=args.weights, imgsz=args.imgsz)
         detections, timing = detect_frames(games.video_path(), frames, Detector(config), args.batch)
         args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -541,7 +679,64 @@ def main(argv: list[str] | None = None) -> int:
         report = {"position": rows, "control": ctrl_rows, "diagnose": diag}
         print(json.dumps(report, indent=1))
         return 0
+    if args.command == "evaluate":
+        return _evaluate(args)
     return 2
+
+
+def _evaluate(args: argparse.Namespace) -> int:
+    import pandas as pd
+
+    from tools import atd, bench, dead_ball, emision
+    from tools.contract import check_submission
+
+    det = _load_npz(args.detections)
+    matrices = load_matrices()
+    tracking = atd.load("tactical")
+    ball, present = tracking.ball()
+    teams = emision.team_slots()
+    ev = dead_ball.load_evidence()
+    _f, _ev, gt, cut = bench.load()
+    out: dict[str, dict] = {}
+    for name in args.variants:
+        variant = VARIANTS[name]
+        lab, filled = labels_with_ball(
+            variant, tracking.players_array, teams, ball, ev, det, matrices
+        )
+        if args.labels_dir:
+            table = pd.DataFrame({"frame": np.arange(len(lab)), "label": lab})
+            check_submission(table, args.labels_dir / f"{name}.csv")
+            args.labels_dir.mkdir(parents=True, exist_ok=True)
+            table.to_csv(args.labels_dir / f"{name}.csv", index=False, lineterminator="\n")
+        donor_video = None
+        if args.design == "joint" and variant.min_conf is not None:
+            _xy, ok = video_ball(det, matrices, ball, Filter(min_conf=variant.min_conf))
+            donor_video = ok & ~present
+        rows = bench_video(
+            variant,
+            args.design,
+            tracking.players_array,
+            teams,
+            ball,
+            ev,
+            det,
+            matrices,
+            gt,
+            cut,
+            donor_video,
+        )
+        out[name] = {
+            "summary": bench.summary(rows),
+            "rows": rows,
+            "filled_match": int(filled.sum()),
+        }
+        print(
+            name, json.dumps(out[name]["summary"]), "filled", out[name]["filled_match"], flush=True
+        )
+    if args.json:
+        args.json.parent.mkdir(parents=True, exist_ok=True)
+        args.json.write_text(json.dumps(out, indent=1), encoding="utf-8")
+    return 0
 
 
 if __name__ == "__main__":

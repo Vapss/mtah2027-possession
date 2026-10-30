@@ -186,3 +186,114 @@ Una variante se **recomienda** solo si pasa todas:
 
 Entre las que pasan, la que cambia menos frames (V2 antes que V1, V1 antes que V3). Si ninguna pasa,
 el resultado es negativo y se reporta como tal. El Smart Tagging no es entrada en ningún punto.
+
+---
+
+Las secciones 3 en adelante se escribieron **después** de medir. El pre-registro de arriba está en
+el commit `2364dd6`.
+
+## 3. Resultado de la etapa 1 (detector COCO): negativo
+
+```bash
+<venv-video>/python tools/video_ball.py detect --range 11185 18685 --out runs/video_ball/det_block1.npz
+.venv/Scripts/python tools/video_ball.py evaluate --detections runs/video_ball/det_block1.npz \
+    --design opt --labels-dir runs/video_ball/labels_stage1
+.venv/Scripts/python tools/compare_submissions.py runs/video_ball/labels_stage1/V0.csv \
+    runs/video_ball/labels_stage1/V2.csv --gt public
+```
+
+Comprobación del banco reimplementado: V0 reproduce exactamente `tools/bench.py --method engine`
+(0,4585 / 0,3516 / peor 0,2069 / poco balón 0,2782).
+
+| variante | público `spellF1` | Δ pareado vs V0 | `n_discordant` | spurious@0,3 (V0: 11) | `macroF1` | B-opt limpio | B-opt media | B-opt poco balón | B-opt peor | frames rellenados en block 1 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| V0 | 0,4585 | — | — | 11 | 0,7066 | 0,4585 | 0,3516 | 0,2782 | 0,2069 | 0 |
+| V1 | 0,4000 | −0,0585 | 0 | 17 | 0,6979 | 0,4000 | 0,3929 | 0,3885 | 0,3478 | 393 |
+| V2 | 0,4372 | −0,0213 | 0 | 13 | 0,7062 | 0,4372 | 0,4288 | 0,4208 | 0,3714 | 99 |
+| V3 | 0,3915 | −0,0670 | 0 | 17 | 0,6886 | 0,3915 | 0,3930 | 0,3894 | 0,3556 | 393 |
+
+(«B-opt limpio» es block 1 con sus huecos reales rellenados por el vídeo: el mismo número que el
+público.)
+
+**Lectura: el sesgo de selección, medido.**
+
+- **Cota superior grande.** Cuando el vídeo rellena huecos *trasplantados* —frames donde la pelota
+  se veía— el banco sube mucho (V2: media +0,077, poco balón +0,143). Si el vídeo recuperase el
+  balón en los huecos reales como lo hace en los visibles, la ganancia sería la mayor de cualquier
+  línea.
+- **En los huecos reales, pierde.** En el slice público el vídeo rellena los huecos *reales* de
+  block 1 (12% de sus frames): ninguna posesión cambia de estado de emparejamiento (`n_discordant`
+  0 en las tres) y todas las pérdidas son posesiones espurias (+2 a +6): controles breves del otro
+  equipo dentro de un hueco, que parten una posesión. Los huecos del ATD están donde la pelota es
+  difícil de ver (aire, aglomeración, oclusión), y ahí el detector COCO encuentra otra cosa.
+- **Las cuatro suspenden G2** (Δ ≥ −0,02; V2 por poco, −0,0213), así que la recomendación es
+  negativa sea cual sea B-joint. Por decisión del coordinador la etapa 2 (inferencia del partido,
+  ~4,5 h de GPU a 9,3 fps) **se detuvo**: solo puliría un negativo ya establecido por la regla
+  pre-registrada. B-joint y el informe por bloques no se midieron para el detector COCO.
+
+**Determinismo (COCO, GPU).** Los 500 primeros frames de block 1 inferidos dos veces (1.443 cajas):
+posiciones idénticas tras redondear a 0,1 px; la confianza difiere en 2 cajas por 0,001-0,002 (un
+cruce de frontera de redondeo). Casi determinista, no idéntico byte a byte.
+
+## 4. Adenda pre-registrada: detector afinado con etiquetas del ATD
+
+Pedido por el coordinador tras la sección 3. Escrita y comprometida **antes** de extraer datos de
+entrenamiento, entrenar o medir nada con este detector.
+
+### Datos (sin fuga al banco ni al slice público)
+
+- **Exclusión:** block 1 (11.185..18.684) más 1 minuto a cada lado → frames 9.685..20.183 no se usan
+  ni para entrenar ni para elegir umbrales. El banco y el slice público viven ahí.
+- **Partición temporal:** entrenamiento en la 1.ª mitad, bloques 3-9 (26.185..78.684); selección
+  del umbral en los bloques 10-11 (78.685..90.651); go/no-go en la 2.ª mitad (bloques 12-22).
+- **Etiquetas:** el balón del ATD proyectado con la homografía del frame, caja de **24 × 24 px**
+  centrada ahí. Motivo (sin ground truth, medido en la sección 1 con las cajas COCO a ≤ 2 m del ATD,
+  n 798): la proyección del ATD queda a 8,9 px de la pelota visible en mediana, 16,1 en p75 y 25,1
+  en p90 (la pelota aparece ~5,5 px más arriba: su altura). Una caja de 24 px la contiene en ~80%
+  de los casos; el detector aprende «dónde está la pelota» con ~0,5 m de tolerancia, que es lo que
+  el control (1,5 m) necesita.
+- **Muestras:** 6.000 frames con balón del ATD en los bloques 3-9 (equiespaciados entre los frames
+  con balón, sin semilla). Cada uno da un recorte de 640 × 640 a resolución nativa que contiene la
+  pelota en posición aleatoria (semilla 2027) y un recorte **negativo** del mismo frame que no la
+  contiene (a ≥ 48 px de su caja): el ATD dice dónde está, así que el resto del frame es sin balón.
+  Los frames de hueco del ATD **no** son negativos: allí no se sabe.
+- Los recortes se escriben en JPEG (calidad 95) en `runs/` (gitignored), nunca se abren con una
+  herramienta de imágenes y se borran al terminar.
+
+### Modelo y entrenamiento (fijos)
+
+yolo11s (pesos COCO como punto de partida), una clase, `imgsz 640` sobre los recortes, 20 épocas,
+`batch 16`, `seed 0`, `deterministic=True`, sin aumentos de color (`hsv_*=0`), `mosaic 0`,
+`fliplr 0,5`, `scale 0` (la escala de la pelota es física). Inferencia sobre el frame completo a
+`imgsz 1920` (misma escala de píxel que el entrenamiento).
+
+### Umbral de operación (sin ground truth)
+
+En una muestra de los bloques 10-11 (200 tramos de 10 frames con balón del ATD, semilla 2027): el
+**menor** umbral de confianza, en la rejilla 0,1..0,9 de 0,05 en 0,05, con precisión a 2 m (mejor
+caja frente al ATD) ≥ 0,90.
+
+### Go / no-go (antes de cualquier inferencia del partido)
+
+En la 2.ª mitad (200 tramos con balón y 200 sin balón del ATD, semilla 2027), al umbral de
+operación:
+
+- **GO** si la precisión a 2 m frente al ATD es **≥ 0,90**. Se reportan también el recall a 1/2 m,
+  la cuota de frames de hueco con detección aceptada y la tabla de control de la sección 1b.
+- Si es no-go: se para y se reporta el negativo.
+
+### Si es GO
+
+Variantes (las mismas reglas de filtro y fusión de la sección 2, solo cambia el detector):
+
+| variante | umbral | qué alimenta |
+|---|---|---|
+| F1 | el de operación | las `Features` del motor (control), como V1 |
+| F2 | el menor de la rejilla con precisión ≥ 0,95 en bloques 10-11 | ídem, estricto |
+
+1. Inferencia en block 1 y prueba pareada **en huecos reales** (público). Compuerta: **sin
+   pérdida**: `wins_a ≤ wins_b` y Δ `spellF1` ≥ −0,005. Si ninguna pasa, se para.
+2. Solo si alguna pasa: inferencia del partido, B-joint, B-opt e informe por bloques, con la regla de
+   selección de la sección 2 (G1-G3).
+3. Determinismo: dos ejecuciones sobre una muestra con `CUBLAS_WORKSPACE_CONFIG=:4096:8`,
+   algoritmos deterministas y semillas fijas; tiempo en CPU como alternativa.
