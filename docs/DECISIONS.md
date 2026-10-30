@@ -1301,8 +1301,9 @@ Carril m-whether (`docs/proposals/lane-m-whether.md`; anatomía `c9c4990` sin va
 (`72c98ed4bb4a…`).
 
 - **La anatomía corrige la ronda 5.** Emparejando cada cambio verdadero contra cada cambio de la
-  cadena, los 66 "sobrantes" de g1 eran 41 cambios forzados por reanudaciones, 18 en cambios de
-  balón parado y solo 7 reales: la cadena tiene 84 perdidos y 17 sobrantes. De los perdidos, 36 son
+  cadena, los 66 "sobrantes" de g1 eran 41 cambios forzados por reanudaciones, 11 junto a un cambio
+  de balón parado y 14 sin ningún cambio verdadero a ±5 s: la cadena tiene 84 perdidos y 17
+  sobrantes. De los perdidos, 36 son
   toques rápidos, 28 reflejos de posesiones cortas no vistas y 14 vetos del duelo; **la mitad son
   posesiones verdaderas de menos de 2 s**, balones sueltos que el `RECOVERY` de Metrica cuenta y la
   definición del reto ("mientras el balón está suelto, sigue con el último equipo") no.

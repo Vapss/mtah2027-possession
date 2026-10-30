@@ -54,6 +54,7 @@ from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -62,6 +63,9 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from tools import change_dating as cd  # noqa: E402
 from tools import dead_ball, emision, engine  # noqa: E402
+
+if TYPE_CHECKING:
+    from tools import metrica_open
 
 NONE = engine.NONE
 FPS = engine.FPS
@@ -91,7 +95,7 @@ class Truth:
     dead: np.ndarray
 
 
-def metrica_truth(game) -> Truth:
+def metrica_truth(game: metrica_open.Game) -> Truth:
     t = game.truth
     return Truth(
         tuple((c.frame, c.new) for c in t.changes),
@@ -116,10 +120,24 @@ class Fair:
 def fair(truth: Truth, pred: Sequence[tuple[int, int]]) -> Fair:
     """Every truth change against every chain change, one to one (`change_dating.match`)."""
     pairs = cd.match(list(truth.changes), list(pred))
-    used_t = {a for a, _ in pairs}
-    used_p = {b for _, b in pairs}
-    missed = tuple(c for c in truth.changes if c[0] in truth.open_frames and c[0] not in used_t)
-    spurious = tuple(c for c in pred if c[0] not in used_p)
+    # One pair credits ONE truth change: two changes on the same frame need two partners
+    # (review of PR #60). Counted by multiplicity, in the truth's order.
+    left = Counter(a for a, _ in pairs)
+    missed_list = []
+    for c in truth.changes:
+        if left[c[0]]:
+            left[c[0]] -= 1
+        elif c[0] in truth.open_frames:
+            missed_list.append(c)
+    missed = tuple(missed_list)
+    used_p = Counter(b for _, b in pairs)
+    spurious_list = []
+    for c in pred:
+        if used_p[c[0]]:
+            used_p[c[0]] -= 1
+        else:
+            spurious_list.append(c)
+    spurious = tuple(spurious_list)
     lags = [(b - a) / FPS for a, b in pairs if a in truth.open_frames]
     return Fair(len(pred), len(pairs), missed, spurious, tuple(pairs), cd.lag_stats(lags))
 
@@ -160,13 +178,8 @@ def spell_end(truth: Truth, frame: int, team: int, runs: Sequence[tuple[int, int
 
 def touch(f: engine.Features) -> np.ndarray:
     """The team whose nearest player is within reach of a ball in the pitch and strictly nearer,
-    at ANY speed: `change_dating._touch`, recomputed here (that one is private)."""
-    nearest = np.fmin(f.home_m, f.away_m)
-    close = f.in_pitch & (nearest <= REACH_M)
-    team = np.full(len(f.present), NONE, dtype=np.int8)
-    team[close & (f.home_m < f.away_m)] = 0
-    team[close & (f.away_m < f.home_m)] = 1
-    return team
+    at ANY speed: round 5's definition, `change_dating._touch`, so both rounds use one."""
+    return cd._touch(f)
 
 
 def miss_kind(chain: cd.Chain, f: engine.Features, frame: int, new: int, end: int) -> str:
@@ -254,7 +267,10 @@ def fast_touches(chain: cd.Chain, f: engine.Features) -> np.ndarray:
 
 
 def flip_flops(
-    pred: Sequence[tuple[int, int]], runs, forced: dict[int, int], state: np.ndarray
+    pred: Sequence[tuple[int, int]],
+    runs: Sequence[tuple[int, int]],
+    forced: dict[int, int],
+    state: np.ndarray,
 ) -> list[int]:
     """Natural chain changes A -> B that go back to A within `FLIP_S`."""
     back = _returns(pred, runs, state)
@@ -274,7 +290,12 @@ def _q(values: Sequence[float]) -> list[float]:
     return [float(x) for x in np.quantile(v, [0.25, 0.5, 0.75, 0.9])] if v.size else [np.nan] * 4
 
 
-def structure(chain: cd.Chain, f: engine.Features, runs, owner: np.ndarray | None = None) -> dict:
+def structure(
+    chain: cd.Chain,
+    f: engine.Features,
+    runs: Sequence[tuple[int, int]],
+    owner: np.ndarray | None = None,
+) -> dict:
     """The no-ground-truth anatomy of one chain: changes, duel vetoes, fast rival touches and
     flip-flops, per minute and in seconds. With `owner` (the team an independent source says has
     the ball, `NONE` where it says nothing), the share of each kind of stretch it agrees with."""
@@ -296,10 +317,10 @@ def structure(chain: cd.Chain, f: engine.Features, runs, owner: np.ndarray | Non
         "veto_per_min": len(veto) / minutes,
         "veto_s": _q([(b - a) / FPS for a, b in veto]),
         "veto_ge": {s: sum(1 for a, b in veto if b - a >= s * FPS) for s in (0.2, 0.4, 1.0)},
-        "veto_then_switch": _then_switch(chain, veto),
+        "veto_then_switch": _then_switch(chain, veto, runs),
         "fast": len(fast),
         "fast_per_min": len(fast) / minutes,
-        "fast_then_switch": _then_switch(chain, fast),
+        "fast_then_switch": _then_switch(chain, fast, runs),
         "flips": len(flips),
         "flips_per_min": len(flips) / minutes,
     }
@@ -311,15 +332,18 @@ def structure(chain: cd.Chain, f: engine.Features, runs, owner: np.ndarray | Non
     return out
 
 
-def _then_switch(chain: cd.Chain, spans: Sequence[tuple[int, int]]) -> float:
+def _then_switch(
+    chain: cd.Chain, spans: Sequence[tuple[int, int]], runs: Sequence[tuple[int, int]]
+) -> float:
     """The share of stretches after which the chain goes to the rival within 5 s anyway."""
     if not spans:
         return float("nan")
     rival = rival_of(chain.state)
-    hit = [
-        bool((chain.state[a : min(len(chain.state), b + TOLERANCE)] == rival[a]).any())
-        for a, b in spans
-    ]
+    hit = []
+    for a, b in spans:
+        # After the stretch, within 5 s, and never past the end of its half (review of PR #60).
+        stop = next((hi for lo, hi in runs if lo <= a < hi), len(chain.state))
+        hit.append(bool((chain.state[b : min(stop, b + TOLERANCE)] == rival[a]).any()))
     return float(np.mean(hit))
 
 
@@ -386,7 +410,10 @@ def anatomy(
             continue
         if frame in chain.forced:
             r5_extra["reanudación forzada"] += 1
-        elif any(abs(a - frame) <= TOLERANCE and b == new for a, b in truth.changes):
+        elif any(
+            abs(a - frame) <= TOLERANCE and b == new and a not in truth.open_frames
+            for a, b in truth.changes
+        ):  # only a change that is NOT open play explains it (review of PR #60)
             r5_extra["junto a un cambio verdadero que no es en juego"] += 1
         else:
             r5_extra["sin cambio verdadero a ±5 s"] += 1
@@ -396,7 +423,7 @@ def anatomy(
 # -- the degraded ball -------------------------------------------------------------------------
 
 
-def home_slots(game) -> int:
+def home_slots(game: metrica_open.Game) -> int:
     """How many of `game.players_m`'s slots are the home team's (`metrica_open.Game` keeps the
     players of both teams in one array, home first, without saying where the away team begins)."""
     present = game.features.present
@@ -461,7 +488,7 @@ def _live(n: int, runs, dead: np.ndarray) -> np.ndarray:
     return inside & ~np.asarray(dead, dtype=bool)
 
 
-def noisy_features(game, sigma: float, seed: int) -> engine.Features:
+def noisy_features(game: metrica_open.Game, sigma: float, seed: int) -> engine.Features:
     noise = smooth_noise(len(game.ball_m), sigma, int(round(NOISE_SMOOTH_S * FPS)), seed)
     return features_from(game.players_m, home_slots(game), game.ball_m + noise)
 
@@ -477,7 +504,9 @@ def fit_sigma(game, target_m: float, grid: Sequence[float] = NOISE_SIGMA_GRID) -
     return best[0], tried
 
 
-def degraded(game, donors: Sequence[np.ndarray] | None, sigma: float) -> tuple:
+def degraded(
+    game: metrica_open.Game, donors: Sequence[np.ndarray] | None, sigma: float
+) -> tuple[engine.Features, dead_ball.Evidence]:
     """`(features, evidence)` of `game` with the noisy ball, then our ball-presence pattern
     (`donors`, BAR-ATH's per half) when given. Players, stillness and restarts are kept; the
     in/out-of-pitch observation follows the moved ball."""
@@ -913,7 +942,13 @@ def anatomy_report() -> str:
     return "\n".join(lines) + "\n"
 
 
-def anatomy_on(truth: Truth, chain: cd.Chain, f, runs, no_duel: cd.Chain) -> Anatomy:
+def anatomy_on(
+    truth: Truth,
+    chain: cd.Chain,
+    f: engine.Features,
+    runs: Sequence[tuple[int, int]],
+    no_duel: cd.Chain,
+) -> Anatomy:
     """`anatomy` on a window of chains decoded over longer runs (the public slice): the state
     outside the window is blanked, so only the window's changes count."""
     clipped = dataclasses.replace(chain, state=_only(chain.state, runs))
@@ -1146,7 +1181,11 @@ def bar_ath_measure(names: Sequence[str]) -> dict[str, dict]:
         paired = compare_submissions.compare_codes(gt, base_codes, codes)
         sign = paired["sign_diagnostic"]
         summary = bench.summary(bench.bench(METHODS[name], f, ev, gt, cut))
-        ratio = rates / np.where(base_rates > 0, base_rates, np.nan)
+        # A block with no possession in the reference cannot be halved or doubled by a ratio:
+        # any possession there is an infinite change (review of PR #60), so it fails gate B.
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ratio = np.where(base_rates > 0, rates / np.where(base_rates > 0, base_rates, 1), 1.0)
+        ratio = np.where((base_rates == 0) & (rates > 0), np.inf, ratio)
         out[name] = {
             "spell_f1": result["spell_f1_mean"],
             "macro_f1": result["macro_f1"],

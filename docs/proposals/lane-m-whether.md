@@ -622,3 +622,40 @@ Aplicando la sección 6 tal cual: **ninguna variante pasa las cuatro compuertas.
   ni el banco antes del commit 2.
 - **Deuda aceptada.** `features_from` copia la aritmética de `metrica_open.build` y `touch` la de
   `change_dating._touch` (privada), para no editar módulos de otra ronda.
+
+## 11. Revisión de código (PR #60)
+
+Correcciones posteriores a la medición, con sus pruebas, re-medidas con `--anatomy` y `--measure`:
+**`--measure` sale idéntico** (todas las compuertas y números de las secciones 7–8) y `--anatomy`
+cambia una línea. **El veredicto no cambia.**
+
+- **El desglose de los sobrantes de la ronda 5 (secciones 3 y 4.1) contaba de más los de balón
+  parado.** Atribuía a "junto a un cambio verdadero que no es en juego" cualquier sobrante a ±5 s de
+  *cualquier* cambio verdadero del mismo equipo, también de los que sí son en juego (ya emparejados
+  con otro cambio). Ahora solo cuentan los que no son en juego: de los 66, **41 reanudaciones
+  forzadas, 11 junto a un cambio de balón parado y 14 sin cambio verdadero a ±5 s** (no 41 / 18 /
+  7). La lectura de 4.1 se mantiene en lo esencial —el sobrante de la ronda 5 era sobre todo del
+  instrumento, y la cadena corregida tiene 84 perdidos y 17 sobrantes—, pero los reales son 14, no 7.
+  La decisión 43 dice ya 41 / 11 / 14.
+- **`persist` y `relay` también re-fechan cambios que conservan.** Escriben el equipo del rival en
+  `switch` sobre todo el tramo de control, así que el decodificador fecha el cambio en su primer
+  frame y no en el primero sin disputa. El pre-registro (6.1) decía que los cambios conservados
+  mantienen su fecha. Medido por la revisión en g2 limpio: `engine` y `persist` tienen los dos 214
+  cambios y 18 se adelantan hasta ~2,8 s (mediana \|retraso\| 0,16 → 0,08 s); parte del +0,0035 de
+  `persist` en g2 limpio viene de ahí. **No cambia ningún veredicto**, porque cada variante falla
+  una compuerta que la fecha no mueve: `persist` empata en errores (88 → 88) en g2 limpio, cuando la
+  compuerta pide menos; `relay` y `relay+settle` suben la escala de BAR-ATH a 4,11 / 4,03
+  posesiones/min, que no depende de la fecha. `settle` no re-fecha.
+- **El emparejamiento cuenta por multiplicidad**: un cambio de la cadena acredita un solo cambio
+  verdadero aunque dos compartan frame (en g1 y g2 no los hay; el resultado no cambia).
+- **"Tras el veto/toque, cambia a ±5 s"** mira ahora *después* del tramo y nunca más allá de su
+  mitad (antes empezaba en el tramo y podía cruzar el descanso). Los porcentajes publicados no
+  cambian.
+- **La compuerta de bloques** trata un bloque sin posesiones en la referencia que pasa a tenerlas
+  como un cambio infinito (antes quedaba fuera del cociente). Ningún bloque de BAR-ATH está en ese
+  caso.
+- `touch` usa la definición de la ronda 5 (`change_dating._touch`) en lugar de una copia; tipos en
+  las funciones públicas.
+
+Deuda aceptada: `home_slots` se recalcula en cada llamada, `bar_ath_measure` construye cada cadena
+dos veces y la receta del `D` entregado se repite (coste y duplicación; módulo de investigación).

@@ -518,3 +518,29 @@ def test_the_reference_variant_is_the_delivered_file_byte_for_byte() -> None:
     table = pd.DataFrame({"frame": np.arange(len(labels)), "label": labels})
     csv = table.to_csv(index=False, lineterminator="\n")
     assert hashlib.sha256(csv.encode()).hexdigest().startswith("72c98ed4bb4a")  # DECISIONS 36
+
+
+# -- review of PR #60 --------------------------------------------------------------------------
+
+
+def test_one_partner_credits_one_truth_change_even_on_a_shared_frame() -> None:
+    # Two open-play truth changes on frame 100 (events can share a frame) and one chain change:
+    # one of them is matched, the other is still a miss.
+    truth = _truth([(100, A), (100, A)], {100}, [H] * 400)
+    r = cw.fair(truth, [(102, A)])
+    assert (r.matched, len(r.missed), r.spurious) == (1, 1, ())
+
+
+def test_then_switch_looks_after_the_stretch_and_stays_in_its_half() -> None:
+    n = 400
+    state = [H] * n
+    state[150:200] = [A] * 50  # the rival has it 3 s after the stretch [100, 110)...
+    late = [H] * n
+    late[205:] = [A] * (n - 205)  # ...or only in the next half
+    ctrl = [cw.NONE] * n
+    assert cw._then_switch(_chain(state, ctrl), [(100, 110)], [(0, n)]) == 1.0
+    assert cw._then_switch(_chain(late, ctrl), [(100, 110)], [(0, 200), (205, n)]) == 0.0
+    # A rival spell during the stretch itself is not "after" it.
+    during = [H] * n
+    during[102:105] = [A] * 3
+    assert cw._then_switch(_chain(during, ctrl), [(100, 110)], [(0, n)]) == 0.0
