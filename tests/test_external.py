@@ -5,6 +5,7 @@ Only the last test reads the real IDSSE files, and it skips when they are not on
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -165,7 +166,37 @@ def test_an_oracle_scores_one_and_the_rate_is_per_graded_minute() -> None:
     assert row["spell_f1"] == pytest.approx(1.0) and row["macro_f1"] == pytest.approx(1.0)
     assert row["n_gt"] == 3  # H, A, and the second half's H: the gap is not a possession
     assert row["gt_per_min"] == pytest.approx(3 / (2900 / 25 / 60))
+    # Possessions of 28, 28 and 56 s: the time scale is reported for both sides.
+    assert row["gt_median_s"] == pytest.approx(28.0) and row["pred_median_s"] == row["gt_median_s"]
+    assert row["pred_under_1s"] == 0.0 and row["pred_per_min"] == row["gt_per_min"]
     assert table.iloc[-1]["match"] == "mean"
+
+
+def test_a_method_that_imported_halves_by_name_is_swapped_too(monkeypatch) -> None:
+    import types
+
+    fake = types.ModuleType("tools._fake_decoder")
+    fake.halves = engine.halves  # what `from tools.engine import halves` leaves behind
+    monkeypatch.setitem(sys.modules, "tools._fake_decoder", fake)
+    with external.halves_of(_match()):
+        assert fake.halves() == [(0, 4), (6, 10)]
+    assert fake.halves is engine.halves
+
+
+def test_plugged_in_methods_keep_their_names_unless_they_collide(monkeypatch) -> None:
+    import types
+
+    def mine(f, ev):
+        return np.array([])
+
+    taken = dict(external.METHODS)
+    plugin = types.ModuleType("tools._fake_plugin")
+    plugin.METHODS = {"touch": mine, "engine": mine, "smooth50": taken["smooth50"]}
+    plugin.touch = mine
+    monkeypatch.setitem(sys.modules, "tools._fake_plugin", plugin)
+    found = external.extra_methods("tools._fake_plugin:METHODS", taken)
+    assert set(found) == {"touch", "_fake_plugin.engine", "smooth50"}  # ours is not replaced
+    assert external.extra_methods("tools._fake_plugin:touch", taken) == {"touch": mine}
 
 
 def test_engine_out_marks_a_ball_out_for_a_second_dead_until_it_is_back() -> None:

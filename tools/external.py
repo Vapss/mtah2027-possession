@@ -59,6 +59,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import dataclasses
+import importlib
 import os
 import re
 import sys
@@ -428,20 +429,28 @@ def halves_of(match: Match) -> Iterator[None]:
     """Run a bench-style method on an external match: the halves it asks for are this match's.
 
     Our methods take their halves from `engine.halves`, `dead_ball.halves` or
-    `ball_gaps.half_runs`, all of which describe BAR-ATH. This swaps the three for the duration of
-    one call and restores them, so a method registered for the bench runs here unchanged. A method
-    that reads anything else of our match (Smart Tagging, the raw tracking) is not portable and must
-    not be scored here.
+    `ball_gaps.half_runs`, all of which describe BAR-ATH. This swaps them for the duration of one
+    call and restores them, so a method registered for the bench runs here unchanged. The swap is
+    by identity across every loaded `tools.*` module, so a module that did
+    `from tools.engine import halves` is swapped too. A method that reads anything else of our match
+    (Smart Tagging, the raw tracking, `games.half_video_blocks`) is not portable and must not be
+    scored here.
     """
     runs = [tuple(r) for r in match.runs]
-    saved = engine.halves, dead_ball.halves, ball_gaps.half_runs
-    engine.halves = lambda: list(runs)
-    dead_ball.halves = lambda: list(runs)
-    ball_gaps.half_runs = lambda *_a, **_k: list(runs)
+    originals = {id(f) for f in (engine.halves, dead_ball.halves, ball_gaps.half_runs)}
+    saved = []
+    for name, module in list(sys.modules.items()):
+        if module is None or not (name == "tools" or name.startswith("tools.")):
+            continue
+        for attr in ("halves", "half_runs"):
+            if id(getattr(module, attr, None)) in originals:
+                saved.append((module, attr, getattr(module, attr)))
+                setattr(module, attr, lambda *_a, **_k: list(runs))
     try:
         yield
     finally:
-        engine.halves, dead_ball.halves, ball_gaps.half_runs = saved
+        for module, attr, value in saved:
+            setattr(module, attr, value)
 
 
 def run(method: Method, match: Match) -> np.ndarray:
@@ -478,6 +487,9 @@ def structure(codes: np.ndarray, runs: Sequence[tuple[int, int]]) -> dict:
     }
 
 
+TIME_SCALE = ("per_min", "mean_s", "median_s", "under_1s", "under_3s")
+
+
 def score(
     method: Method,
     matches: Sequence[Match],
@@ -500,24 +512,24 @@ def score(
         result = pm.evaluate(gt, pred)
         runs = pm.valid_runs(gt)
         filled = pm.fill_abstentions(pred, runs)
-        rows.append(
-            {
-                "match": match.name,
-                "ball": float(
-                    m.features.present[
-                        np.concatenate([np.arange(a, b) for a, b in match.runs])
-                    ].mean()
-                ),
-                "spell_f1": float(result["spell_f1_mean"]),
-                "macro_f1": float(result["macro_f1"]),
-                "team_acc": float(result["team_acc_gt_alive"]),
-                "n_gt": int(result["n_gt_spells"]),
-                "n_pred": int(result["n_pred_spells"]),
-                "gt_per_min": structure(gt, runs)["per_min"],
-                "pred_per_min": structure(filled, runs)["per_min"],
-                "pred_dead": structure(filled, runs)["dead_share"],
-            }
-        )
+        truth, said = structure(gt, runs), structure(filled, runs)
+        row = {
+            "match": match.name,
+            "ball": float(
+                m.features.present[np.concatenate([np.arange(a, b) for a, b in match.runs])].mean()
+            ),
+            "spell_f1": float(result["spell_f1_mean"]),
+            "macro_f1": float(result["macro_f1"]),
+            "team_acc": float(result["team_acc_gt_alive"]),
+            "n_gt": int(result["n_gt_spells"]),
+            "n_pred": int(result["n_pred_spells"]),
+            "pred_dead": said["dead_share"],
+        }
+        # The time scale, for prediction and truth side by side: a decoder that splits or merges
+        # possessions shows here before it shows in spellF1.
+        for key in TIME_SCALE:
+            row[f"gt_{key}"], row[f"pred_{key}"] = truth[key], said[key]
+        rows.append(row)
     table = pd.DataFrame(rows)
     mean = table.drop(columns="match").mean(numeric_only=True)
     return pd.concat(
@@ -590,6 +602,29 @@ def score_table(tables: dict[str, pd.DataFrame], column: str) -> list[str]:
     return lines
 
 
+def time_scale_table(tables: dict[str, pd.DataFrame]) -> list[str]:
+    """Per match: the truth's possessions per minute, median length and share under a second,
+    then the same three for every method -- where a time-scale error is visible."""
+    names = list(tables)
+    first = tables[names[0]]
+    head = ["verdad"] + [f"`{n}`" for n in names]
+    lines = [
+        "| partido | " + " | ".join(f"{h} /min | {h} mediana s | {h} < 1 s" for h in head) + " |",
+        "|---|" + "---:|---:|---:|" * len(head),
+    ]
+    for i, match in enumerate(first["match"]):
+        cells = [(first["gt_per_min"], first["gt_median_s"], first["gt_under_1s"])]
+        cells += [
+            (tables[n]["pred_per_min"], tables[n]["pred_median_s"], tables[n]["pred_under_1s"])
+            for n in names
+        ]
+        text = " | ".join(
+            f"{_dec(r.iloc[i], 2)} | {_dec(m.iloc[i], 1)} | {_pct(u.iloc[i])}" for r, m, u in cells
+        )
+        lines.append(f"| {match} | {text} |")
+    return lines
+
+
 def wins(tables: dict[str, pd.DataFrame], column: str = "spell_f1") -> list[str]:
     """For every pair, on how many matches the row method beats the column one."""
     names = list(tables)
@@ -646,6 +681,14 @@ def report(
         "",
         *score_table(degraded, "macro_f1"),
         "",
+        "## Escala temporal por partido — limpio",
+        "",
+        *time_scale_table(clean),
+        "",
+        "## Escala temporal por partido — degradado",
+        "",
+        *time_scale_table(degraded),
+        "",
         "## Posesiones por minuto y %D predichos (media de partidos)",
         "",
         "| método | /min limpio | /min degradado | %D limpio | %D degradado |",
@@ -688,11 +731,36 @@ def report(
     return "\n".join(lines)
 
 
+def extra_methods(spec: str, taken: dict[str, Method]) -> dict[str, Method]:
+    """`MODULE:ATTR` -> methods to score: a dict of them, or one callable named after `ATTR`.
+
+    A name already taken by a different function is prefixed with the module's last component,
+    so a plugged-in `engine` never silently replaces ours.
+    """
+    module_name, _, attr = spec.partition(":")
+    found = getattr(importlib.import_module(module_name), attr or "METHODS")
+    found = {attr: found} if callable(found) else dict(found)
+    prefix = module_name.rsplit(".", 1)[-1]
+    out: dict[str, Method] = {}
+    for name, method in found.items():
+        if name in taken and taken[name] is not method:
+            name = f"{prefix}.{name}"
+        out[name] = method
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="External validation corpus (IDSSE / DFL)")
     parser.add_argument("--describe", action="store_true", help="ground-truth structure only")
     parser.add_argument("--score", action="store_true", help="score METHODS, clean and degraded")
-    parser.add_argument("--method", action="append", choices=sorted(METHODS))
+    parser.add_argument("--method", action="append", help="score only these (default: all)")
+    parser.add_argument(
+        "--extra",
+        action="append",
+        default=[],
+        metavar="MODULE:ATTR",
+        help="also score a dict of bench-style methods, or one, e.g. tools.decoder:METHODS",
+    )
     parser.add_argument("--no-bench", action="store_true", help="skip our bench and public rows")
     parser.add_argument("--write", type=Path, help="write the document here instead of printing")
     args = parser.parse_args(argv)
@@ -710,19 +778,30 @@ def main(argv: list[str] | None = None) -> int:
         if not args.score:
             text = "\n".join(describe_table(matches, public)) + "\n"
         else:
-            names = args.method or list(METHODS)
+            methods, extras = dict(METHODS), {}
+            for spec in args.extra:
+                extras.update(extra_methods(spec, methods))
+            methods.update(extras)
+            names = args.method or list(methods)
+            unknown = sorted(set(names) - set(methods))
+            if unknown:
+                raise ValueError(f"unknown method(s) {unknown}; known: {sorted(methods)}")
             donors = our_ball_halves()
-            clean = {n: score(METHODS[n], matches) for n in names}
-            degraded = {n: score(METHODS[n], matches, True, donors) for n in names}
+            clean = {n: score(methods[n], matches) for n in names}
+            degraded = {n: score(methods[n], matches, True, donors) for n in names}
             ours = None
             if not args.no_bench:
+                # Public and bench for our registered methods and for every plugged-in one: the
+                # extras share the bench signature by construction.
                 loaded = bench.load()
+                benched = {**bench.METHODS, **extras}
                 ours = {
-                    n: bench.summary(bench.bench(bench.METHODS[n], *loaded))
+                    n: bench.summary(bench.bench(benched[n], *loaded))
                     for n in names
-                    if n in bench.METHODS
+                    if n in benched
                 }
             command = "python tools/external.py --score"
+            command += "".join(f" --extra {e}" for e in args.extra)
             command += "".join(f" --method {n}" for n in (args.method or []))
             if args.no_bench:
                 command += " --no-bench"
