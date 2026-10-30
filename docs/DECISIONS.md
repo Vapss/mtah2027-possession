@@ -1076,3 +1076,39 @@ regla; en BAR-ATH el caso no ocurre (V2 y la cadena entregada son idénticos fra
 **Resultado.** En BAR-ATH no cambia **ni un frame** de la cadena entregada (la interacción no ocurre en
 este partido): mismo slice 0,5189, mismo banco 0,3792, mismos bloques. Se adopta por la regla, como
 robustez; un test sintético fija el caso que corrige.
+
+---
+
+## 36. El balón muerto también se lee en los jugadores (carril dead-v2, regla W1)
+
+**Contexto.** El recall de `D` de la cadena era 0,384: solo se detectaban las paradas con salida del
+balón del campo y reanudación etiquetada. El carril dead-v2 (`docs/proposals/lane-dead-v2.md`)
+construyó un detector de paradas sin balón y sin identidades, a partir de la velocidad de los
+jugadores, con **todas sus constantes fijadas en los 7 partidos abiertos de DFL** (CC-BY, con estado
+vivo/muerto por frame), no en nuestro slice. Pre-registro antes de medir; números reproducidos por el
+coordinador.
+
+**Decidido (W1 `rule`).** A las paradas etiquetadas se une cada tramo de ≥ 4 s en que el percentil 90
+de las velocidades de los jugadores (el segundo más rápido de ~21), promediado sobre ±1 s, va por
+debajo de 2 m/s; cerrando huecos vivos de < 1 s, medio tiempo a medio tiempo, y nunca con menos de 8
+jugadores seguidos. Solo numpy, sin pesos. `engine.delivered_dead()` es la única definición del `D`
+entregado; la usan `run`, el banco y el barrido.
+
+**Por qué**, medido sobre la cadena con la regla del duelo:
+
+| | sin W1 | con W1 |
+|---|---:|---:|
+| `spellF1` slice | 0,5189 | 0,5368 (+0,018, 1–0; jackknife cambia de signo: dirección) |
+| banco, media / poco balón | 0,3792 / 0,3021 | **0,4351 / 0,3595** |
+| precisión / recall de `D` (slice) | 0,907 / 0,384 | 0,877 / 0,897 |
+| acuerdo con el Smart Tagging | 73,4% | **77,1%** |
+| corpus DFL (motor D31) | 0,376 | 0,432 (7 de 7 partidos) |
+
+La evidencia fuerte no es el slice (17 posesiones, una discordante) sino tres fuentes independientes
+de él que dicen lo mismo: el banco, el Smart Tagging y los partidos de DFL.
+
+**Coste.** El 40,3% de los frames de los medios tiempos pasa a ser `D`, frente al 19,6% del slice; el
+bloque máximo llega a 65,5% (bloque 9). No es una anomalía: el balón está en juego unos 55–60 de los
+90 minutos de un partido, y los primeros 5 minutos son un tramo especialmente vivo. Las variantes con
+modelo aprendido puntúan más en el slice (0,5026 sobre el motor anterior) pero fallan la compuerta de
+precisión de `D` (0,787 < 0,80, por desbordar los bordes de la parada) y quedan fuera.

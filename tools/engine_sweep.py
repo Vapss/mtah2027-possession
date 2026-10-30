@@ -44,7 +44,7 @@ def sweep() -> list[dict]:
     # The delivered chain (DECISIONS 30-32): restarts and stoppages are read once; only the engine's
     # thresholds move across the grid (which restarts apply depends on them, so the chain decides).
     evidence = dead_ball.load_evidence()
-    dead = dead_ball.dead_mask(evidence, runs, "out")
+    dead = engine.delivered_dead(evidence)
 
     def decoded(params: engine.Params) -> np.ndarray:
         return engine.chain(f, params, evidence.restarts, dead)[2]

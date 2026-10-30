@@ -256,7 +256,10 @@ def test_on_the_match_the_baseline_is_the_delivered_engine_and_no_variant_touche
     from tools import bench, dead_ball, engine
 
     f, ev, _gt, _cut = bench.load()
-    delivered = bench._engine(f, ev)
+    # The lane decodes with the tagged D only; the delivered D adds the players' stoppages
+    # (DECISIONS 36), so the comparison is with the delivered chain under the lane's D.
+    tagged = dead_ball.dead_mask(ev, engine.halves(), "out")
+    delivered = engine.chain(f, engine.DEFAULT, ev.restarts, tagged)[2]
     # The lane's baseline is the engine it measured against (DECISIONS 29-32, `engine.D31`); its V2
     # is what DECISIONS 34 integrated, so it must equal the delivered chain exactly.
     dead = dead_ball.dead_mask(ev, engine.halves(), "out")

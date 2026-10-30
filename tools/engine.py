@@ -35,6 +35,7 @@ import json
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -232,18 +233,41 @@ def chain(
     return ctrl, state, out
 
 
-def run(
-    params: Params = DEFAULT, *, dead: bool = True, restarts: bool = True
-) -> tuple[pd.DataFrame, dict]:
-    """The delivered chain over the match (DECISIONS 30): labels and aggregates.
+@lru_cache(maxsize=1)
+def _players_stoppages() -> np.ndarray:
+    """The players' stoppages (DECISIONS 36), once per process: they depend on the players only."""
+    from tools import dead_ball_v2
 
-    `dead=False, restarts=False` is the bare engine of DECISIONS 29; `restarts=False` is I0.
+    mask = dead_ball_v2.match_kinematic("rule")
+    mask.flags.writeable = False
+    return mask
+
+
+def delivered_dead(evidence, kinematic: bool = True) -> np.ndarray:
+    """The delivered `D`: tagged stoppages (ball out -> restart, DECISIONS 30), united with the
+    stoppages the players' speeds show (W1, DECISIONS 36) when `kinematic`.
+
+    The one definition `run`, the bench and the sweep all use, so they measure what is delivered.
+    """
+    from tools import dead_ball
+
+    mask = dead_ball.dead_mask(evidence, halves(), "out")
+    return mask | _players_stoppages() if kinematic else mask
+
+
+def run(
+    params: Params = DEFAULT, *, dead: bool = True, restarts: bool = True, kinematic: bool = True
+) -> tuple[pd.DataFrame, dict]:
+    """The delivered chain over the match (DECISIONS 30-36): labels and aggregates.
+
+    `dead=False, restarts=False` is the bare engine of DECISIONS 29; `restarts=False` is I0;
+    `kinematic=False` leaves out the players' stoppages of DECISIONS 36.
     """
     from tools import dead_ball
 
     f = features(atd.load("tactical"), emision.team_slots())
     evidence = dead_ball.load_evidence() if (dead or restarts) else None
-    mask = dead_ball.dead_mask(evidence, halves(), "out") if dead else None
+    mask = delivered_dead(evidence, kinematic) if dead else None
     ctrl, state, lab = chain(f, params, evidence.restarts if restarts else None, mask)
     table = pd.DataFrame({"frame": np.arange(len(lab)), "label": lab})
     inside = np.zeros(len(state), dtype=bool)
@@ -253,6 +277,7 @@ def run(
         "params": params.__dict__,
         "dead": dead,
         "restarts": restarts,
+        "kinematic": kinematic,
         "dead_share": float((table["label"].to_numpy() == "D")[inside].mean()),
         "control_frames_share": float((ctrl != NONE)[inside].mean()),
         "labelled_share": float((state != NONE)[inside].mean()),
@@ -275,6 +300,7 @@ def build(
     *,
     dead: bool = True,
     restarts: bool = True,
+    kinematic: bool = True,
 ) -> Path:
     """The delivered chain for this engine: artifact -> assemble -> validator (tools/repro.py)."""
     from tools import backup
@@ -292,6 +318,8 @@ def build(
         flags.append("--bare")
     elif not restarts:
         flags.append("--no-restarts")
+    if dead and not kinematic:
+        flags.append("--no-kinematic")
     _run(["tools/engine.py", "--out", artifact, *flags])
     _run(
         [
@@ -320,9 +348,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-duel", action="store_true", help="a duel changes possession (D29)")
     parser.add_argument("--bare", action="store_true", help="the engine alone: no D, no restarts")
     parser.add_argument("--no-restarts", action="store_true", help="I0: D but no restart control")
+    parser.add_argument("--no-kinematic", action="store_true", help="D without players' stoppages")
     args = parser.parse_args(argv)
     params = Params(args.radius, args.speed, args.dwell, not args.no_duel)
-    chain = {"dead": not args.bare, "restarts": not (args.bare or args.no_restarts)}
+    chain = {
+        "dead": not args.bare,
+        "restarts": not (args.bare or args.no_restarts),
+        "kinematic": not args.no_kinematic,
+    }
     try:
         if args.build:
             out = build(args.build, args.submission, params, **chain)
