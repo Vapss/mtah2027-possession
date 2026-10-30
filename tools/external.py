@@ -63,6 +63,7 @@ import importlib
 import os
 import re
 import sys
+import zipfile
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -261,6 +262,12 @@ def raw(match_id: str, root: Path | None = None) -> Raw:
     root = Path(root) if root is not None else data_dir() / "idsse"
     cache = root / "cache" / f"{match_id}.v{CACHE_VERSION}.npz"
     if cache.exists():
+        try:
+            with np.load(cache) as z:
+                pass
+        except (OSError, ValueError, zipfile.BadZipFile):
+            cache.unlink()  # a cache cut short by an interrupted write: rebuild it
+    if cache.exists():
         with np.load(cache) as z:
             sections = tuple(
                 Section(
@@ -291,7 +298,9 @@ def raw(match_id: str, root: Path | None = None) -> Raw:
             }
         )
     cache.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(cache, **arrays)
+    partial = cache.with_suffix(".partial.npz")
+    np.savez_compressed(partial, **arrays)
+    os.replace(partial, cache)  # atomic: a reader never sees a half-written cache
     return parsed
 
 
@@ -548,13 +557,25 @@ def _engine_out(f: engine.Features, ev: dead_ball.Evidence) -> np.ndarray:
     return engine.chain(f, engine.D31, None, dead)[2]
 
 
+def _engine_bare_d31(f: engine.Features, ev: dead_ball.Evidence) -> np.ndarray:
+    return engine.chain(f, engine.D31, None, None)[2]
+
+
+def _engine_d31(f: engine.Features, ev: dead_ball.Evidence) -> np.ndarray:
+    dead = dead_ball.dead_mask(ev, engine.halves(), "out")
+    return engine.chain(f, engine.D31, ev.restarts, dead)[2]
+
+
+# Every engine row is the engine this lane measured and archived (`engine.D31`, DECISIONS 29-32),
+# so `engine-out` and `engine-bare` differ only by the D rule. The delivered duel engine is scored
+# through `--extra` like any other method.
 METHODS: dict[str, Method] = {
-    "engine-bare": bench.METHODS["engine-bare"],
+    "engine-bare": _engine_bare_d31,
     "engine-out": _engine_out,
     "smooth50": bench.METHODS["smooth50"],
     # The delivered chain needs Smart Tagging restarts for both its D and its restart control;
     # without them it is `engine-bare` exactly. Scored to show that, not as a separate method.
-    "engine": bench.METHODS["engine"],
+    "engine": _engine_d31,
 }
 
 

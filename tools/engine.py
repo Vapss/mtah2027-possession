@@ -143,7 +143,9 @@ def decode(
     The first control of a run sets the state at once; after that, a change needs `dwell`
     consecutive control frames of the other team and is dated to the first of them. A frame in
     `forced` (a restart, DECISIONS 30) hands the ball to its team at once, whatever `dwell` is.
-    With `switch` (`uncontested`), a rival control that is not in it is a duel and changes nothing.
+    With `switch` (`uncontested`), a rival control that is not in it is a duel and changes nothing,
+    also when the state was set by a restart before any control (DECISIONS 35: `decoder.decode`
+    accepts a run's first control in that case; the engine keeps the restart's team).
     """
     if dwell < 1:
         raise ValueError(f"dwell must be at least 1 frame, got {dwell}")
@@ -218,8 +220,11 @@ def chain(
     stoppages. Shared by `run` and the sensitivity sweep, so the sweep measures what is delivered.
     """
     ctrl = control(f, params)
-    forced = restart_controls(restarts, ctrl) if restarts is not None else None
     switch = uncontested(ctrl, f, params.radius_m) if params.duel else None
+    # A restart is cancelled only by a control the decoder accepts: a duel observes no possession
+    # (DECISIONS 35).
+    accepted = switch if switch is not None else ctrl
+    forced = restart_controls(restarts, accepted) if restarts is not None else None
     state = decode(ctrl, halves(), params.dwell, forced, switch)
     out = labels(state)
     if dead is not None:

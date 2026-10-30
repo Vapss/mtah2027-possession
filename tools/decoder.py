@@ -63,14 +63,9 @@ SWITCH_COST = math.log((1 - SWITCH_PROBABILITY) / SWITCH_PROBABILITY)
 
 
 def uncontested(ctrl: np.ndarray, home_m: np.ndarray, away_m: np.ndarray, radius_m: float):
-    """`ctrl` where the other team's nearest player is beyond `radius_m`, `NONE` elsewhere.
-
-    A control both teams could play is a duel. An unknown distance is not evidence that the other
-    team is far, so it fails closed, like everything else in the engine.
-    """
-    other = np.where(ctrl == 0, away_m, home_m)
-    clear = np.nan_to_num(other, nan=-np.inf) > radius_m
-    return np.where((ctrl != NONE) & clear, ctrl, NONE).astype(np.int8)
+    """`ctrl` where the other team's nearest player is beyond `radius_m`: `engine.uncontested`."""
+    f = engine.Features(home_m, away_m, ctrl != NONE, np.zeros(len(ctrl)), ctrl != NONE)
+    return engine.uncontested(ctrl, f, radius_m)
 
 
 def decode(
@@ -267,7 +262,8 @@ def _finish(state: np.ndarray, dead: np.ndarray) -> np.ndarray:
 
 
 def _uncontested_switch(f: engine.Features, ctrl: np.ndarray) -> np.ndarray:
-    return uncontested(ctrl, f.home_m, f.away_m, engine.DEFAULT.radius_m)
+    # The one definition of a duel, the delivered engine's (DECISIONS 34).
+    return engine.uncontested(ctrl, f, engine.DEFAULT.radius_m)
 
 
 def _engine(f: engine.Features, ev: dead_ball.Evidence) -> np.ndarray:
@@ -603,6 +599,7 @@ def diagnose_block(index: int, variant: str = FOLLOW_UP_BASELINE) -> dict:
             }
         )
 
+    # The lane's baseline (`engine.D31`); since DECISIONS 34 the delivered chain is V2 itself.
     delivered = _engine(f, ev)[start:stop]
     other = "A" if team == 0 else "H"
     votes = st.possession_votes(st.load())[start:stop]

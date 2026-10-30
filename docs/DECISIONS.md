@@ -1072,3 +1072,7 @@ Además, un caso límite declarado: si una mitad empieza con una reanudación fo
 control, el motor trata un primer control disputado del rival como duelo (no cambia la posesión que
 dio la reanudación), y `decoder.decode` lo acepta como primer evento. El motor es el coherente con la
 regla; en BAR-ATH el caso no ocurre (V2 y la cadena entregada son idénticos frame a frame).
+
+**Resultado.** En BAR-ATH no cambia **ni un frame** de la cadena entregada (la interacción no ocurre en
+este partido): mismo slice 0,5189, mismo banco 0,3792, mismos bloques. Se adopta por la regla, como
+robustez; un test sintético fija el caso que corrige.

@@ -33,7 +33,6 @@ truth or the Smart Tagging; a method only sees what `tools/bench.degrade` leaves
 from __future__ import annotations
 
 import argparse
-import dataclasses
 import json
 import sys
 from collections.abc import Callable, Sequence
@@ -257,17 +256,19 @@ def design(
 
 
 def hide(f: engine.Features, keep: np.ndarray) -> engine.Features:
-    """`f` with the ball deleted wherever `keep` is False, as `tools/bench.degrade` deletes it."""
-    present = f.present & keep
-    speed = np.where(present & np.concatenate(([False], present[:-1])), f.speed_mps, np.nan)
-    return dataclasses.replace(
-        f,
-        home_m=np.where(present, f.home_m, np.nan),
-        away_m=np.where(present, f.away_m, np.nan),
-        present=present,
-        speed_mps=speed,
-        in_pitch=f.in_pitch & keep,
+    """`f` with the ball deleted wherever `keep` is False: `tools/bench.degrade`, one definition."""
+    from tools import bench
+
+    n = len(f.present)
+    empty = dead_ball.Evidence(
+        (), np.zeros(n, dtype=bool), np.zeros(n, dtype=bool), np.zeros(n, dtype=bool)
     )
+    return bench.degrade(f, empty, (0, n), keep)[0]
+
+
+def _engine_d31(f: engine.Features, ev: dead_ball.Evidence) -> np.ndarray:
+    dead = dead_ball.dead_mask(ev, engine.halves(), "out")
+    return engine.chain(f, engine.D31, ev.restarts, dead)[2]
 
 
 def anchors(f: engine.Features, ev: dead_ball.Evidence) -> tuple[np.ndarray, dict[int, int]]:
@@ -579,7 +580,8 @@ def bench_rows(f: engine.Features, ev: dead_ball.Evidence) -> dict:
     from tools import bench
 
     _, _, gt, cut = bench.load()
-    methods = {"engine": bench.METHODS["engine"], **{n: method(v) for n, v in VARIANTS.items()}}
+    # The baseline is the engine every variant rewrites (`engine.D31`), not the delivered one.
+    methods = {"engine": _engine_d31, **{n: method(v) for n, v in VARIANTS.items()}}
     window = (cut[0].start, cut[0].stop)
     size = window[1] - window[0]
     live = (gt == pm.H) | (gt == pm.A)
