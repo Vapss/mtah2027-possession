@@ -625,6 +625,46 @@ def time_scale_table(tables: dict[str, pd.DataFrame]) -> list[str]:
     return lines
 
 
+def paired(a: pd.DataFrame, b: pd.DataFrame) -> dict:
+    """`a` against `b` over the same matches: means, wins, and which one misses the truth's rate.
+
+    `a_further` counts the matches where `a`'s predicted possessions per minute are further from
+    the ground truth's than `b`'s -- the time-scale half of a comparison.
+    """
+    sa, sb = a["spell_f1"].to_numpy()[:-1], b["spell_f1"].to_numpy()[:-1]
+    gt = a["gt_per_min"].to_numpy()[:-1]
+    ra, rb = a["pred_per_min"].to_numpy()[:-1], b["pred_per_min"].to_numpy()[:-1]
+    return {
+        "a": float(sa.mean()),
+        "b": float(sb.mean()),
+        "a_wins": int((sa > sb).sum()),
+        "b_wins": int((sb > sa).sum()),
+        "a_further": int((np.abs(ra - gt) > np.abs(rb - gt)).sum()),
+        "n": len(sa),
+    }
+
+
+def pair_table(
+    clean: dict[str, pd.DataFrame], degraded: dict[str, pd.DataFrame], pairs: Sequence[str]
+) -> list[str]:
+    """One row per `A:B` pair and setting: the numbers a pre-registered comparison reads."""
+    lines = [
+        "| A : B | escenario | spellF1 A | spellF1 B | Δ A−B | A gana | B gana "
+        "| ritmo de A más lejos de la verdad |",
+        "|---|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for pair in pairs:
+        a, _, b = pair.partition(":")
+        for setting, tables in (("degradado", degraded), ("limpio", clean)):
+            p = paired(tables[a], tables[b])
+            lines.append(
+                f"| `{a}` : `{b}` | {setting} | {_dec(p['a'])} | {_dec(p['b'])} "
+                f"| {_dec(p['a'] - p['b'])} | {p['a_wins']}/{p['n']} | {p['b_wins']}/{p['n']} "
+                f"| {p['a_further']}/{p['n']} |"
+            )
+    return lines
+
+
 def wins(tables: dict[str, pd.DataFrame], column: str = "spell_f1") -> list[str]:
     """For every pair, on how many matches the row method beats the column one."""
     names = list(tables)
@@ -651,6 +691,7 @@ def report(
     ours: dict[str, dict] | None,
     command: str,
     commit: str | None,
+    pairs: Sequence[str] = (),
 ) -> str:
     origin = f" desde el commit `{commit}`" if commit else ""
     donors = ", ".join(_pct(b) for b in donor_ball)
@@ -713,6 +754,8 @@ def report(
         *wins(degraded),
         "",
     ]
+    if pairs:
+        lines += ["## Pares pre-registrados", "", *pair_table(clean, degraded, pairs), ""]
     if ours:
         lines += [
             "## Comparación con nuestros instrumentos",
@@ -761,6 +804,13 @@ def main(argv: list[str] | None = None) -> int:
         metavar="MODULE:ATTR",
         help="also score a dict of bench-style methods, or one, e.g. tools.decoder:METHODS",
     )
+    parser.add_argument(
+        "--pair",
+        action="append",
+        default=[],
+        metavar="A:B",
+        help="also tabulate A against B: means, wins, which rate is further from the truth",
+    )
     parser.add_argument("--no-bench", action="store_true", help="skip our bench and public rows")
     parser.add_argument("--write", type=Path, help="write the document here instead of printing")
     args = parser.parse_args(argv)
@@ -783,9 +833,13 @@ def main(argv: list[str] | None = None) -> int:
                 extras.update(extra_methods(spec, methods))
             methods.update(extras)
             names = args.method or list(methods)
-            unknown = sorted(set(names) - set(methods))
+            paired_names = {n for pair in args.pair for n in pair.split(":")}
+            if any(pair.count(":") != 1 for pair in args.pair):
+                raise ValueError(f"a --pair is A:B, got {args.pair}")
+            unknown = sorted((set(names) | paired_names) - set(methods))
             if unknown:
                 raise ValueError(f"unknown method(s) {unknown}; known: {sorted(methods)}")
+            names = list(names) + sorted(paired_names - set(names))
             donors = our_ball_halves()
             clean = {n: score(methods[n], matches) for n in names}
             degraded = {n: score(methods[n], matches, True, donors) for n in names}
@@ -803,12 +857,15 @@ def main(argv: list[str] | None = None) -> int:
             command = "python tools/external.py --score"
             command += "".join(f" --extra {e}" for e in args.extra)
             command += "".join(f" --method {n}" for n in (args.method or []))
+            command += "".join(f" --pair {pair}" for pair in args.pair)
             if args.no_bench:
                 command += " --no-bench"
             if args.write:
                 command += f" --write {bl._relative(args.write)}"
             ball = [float(d.mean()) for d in donors]
-            text = report(matches, clean, degraded, ball, public, ours, command, bl._git_commit())
+            text = report(
+                matches, clean, degraded, ball, public, ours, command, bl._git_commit(), args.pair
+            )
     except (OSError, ValueError) as problem:
         print(f"external corpus failed: {problem}", file=sys.stderr)
         return 1

@@ -289,3 +289,52 @@ la de nuestro partido: posesiones por minuto por bloque en `tools/blocks.py` fre
   independientes de estilo.
 - Las sumas de hash son las del espejo de Hugging Face, no las de figshare (1.1).
 - Metrica sample data descartado como ground truth (1.1).
+
+## 5. Pre-registro del arbitraje de los decodificadores (lista del coordinador)
+
+Comprometido **antes** de puntuar V6 en el corpus. Código: `tools/decoder.py` de la rama
+`research-decode-lane` en **`23bdc52`**, copiado sin commitear y sin editar (sus funciones de V1–V5
+son idénticas a las de `1974f54`; solo se añade V6 y su informe). Comando, fijado ahora:
+
+    python tools/external.py --score --extra tools.decoder:METHODS \
+        --pair mid+uncontested:uncontested --pair mid+uncontested:decoder.engine \
+        --pair uncontested:decoder.engine --pair touch:decoder.engine \
+        --pair mid+uncontested+touch:mid+uncontested
+
+**Qué NO es ciego, y hay que leerlo así.** V2 `uncontested`, V3 `touch` y V5
+`mid+uncontested+touch` ya se puntuaron en el corpus (§2.6). Y se sabe que `mid` solo pierde contra
+`engine` en 7/7 partidos degradados, así que la dirección de V6 frente a V2 (V6 = V2 + `mid`) se podía
+adivinar. Solo V6 es nuevo. Las reglas siguientes no tienen parámetros que el resultado pudiera mover.
+
+**Igualdad de condiciones.** Sin Smart Tagging, todos corren sin reanudaciones y sin `D` (su
+máscara `out` queda vacía y no hay control forzado): la comparación aísla el decodificador. La regla
+de control desnuda es `decoder.engine`, que debe ser idéntica a nuestro `engine-bare` (se comprueba).
+
+### 5.1 Decisión 1: V6 `mid+uncontested` frente a V2 `uncontested` (y frente a la regla desnuda)
+
+- **Números que deciden**: corpus **degradado**, `spellF1` medio de los 7 partidos y partidos
+  ganados de la fila `mid+uncontested` : `uncontested`.
+- **«El corpus pone V6 por debajo de V2»** (y, por la regla del coordinador, V6 se revierte) si y
+  solo si la media degradada de V6 es menor que la de V2 **y** V2 gana en ≥ 5 de 7 partidos
+  degradados.
+- **«El corpus no pone V6 por debajo»** si la media de V6 es mayor o igual **y** V6 gana en ≥ 5/7.
+- En cualquier otro caso: **indeciso**, el corpus no revierte nada.
+- Se informan sin decidir: el escenario limpio, y V6 y V2 frente a `decoder.engine`.
+- Lectura: V6 y V2 tienen el mismo ritmo de posesión (`mid` solo cambia *cuándo* se fecha el cambio),
+  así que la puerta P1 no los excluye. Pero el instante del cambio depende de la definición del
+  ground truth (§2.6), y eso se dirá junto al resultado.
+
+### 5.2 Decisión 2: V3 `touch` y V5 `mid+uncontested+touch`, retenidos por la escala temporal
+
+Cada uno contra la variante que no tiene `touch`, para aislar ese componente: V3 contra
+`decoder.engine`, V5 contra V6. Por partido, en el informe: posesiones/min, mediana y < 1 s,
+predicción frente a verdad, limpio y degradado (tablas «Escala temporal por partido»).
+
+- **«El corpus confirma un daño de escala temporal»** para una variante si, en el degradado, pierde
+  contra su referencia en ≥ 5/7 partidos **y** su ritmo predicho está más lejos del de la verdad que
+  el de la referencia en ≥ 5/7 partidos (columna «ritmo de A más lejos de la verdad»).
+- **«El corpus no tiene objeción»** si no se cumple ninguna de las dos condiciones; en otro caso,
+  indeciso.
+- Lectura obligatoria: P1 falló y el sesgo va contra fusionar posesiones (la verdad DFL es más fina
+  que la nuestra), así que una confirmación es una **alarma, no un veredicto**. La decisión de
+  entregar `touch` debe salir del informe de bloques de BAR-ATH.

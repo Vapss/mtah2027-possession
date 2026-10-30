@@ -172,6 +172,27 @@ def test_an_oracle_scores_one_and_the_rate_is_per_graded_minute() -> None:
     assert table.iloc[-1]["match"] == "mean"
 
 
+def test_a_pair_counts_wins_and_which_rate_is_further_from_the_truth() -> None:
+    import pandas as pd
+
+    def table(spell, rate):
+        return pd.DataFrame(
+            {
+                "spell_f1": spell + [np.mean(spell)],
+                "pred_per_min": rate + [np.mean(rate)],
+                "gt_per_min": [4.0, 4.0, 4.0, 4.0],
+            }
+        )
+
+    a = table([0.5, 0.4, 0.3], [2.0, 4.0, 1.0])
+    b = table([0.4, 0.4, 0.2], [3.0, 4.5, 5.0])
+    p = external.paired(a, b)
+    assert (p["a_wins"], p["b_wins"], p["n"]) == (2, 0, 3)  # the tie counts for neither
+    # Distance to the truth's 4/min, a against b: 2 > 1, 0 < 0,5, 3 > 1.
+    assert p["a_further"] == 2
+    assert p["a"] == pytest.approx(0.4)
+
+
 def test_a_method_that_imported_halves_by_name_is_swapped_too(monkeypatch) -> None:
     import types
 
