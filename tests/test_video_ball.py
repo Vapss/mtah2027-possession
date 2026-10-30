@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+from _bundle import requires_bundle
 
 from tools import video_ball as vb
 
@@ -143,3 +144,26 @@ def test_operating_threshold_is_the_smallest_reaching_the_precision_target() -> 
     assert vb.operating_threshold(rows, 0.90) == 0.3
     assert vb.operating_threshold(rows, 0.95) == 0.5
     assert vb.operating_threshold(rows, 0.99) is None
+
+
+@requires_bundle
+def test_the_video_bench_without_video_reproduces_the_engine_bench() -> None:
+    from tools import atd, bench, dead_ball, emision
+
+    f, ev, gt, cut = bench.load()
+    reference = bench.summary(bench.bench(bench.METHODS["engine"], f, ev, gt, cut))
+    tracking = atd.load("tactical")
+    ball, _present = tracking.ball()
+    rows = vb.bench_video(
+        vb.VARIANTS["V0"],
+        "opt",
+        tracking.players_array,
+        emision.team_slots(),
+        ball,
+        dead_ball.load_evidence(),
+        None,
+        vb.load_matrices(),
+        gt,
+        cut,
+    )
+    assert bench.summary(rows) == reference
