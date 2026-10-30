@@ -983,3 +983,42 @@ propia el guardarraíl sigue siendo el informe de bloques (decisión 26).
 **Motor (decisión 32):** 0,4585 limpio, 0,3516 de media (n = 19) y 0,2782 en los 6 donantes con
 menos de la mitad del balón. Es la estimación más honesta disponible de su rendimiento en el
 partido completo.
+
+---
+
+## 34. Ronda 1 de investigación: entra el decodificador sin disputa; la imputación en huecos espera
+
+**Contexto.** Cinco carriles en paralelo (vídeo, imputación, balón muerto v2, decodificador, corpus
+externo), cada uno con su pre-registro antes de medir y con los números reproducidos por el
+coordinador. Los dos primeros en terminar son positivos según sus propias reglas:
+
+- **Decodificador V2 `uncontested`** (`docs/proposals/lane-decode.md`): un control del rival solo
+  cambia la posesión si el jugador más cercano del equipo que la tiene está a más de 1,5 m; un duelo
+  no la cambia (la regla de duelo de la literatura, sin constante nueva). Slice 0,4585 → 0,5189
+  (0 discordantes, jackknife todo positivo), banco 0,3516 → 0,3792 (poco balón 0,2782 → 0,3021),
+  3,29 posesiones/min, acuerdo con el Smart Tagging 73,4%.
+- **Imputación V2** (`docs/proposals/lane-impute.md`): en un hueco cuyos extremos son de equipos
+  distintos, un único punto de cambio colocado por un modelo auto-supervisado (formación, balón
+  interpolado, anclas). Banco 0,3516 → 0,3875, acierto en frames ocultos 0,61 → 0,77; slice sin
+  cambio. El coordinador comprobó que no hay fuga del balón oculto: todo se calcula desde las
+  features degradadas.
+
+**Se suman en el banco:** juntos dan 0,5189 limpio y **0,4143** de media (poco balón 0,3095).
+
+**Pero el Smart Tagging contradice a la imputación en los huecos reales.** En los frames que la
+imputación cambia, el Smart Tagging coincide con el nuevo equipo en el 43% (en los bloques con poco
+balón, una sola decisión de 679 frames, 0%), y su acuerdo en los bloques 7, 9, 11 y 18 cae de 72,4%
+a 66,0%. En el slice, el Smart Tagging acierta el 98% de los frames vivos **sin balón** (391): dentro
+de un hueco real es un juez fiable. El banco y el Smart Tagging no se contradicen por azar: el banco
+trasplanta huecos sobre jugadas donde el balón sí se veía, y los huecos reales ocurren en jugadas
+concretas (balón aéreo, pelotazo, área llena). Es la limitación que declara la decisión 33.
+
+**Decidido.**
+
+- **Entra el decodificador V2** en la cadena entregada: mejora en los tres instrumentos y no tiene
+  señal en contra.
+- **La imputación queda fuera de la entrega**, sin declararla negativa: tiene a favor el banco y en
+  contra la única evidencia sobre huecos reales. Se reevalúa si el carril de vídeo recupera balón en
+  huecos reales, que daría verdad física para juzgarla.
+- **V3 `touch` y V5 del decodificador** (0,56 y 0,58 en el slice) se aplazan al corpus externo con
+  posesión real: su riesgo es de escala temporal, que ni el slice ni el banco pueden juzgar.
