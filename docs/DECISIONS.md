@@ -786,3 +786,172 @@ paso sigue corriendo como proceso propio con el mismo intérprete, como lo corre
 **Coste.** Construir dos veces cuesta el doble de tiempo, y el test que lo hace necesita el bundle,
 así que CI no lo ejecuta. Antes del freeze (#26), `make repro` se corre a mano en el entorno fijado
 de la decisión 27; su hash es el que se archiva con la entrega.
+
+---
+
+## 29. El motor (#6) asigna la posesión al último balón controlado, con umbrales físicos pre-registrados
+
+**Decidido.** `tools/engine.py` etiqueta cada frame con el equipo del **último control**: un frame es
+de control para un equipo cuando el balón está observado, su jugador más cercano está a ≤ `radius_m`,
+el rival no está igual de cerca y el balón va a ≤ `speed_mps`. Entre controles se arrastra el estado
+dentro de cada medio tiempo, y un cambio necesita `dwell` frames seguidos de control rival, fechado
+al primero. Es la definición de `CHALLENGE.md`: la posesión cambia cuando el rival gana posesión
+*controlada*; en balones disputados o sueltos se queda con el último equipo. El motor no emite `D`
+(lo hará el stream de balón muerto, #16).
+
+**Valores, fijados por física antes del barrido:** `radius_m = 1,5` (alcance más ruido del tracking;
+la distancia mediana balón→jugador es 1,84 m), `speed_mps = 5` (una conducción rápida; un pase va a
+10 m/s o más), `dwell = 1` (sin espera: un control ya es control).
+
+**Por qué este diseño, medido antes de escribirlo** (slice público, frames vivos con balón):
+
+| balón | acierto del jugador más cercano |
+|---|---:|
+| < 2 m/s | 91,1% |
+| 10–20 m/s | 66,4% |
+| > 20 m/s | 38,8% |
+| jugador a < 1 m | 90,6% |
+| jugador a 4–8 m | 62,0% |
+
+Con el balón en vuelo, el jugador más cercano suele ser un rival que pasa cerca: esa es la raíz del
+parpadeo que fragmenta el `argmin`. El control filtra exactamente eso.
+
+**Exploración ya hecha (declarada).** Antes de este pre-registro se probaron 5 configuraciones en el
+análisis exploratorio: (1,0 m, 4 m/s, 1), (1,5, 5, 1), (1,5, 5, 5), (2,0, 6, 5), (1,5, 5, 10), con
+`spellF1` público entre 0,366 y 0,451. La configuración elegida por prior es la segunda (0,4390),
+no la de mayor número (0,4513, dentro del ruido).
+
+**Pre-registro del barrido** (#22), escrito antes de correrlo:
+
+- Rejilla: `radius_m` ∈ {1,0; 1,5; 2,0} × `speed_mps` ∈ {3; 5; 7} × `dwell` ∈ {1; 5; 12}: 27
+  configuraciones.
+- Por configuración: `spellF1` y `macroF1` públicos, Δ pareado y `n_discordant` frente al default,
+  posesiones/min en el partido, y acuerdo con el Smart Tagging en el partido y en los bloques con
+  menos balón (7, 9, 11, 18), que es la única señal independiente fuera del slice.
+- **Regla de selección:** se entrega el default. Solo se sustituye si otra configuración le gana con
+  ≥ 6 posesiones discordantes en el mismo sentido (test de signos p ≤ 0,031) **y** no empeora el
+  acuerdo con el Smart Tagging ni rompe la estructura de un bloque (decisión 26). Si no, el barrido es
+  un mapa de sensibilidad: dice si el default está en una meseta o en un pico.
+
+---
+
+## 30. Integración del motor: balón muerto del carril D y la reanudación como control (pre-registro)
+
+**Contexto.** Los dos carriles paralelos de #6 terminaron y el coordinador reprodujo sus números:
+
+- **Carril F (formación en huecos): negativo.** El clasificador de formación acierta 80,4% en
+  bloques no vistos, pero el acuerdo con el Smart Tagging en los frames de hueco solo pasa de 71,3%
+  a 72,9%, bajo el umbral pre-registrado de +2 puntos, y una variante baja el `spellF1` público
+  (−0,029). No entra en la cadena; se conserva como evidencia (`docs/proposals/lane-f.md`).
+- **Carril D (balón muerto, #16): positivo.** Cada parada es un intervalo desde la salida del balón
+  del campo hasta la reanudación del Smart Tagging (variante V2 `out`). Sobre el motor: `spellF1`
+  0,4390 → 0,4667, precisión de `D` 0,907, recall 0,384, 12,3% de `D` en el partido. V3 y V4 empatan
+  en el slice y no pasan el filtro de bloques (decisión 26) (`docs/proposals/lane-d.md`).
+
+**Pre-registro de la integración**, escrito antes de medirla:
+
+- **I0** = motor + máscara `D` V2. Es lo que ya está medido.
+- **I1** = I0 + **la reanudación es un control**: en el frame de reanudación de cada `SET PIECES`
+  con `Team` conocido, ese equipo controla el balón (se inyecta en `engine.control` antes de decodificar).
+  Es la regla del fútbol, no un parámetro: quien saca un lateral, un córner, una falta o un saque de
+  puerta tiene el balón. Hoy el motor arrastra el equipo de antes de la parada hasta el siguiente
+  control.
+- **Regla de selección:** se entrega I1, por principio, salvo que en el slice pierda posesiones en el
+  pareado frente a I0 (`wins_a > wins_b`) o rompa la estructura de un bloque (decisión 26). Si pasa
+  eso, se entrega I0.
+- Se reporta además, como comprobación de la premisa, en cuántas reanudaciones del slice el `Team`
+  del Smart Tagging coincide con el equipo del ground truth justo después.
+
+**Resultado** (medido después del pre-registro, slice público y partido completo):
+
+| cadena | spellF1 | macroF1 | posesiones/min | `D` en el partido | acuerdo ST |
+|---|---:|---:|---:|---:|---:|
+| motor solo (decisión 29) | 0,4390 | 0,5113 | 3,25 | 0% | 74,0% |
+| I0 = motor + `D` | 0,4667 | 0,7082 | 3,63 | 12,3% | 73,0% |
+| **I1 = I0 + reanudación como control** | **0,4585** | 0,7066 | 3,59 | 12,3% | 73,1% |
+
+I1 frente a I0: Δ −0,0081 con **0 posesiones discordantes** (cambian bordes, no posesiones) y
+ningún bloque roto. **Por la regla pre-registrada se entrega I1**, aunque I0 tenga un número
+ligeramente mayor: elegir a posteriori el número más alto es exactamente lo que el pre-registro
+existe para impedir. La premisa (quien reanuda tiene el balón) solo se pudo comprobar en una
+reanudación del slice, y se cumple; descansa sobre todo en el reglamento, no en esta muestra.
+
+**Coste.** El recall de `D` es bajo (0,384): solo hay 59 reanudaciones etiquetadas, y una parada sin
+salida del balón del campo (una falta en juego) no se detecta. El bloque con más `D` llega a 41,8%,
+por encima del 19,6% del slice; es el de una celebración de gol, y queda como límite conocido.
+
+**La entrega candidata pasa a ser el motor (I1).** Supera al respaldo de la decisión 25 en el slice
+(0,4585 frente a 0,3805) y en estructura: acuerdo con el Smart Tagging 73,1% frente a 62,2%, y 3,59
+posesiones/min frente a 3,75 con el respaldo estirando posesiones en los huecos largos. `tools/repro.py`
+cambia su cadena por defecto a `engine` (decisión 28) y `make repro` compara con
+`submissions/engine.csv`. El respaldo se mantiene construible con `make backup` como red de seguridad
+hasta el freeze (#26).
+
+---
+
+## 31. Dos correcciones de principio a la cadena entregada, tras la revisión de #52 (pre-registro)
+
+La revisión de código de #52 encontró dos reglas que contradicen principios ya escritos. Se adoptan
+**por principio**, escritas aquí antes de medir su efecto. La medición solo las revierte si pierden
+posesiones en el pareado frente a I1 (`wins_a > wins_b`) o rompen la estructura de un bloque
+(decisión 26).
+
+1. **Un balón fuera del campo no se controla.** `engine.control` aceptaba un balón observado fuera
+   del rectángulo de juego: un jugador que lo recoge para sacar cambiaba la posesión. Un balón fuera
+   del campo no está en juego (es la premisa del carril D), así que no hay control. La reanudación ya
+   da la posesión a quien saca (decisión 30).
+2. **Menos de un segundo fuera del campo no abre una parada.** El carril D aplica ese mínimo
+   (`untagged_min_out_s`) solo a la variante sin etiqueta, con la razón escrita en su código: es ruido
+   del tracking en la línea, no un balón fuera. En V2, un parpadeo así hasta 40 s antes de una
+   reanudación de falta, sin que el balón haya salido de verdad, abre una parada de hasta 40 s. Se
+   aplica el mismo mínimo a V2.
+
+Además, sin cambiar la entrega con `dwell = 1`: la reanudación **fuerza** el cambio de posesión en el
+decodificador en lugar de inyectarse como un frame de control, que con `dwell > 1` no tenía efecto; y
+el barrido de la decisión 29 pasa a medir la cadena entregada, no solo el motor desnudo, y su regla de
+selección se aplica tal como está escrita (test de signos p ≤ 0,031, más ganadas que perdidas, y sin
+empeorar el acuerdo con el Smart Tagging).
+
+**Resultado y una desviación declarada del pre-registro.** La regla de arriba solo preveía revertir
+por el pareado o por los bloques, y daba por buena la premisa de cada corrección. Al medir, la
+premisa de la corrección 2 resultó **falsa**, así que se revierte aunque la regla no lo pidiera:
+
+- **Corrección 2, revertida.** Al exigir 1 s fuera del campo, el `D` predicho en el slice cae de 622
+  a 545 frames y los aciertos de 564 a 487: **los 77 frames eliminados eran `D` real**. El 55% de las
+  salidas del balón dura menos de un segundo (mediana 22 frames): la cámara táctica ve el balón fuera
+  solo un instante antes de perderlo. Eso no es ruido en la línea, es la forma normal de una salida
+  en este dato. El riesgo que señaló la revisión (un parpadeo de verdad, 35 s antes de una falta sin
+  salida) sigue siendo posible y queda como límite conocido.
+- **Corrección 1, mantenida.** En la cadena entregada es neutra: Δ 0,0 con 0 posesiones
+  discordantes (los 20 frames de control fuera del campo del slice caen dentro de paradas ya
+  marcadas `D`). Se mantiene porque es el reglamento. En el motor desnudo, sin reanudaciones, sí baja
+  el número (0,4390 → 0,4195), porque nadie devuelve el balón tras una salida; ese motor no es lo que
+  se entrega.
+
+Cadena entregada final: **`spellF1` 0,4585**, 12,3% de `D`, acuerdo con el Smart Tagging 73,1%,
+reproducible con SHA-256 `4e0ed39b52ed…`.
+
+---
+
+## 32. La reanudación solo se fuerza si el tracking no vio ya el juego reanudado (pre-registro)
+
+La segunda revisión de #52 señaló que el frame de reanudación es una **estimación** (inicio del
+`SET PIECES` + 5 s, o + 3,5 s en un saque de centro), y que forzar la posesión ahí puede deshacer lo
+que el tracking **observó**: un saque rápido a +2 s y un robo con control a +4 s quedan revertidos al
+equipo que sacó.
+
+**Decidido, antes de medir:** la reanudación se fuerza solo si en su ventana `[inicio del tag, frame
+de reanudación)` no hay ningún frame de control. Si lo hay, el juego ya se reanudó y el tracking manda:
+una observación vale más que una estimación. Si dos reanudaciones caen en el mismo frame con equipos
+distintos, ninguna se fuerza; es una etiqueta ambigua y no se resuelve por el orden del XML.
+
+**Regla de selección:** se adopta salvo que pierda posesiones en el pareado frente a la cadena de la
+decisión 31 (`wins_a > wins_b`) o rompa un bloque. Y, como enseñó la decisión 31, se comprueba la
+premisa: cuántas reanudaciones del partido tienen ya un control dentro de su ventana.
+
+**Resultado.** En el slice, neutro: Δ 0,0 con 0 posesiones discordantes, y la estructura no cambia
+(3,64 posesiones/min, 12,3% de `D`, acuerdo con el Smart Tagging 73,1%). Se adopta por la regla. La
+premisa se comprueba en el partido: **10 de las 27 reanudaciones con equipo conocido ya tienen un
+control observado en su ventana**, y en 2 de esas 10 el primer control es del rival: son justo los
+casos que antes se revertían al equipo que sacaba. Se fuerzan 17 de 27. Cadena entregada: SHA-256
+`1cdab582ee6b…`.

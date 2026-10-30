@@ -90,3 +90,11 @@ def test_the_backup_is_reproducible_and_is_the_published_file() -> None:
     assert first == second
     # DECISIONS 25: the safety-net entry's SHA-256. A change here is a change of the delivered file.
     assert first.startswith("cb4eeef3617f")
+
+
+@requires_bundle
+def test_the_engine_is_reproducible_and_is_the_candidate_entry() -> None:
+    first, second = repro.repro("engine")
+    assert first == second
+    # DECISIONS 30-32: the candidate entry's SHA-256. A change here changes the delivered file.
+    assert first.startswith("1cdab582ee6b")

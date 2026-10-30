@@ -1,0 +1,149 @@
+"""#6: the engine's control rule and its decoder, on synthetic frames and on the delivered match."""
+
+from __future__ import annotations
+
+import numpy as np
+import pytest
+from _bundle import requires_bundle
+
+from tools import engine
+
+NONE = engine.NONE
+
+
+def feats(home, away, speed, present=None, in_pitch=None) -> engine.Features:
+    home = np.asarray(home, dtype=float)
+    present = np.ones(len(home), dtype=bool) if present is None else np.asarray(present)
+    in_pitch = present.copy() if in_pitch is None else np.asarray(in_pitch)
+    away = np.asarray(away, dtype=float)
+    return engine.Features(home, away, present, np.asarray(speed, float), in_pitch)
+
+
+def test_control_needs_a_close_player_and_a_slow_ball() -> None:
+    f = feats(home=[1.0, 1.0, 3.0, 1.0], away=[4.0, 4.0, 4.0, 0.5], speed=[2.0, 9.0, 2.0, 2.0])
+    # slow+close home; fast ball; nobody close; away closer
+    assert engine.control(f).tolist() == [0, NONE, NONE, 1]
+
+
+def test_a_tie_and_an_unknown_speed_are_not_control() -> None:
+    f = feats(home=[1.0, 1.0], away=[1.0, 3.0], speed=[2.0, np.nan])
+    assert engine.control(f).tolist() == [NONE, NONE]
+
+
+def test_an_unobserved_ball_is_not_control() -> None:
+    f = feats(home=[1.0], away=[3.0], speed=[1.0], present=[False])
+    assert engine.control(f).tolist() == [NONE]
+
+
+def test_a_ball_outside_the_pitch_is_not_control() -> None:
+    # DECISIONS 31: a player picking the ball up off the pitch does not take possession.
+    f = feats(home=[0.5, 0.5], away=[3.0, 3.0], speed=[1.0, 1.0], in_pitch=[True, False])
+    assert engine.control(f).tolist() == [0, NONE]
+
+
+def test_a_restart_forces_possession_whatever_the_dwell() -> None:
+    ctrl = np.array([0, NONE, NONE, NONE, 0, NONE], dtype=np.int8)
+    # Frame 2 is an away restart: away has the ball from 2 even at dwell 5, until home controls.
+    state = engine.decode(ctrl, [(0, 6)], dwell=5, forced={2: 1})
+    assert state.tolist() == [0, 0, 1, 1, 1, 1]
+    # Without the restart, home keeps it throughout.
+    assert engine.decode(ctrl, [(0, 6)], dwell=5).tolist() == [0] * 6
+
+
+def test_the_state_is_carried_between_controls_and_none_before_the_first() -> None:
+    ctrl = np.array([NONE, NONE, 0, NONE, NONE, 1, NONE], dtype=np.int8)
+    assert engine.decode(ctrl, [(0, 7)]).tolist() == [NONE, NONE, 0, 0, 0, 1, 1]
+
+
+def test_a_change_needs_dwell_frames_and_is_dated_to_the_first() -> None:
+    ctrl = np.array([0, NONE, 1, 1, NONE, 1, 1, 1, NONE], dtype=np.int8)
+    # Two rival frames are not enough at dwell 3; three in a row are, and the change starts at 5.
+    assert engine.decode(ctrl, [(0, 9)], dwell=3).tolist() == [0, 0, 0, 0, 0, 1, 1, 1, 1]
+
+
+def test_the_state_never_crosses_a_run_boundary() -> None:
+    ctrl = np.array([0, NONE, NONE, NONE], dtype=np.int8)
+    assert engine.decode(ctrl, [(0, 2), (2, 4)]).tolist() == [0, 0, NONE, NONE]
+
+
+def test_dwell_must_be_positive() -> None:
+    with pytest.raises(ValueError, match="at least 1"):
+        engine.decode(np.zeros(3, dtype=np.int8), [(0, 3)], dwell=0)
+
+
+def test_labels_are_h_a_and_x() -> None:
+    assert engine.labels(np.array([0, 1, NONE], dtype=np.int8)).tolist() == ["H", "A", "X"]
+
+
+def _restart(frame: int, tag_start: int, team: int | None):
+    from tools.dead_ball import Restart
+
+    return Restart(frame, tag_start, "Throw-in", team)
+
+
+def test_a_restart_hands_the_ball_to_the_team_that_takes_it() -> None:
+    from tools import dead_ball
+
+    instances = [
+        {
+            "code": "SET PIECES",
+            "tags": {"Team": "Atletic Club", "Type": "Throw In"},
+            "start_frame": 100,
+            "end_frame": 300,
+        },
+        {
+            "code": "SET PIECES",
+            "tags": {"Team": "N/A", "Type": "Throw In"},
+            "start_frame": 400,
+            "end_frame": 500,
+        },
+    ]
+    # One known team, at the dead-ball stream's restart frame (5 s into the tag), away = 1.
+    assert engine.restart_controls(dead_ball.restarts(instances)) == {100 + 5 * engine.FPS: 1}
+
+
+def test_a_restart_already_seen_resuming_is_not_forced() -> None:
+    # DECISIONS 32: a control inside [tag_start, frame) means the game resumed; the tracking wins.
+    ctrl = np.full(20, NONE, dtype=np.int8)
+    ctrl[7] = 0
+    restarts = [_restart(10, 5, 1), _restart(18, 15, 1)]
+    assert engine.restart_controls(restarts, ctrl) == {18: 1}
+
+
+def test_two_restarts_on_one_frame_for_different_teams_are_not_forced() -> None:
+    restarts = [_restart(10, 5, 0), _restart(10, 5, 1), _restart(30, 25, 0), _restart(30, 26, 0)]
+    assert engine.restart_controls(restarts) == {30: 0}
+
+
+def _public_score(table) -> tuple[float, float]:
+    import sys
+
+    import pandas as pd
+
+    sys.path.insert(0, str(engine.REPO_ROOT / "evaluation"))
+    import possession_metrics as pm
+
+    gt_path = engine.REPO_ROOT / "evaluation" / "gt" / "BAR-ATH_possession_gt_public.csv"
+    gt = pm.label_codes(pd.read_csv(gt_path).label)
+    codes = pm.label_codes(table.label.tolist())
+    live = np.isin(gt, [pm.H, pm.A])
+    filled = pm.fill_abstentions(codes, pm.valid_runs(gt))
+    return float(pm.evaluate(gt, codes)["spell_f1_mean"]), float(np.mean(filled[live] == gt[live]))
+
+
+@requires_bundle
+def test_the_bare_engine_reproduces_its_public_score() -> None:
+    """DECISIONS 29 and 31: 0,4390 before a ball off the pitch stopped counting as control, 0,4195
+    after (the bare engine has no restart to hand the ball back); 87,2% team accuracy on live."""
+    spell, accuracy = _public_score(engine.run(dead=False, restarts=False)[0])
+    assert round(spell, 4) == 0.4195
+    assert round(accuracy, 3) == 0.872
+
+
+@requires_bundle
+def test_the_delivered_chain_reproduces_its_public_score() -> None:
+    """DECISIONS 30 anchors: I0 (with D) 0,4667 and I1 (D + restart control, delivered) 0,4585."""
+    assert round(_public_score(engine.run(restarts=False)[0])[0], 4) == 0.4667
+    table, summary = engine.run()
+    assert round(_public_score(table)[0], 4) == 0.4585
+    assert round(summary["dead_share"], 3) == 0.123
