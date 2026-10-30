@@ -32,7 +32,8 @@ otra definición de cuándo cambia la posesión (decisión 34, adenda 2).
 
 Todo lo de esta sección se midió **sin ground truth** (el partido completo, sus propios datos) y
 antes de escribir las variantes. Se reproduce con `python tools/dating.py --explore`; la tabla de
-abajo es su salida, sin editar.
+abajo es su salida, sin editar (la fila del balón visto se desglosó en la revisión de código, al
+final).
 
 **Definición del traspaso.** Un cambio natural (no forzado) de la cadena entregada del equipo `o` al
 `n` en el frame `c` tiene su traspaso en `(l, c]`, con `l` el último frame del tramo de `o` en que
@@ -50,8 +51,10 @@ Cambios naturales: 301; forzados por una reanudación: 2.
 | hueco del traspaso (l, c), frames, p10/25/50/75/90 | 0 / 4 / 40 / 90 / 169 |
 | frames dentro de traspasos | 19425 |
 | de ellos, sin balón | 16,9% |
-| balón visto, nadie a ≤ 1,5 m | 66,8% |
-| balón visto, alguien a ≤ 1,5 m | 16,3% |
+| balón visto fuera del campo | 1,7% |
+| balón visto en el campo, nadie a ≤ 1,5 m | 65,1% |
+| balón visto en el campo, empate a ≤ 1,5 m | 0,0% |
+| balón visto en el campo, un equipo más cerca a ≤ 1,5 m | 16,3% |
 
 | variante | cambios movidos | adelanto medio | adelanto de los movidos p10/25/50/75/90 | adelanto máx. | frames reetiquetados |
 |---|---:|---:|---:|---:|---:|
@@ -353,3 +356,18 @@ el balón es candidata a terminar en ese control) y la fragmentación por duelos
 - **El corpus de DFL no arbitra la fecha** (decisión 34, adenda 2), así que no se usó.
 - **El desfase de inicio** (columna de la sección 8 y tabla de arriba) usa la posesión predicha de
   mayor IoU, no el emparejamiento oficial uno a uno; es un diagnóstico, no una métrica.
+
+## Revisión de código (PR #56)
+
+- **Fila "balón visto, nadie a ≤ 1,5 m" (corregido).** Usaba `touch == NONE`, que también incluye
+  los empates y el balón fuera del campo. Ahora `reach` separa sin balón / fuera del campo / nadie
+  al alcance / empate / un equipo más cerca, y la tabla de la sección 2 lo muestra: el 66,8% era
+  65,1% de nadie al alcance más 1,7% de balón fuera del campo (empates: 0,0%). Es un diagnóstico;
+  **la conclusión no depende de él** ("dos tercios del hueco: el balón viaja" sigue siendo cierto).
+- **`explore` sin cambios naturales** imprime ceros en vez de fallar en `shift.max()`.
+- **Preámbulo compartido.** `delivered` usa `engine.inputs` y acepta `params`, así que respeta
+  `params.duel` (antes aplicaba siempre la regla del duelo). Con `engine.DEFAULT` el resultado es el
+  mismo; la entrega sigue byte a byte igual (sha256 `72c98ed4bb4a…`).
+- **Tipos.** `best_iou` anotada.
+- **Deuda aceptada (9).** `LOW_BALL_BLOCKS`, el binomial exacto y los formateadores (`_f`, `_p`)
+  están duplicados entre los módulos de la ronda 2.

@@ -160,6 +160,54 @@ def test_redating_changes_when_never_whether(seed: int) -> None:
     assert len(changes) > 0 and moved.any()
 
 
+# -- exploration ---------------------------------------------------------------------------------
+
+
+def test_reach_tells_apart_nobody_a_tie_and_a_ball_off_the_pitch() -> None:
+    f = features(
+        home_m=[1.0, 1.0, FAR, 1.0, 1.0, np.nan],
+        away_m=[FAR, 1.0, FAR, 1.0, FAR, np.nan],
+        speed_mps=[2.0] * 6,
+        in_pitch=[True, True, True, False, False, False],
+    )
+    assert dating.reach(f).tolist() == ["near", "tie", "nobody", "off", "off", "unseen"]
+    near = dating.reach(f) == "near"
+    assert np.array_equal(near, dating.touch(f) != NONE)
+
+
+def test_a_match_without_natural_changes_explores_to_zeros(monkeypatch) -> None:
+    from tools import dead_ball
+
+    n = 60
+    monkeypatch.setattr(engine, "halves", lambda: [(0, n)])
+    monkeypatch.setattr(engine, "delivered_dead", lambda ev: np.zeros(n, dtype=bool))
+    f = features([FAR] * n, [FAR] * n, [1.0] * n)
+    zeros = np.zeros(n, dtype=bool)
+    text = dating.explore(f, dead_ball.Evidence((), zeros, zeros.copy(), zeros.copy()))
+    assert "Cambios naturales: 0" in text
+    assert "| `first` | 0 de 0 | 0,0 | — | 0 | 0 |" in text
+    assert "| `touch` | 0 de 0 | 0,0 | — | 0 | 0 |" in text
+
+
+def test_delivered_follows_the_duel_flag(monkeypatch) -> None:
+    from tools import dead_ball
+
+    n = 12
+    monkeypatch.setattr(engine, "halves", lambda: [(0, n)])
+    monkeypatch.setattr(engine, "delivered_dead", lambda ev: np.zeros(n, dtype=bool))
+    # Home controls, then away controls at 6 with a home player within reach: a duel.
+    home = [1.0] * 3 + [FAR] * 3 + [1.2] * 6
+    away = [FAR] * 6 + [0.5] * 6
+    f = features(home, away, [1.0] * n)
+    zeros = np.zeros(n, dtype=bool)
+    ev = dead_ball.Evidence((), zeros, zeros.copy(), zeros.copy())
+    for params in (engine.DEFAULT, engine.D31):
+        expected = engine.chain(f, params, ev.restarts, None)[1]
+        assert np.array_equal(dating.delivered(f, ev, params).state, expected)
+    assert dating.delivered(f, ev).state[-1] == H
+    assert dating.delivered(f, ev, engine.D31).state[-1] == A
+
+
 # -- the per-possession IoU sign test -------------------------------------------------------------
 
 

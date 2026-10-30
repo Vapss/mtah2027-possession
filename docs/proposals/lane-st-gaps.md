@@ -320,3 +320,28 @@ Lo que el coordinador debe saber:
   se diseñaron después de ver dónde actuaría la regla (sección 1, declarado); no se miró el GT, el
   banco ni el pareado antes de `b71360c`.
 - **Un partido.** Cifras de BAR–ATH.
+
+## Revisión de código (PR #56)
+
+- **Reanudación dentro de la unidad (corregido).** Una reanudación forzada al equipo arrastrado
+  dentro de una unidad no cambiaba el estado, así que la unidad saltaba y el decodificador deshacía
+  el cambio en la reanudación; y la fecha `phase` podía retroceder por encima de ella, porque
+  `last_observation` solo mira `[inicio de la mitad, inicio de la unidad)`. Ahora **una unidad con
+  una reanudación forzada dentro (de cualquier equipo) no hace nada** (regla 2 de `st_gaps.py`): se
+  descarta entera en vez de partirse, porque partirla crearía unidades más cortas que el
+  pre-registro no nombra. Con eso ningún cambio se fecha antes de una reanudación de su unidad.
+  Pruebas sintéticas en `tests/test_st_gaps.py`.
+- **Re-medición.** `--measure` y `--explore` dan un JSON **idéntico byte a byte** al de antes de la
+  corrección: 14 de las 132 unidades de V1/V2 (≥ 5 s), 2 de las 65 de V3 y 11 de las 44 de V4
+  contienen una reanudación forzada, pero ninguna saltaba. Las tablas de la sección 3 no cambian y
+  **la conclusión negativa se mantiene**: ninguna variante es integrable.
+- **Preámbulo compartido.** `chain` usa `engine.inputs` (control → sin disputa → aceptado →
+  reanudaciones) en vez de copiarlo; la entrega sigue byte a byte igual (sha256 `72c98ed4bb4a…`).
+- **Deuda aceptada (5).** `_redecode` vuelve a decodificar hasta el final de la mitad por cada
+  cambio y `chain` decodifica otra vez el partido: O(cambios × mitad) por llamada. Es un módulo de
+  investigación; ~60 s por medición completa.
+- **Deuda aceptada (6).** `_bench_changed` copia el bucle de donantes de `bench.bench` y recalcula
+  ambas cadenas, y `explore` recalcula la base dentro del bucle de variantes; riesgo de deriva si
+  cambia la selección de donantes de `bench.bench`.
+- **Deuda aceptada (9).** `LOW_BALL_BLOCKS`, el binomial exacto y los formateadores están
+  duplicados entre los módulos de la ronda 2.

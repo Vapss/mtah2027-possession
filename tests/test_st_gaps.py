@@ -143,6 +143,29 @@ def test_a_restart_inside_the_unit_leaves_it_to_the_restart_rule() -> None:
     assert switches(ctrl, ball, side, variant(), forced={5: AWAY}) == {}
 
 
+def test_a_restart_to_the_carried_team_inside_the_unit_stops_it_firing() -> None:
+    # The state stays the carried team's over the whole unit, but the restart at 5 would undo a
+    # switch at 2 three frames later: the unit is the restart's, not the Smart Tagging's.
+    ctrl, ball, side = "h.........", "bb......bb", "..aaaaaa.."
+    assert switches(ctrl, ball, side, variant(), forced={5: HOME}) == {}
+    assert switches(ctrl, ball, side, variant(dating="phase"), forced={5: HOME}) == {}
+
+
+def test_phase_dating_never_walks_back_across_a_restart_inside_the_unit() -> None:
+    # Without the restart the switch goes back to 1 (`phase`); the restart at 6 sits between that
+    # date and the unit's rival frames, so no switch is dated before it: the unit does nothing.
+    ctrl = "h.........."
+    ball = "bbbb.....bb"
+    side = ".aaaaaaaa.."
+    assert switches(ctrl, ball, side, variant(dating="phase")) == {1: AWAY}
+    assert switches(ctrl, ball, side, variant(dating="phase"), forced={6: HOME}) == {}
+
+
+def test_a_restart_just_before_the_unit_does_not_stop_it() -> None:
+    ctrl, ball, side = "h.........", "bb......bb", "..aaaaaa.."
+    assert switches(ctrl, ball, side, variant(), forced={1: HOME}) == {2: AWAY}
+
+
 def test_a_restart_on_the_switch_frame_wins() -> None:
     # The restart gives the ball to the carried team on the very frame the switch would land.
     ctrl, ball, side = "h.........", "bb......bb", "..aaaaaa.."

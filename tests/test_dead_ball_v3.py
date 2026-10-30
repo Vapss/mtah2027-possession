@@ -194,6 +194,46 @@ def test_engine_is_the_delivered_chain_and_unknown_variants_fail(monkeypatch) ->
         dead_ball_v3.chain(f, ev, kin, "first-uncontested")
 
 
+def test_every_variant_follows_the_engines_duel_flag(monkeypatch) -> None:
+    # A home control contested by an away player at 3300: a duel under DEFAULT, a change under D31.
+    monkeypatch.setattr(engine, "halves", lambda: HALF)
+    home = np.full(N, 9.0)
+    away = np.full(N, 9.0)
+    home[200:210] = 0.5
+    away[3300:3310], home[3300:3310] = 0.5, 1.0
+    ev = _evidence()
+    kin = np.zeros(N, dtype=bool)
+    f = _features(home, away)
+    dead = dead_ball_v2.dead_union("rule", ev, kin, HALF)
+    for params in (engine.DEFAULT, engine.D31):
+        expected = engine.chain(f, params, ev.restarts, dead)[2]
+        assert np.array_equal(dead_ball_v3.chain(f, ev, kin, "engine", params), expected)
+    assert dead_ball_v3.chain(f, ev, kin, "engine", engine.DEFAULT)[3305] == "H"
+    assert dead_ball_v3.chain(f, ev, kin, "engine", engine.D31)[3305] == "A"
+
+
+def test_engine_inputs_drop_the_duel_and_the_restarts_when_asked() -> None:
+    home = np.full(N, 9.0)
+    away = np.full(N, 9.0)
+    home[200:210] = 0.5
+    f = _features(home, away)
+    restart = dead_ball.Restart(2000, 1875, "Throw-in", 1)
+    ctrl, switch, forced = engine.inputs(f, engine.DEFAULT, (restart,))
+    assert switch is not None and forced == {2000: 1}
+    assert np.array_equal(ctrl, engine.control(f))
+    _ctrl, switch, forced = engine.inputs(f, engine.D31, None)
+    assert switch is None and forced is None
+
+
+def test_a_stoppage_without_an_uncontested_control_is_counted_apart() -> None:
+    first = {10: 0, 20: 1, 30: 0}  # first control after each untagged stoppage
+    accepted = {10: 0, 20: 0}  # first uncontested one; none after the stoppage at 30
+    assert dead_ball_v3.first_control_vs_accepted(first, accepted) == {
+        "first_control_differs_from_first_accepted": 1,
+        "first_control_without_uncontested_control": 1,
+    }
+
+
 def test_bench_methods_cover_every_variant() -> None:
     kin = {False: np.zeros(N, dtype=bool), True: np.zeros(N, dtype=bool)}
     assert set(dead_ball_v3.bench_methods(kin)) == set(dead_ball_v3.VARIANTS)

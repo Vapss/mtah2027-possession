@@ -22,8 +22,10 @@ A frame's *side* is the team every Smart Tagging phase covering it votes for
    least `min_s` seconds. Its live frames are the ones the delivered chain does not call `D`.
 2. The carried team is the decoded state on the unit's first live frame, with every earlier unit's
    switch already applied: units are processed in time order. A unit with no live frame, no state,
-   or a state that changes over its live frames (a forced restart inside: its own rule decides)
-   does nothing.
+   or a forced restart anywhere inside it does nothing: the restart's own rule decides who has the
+   ball there, whichever team it names (a restart to the carried team would undo the switch, and a
+   phase dating could walk back across it). The unit is skipped whole, not split at the restart:
+   a split would make new, shorter units the pre-registration does not name.
 3. It fires when at least `share` of its live frames have the rival as side.
 4. The switch is forced into `engine.decode` exactly like a restart (DECISIONS 30-32): from that
    frame the rival holds the ball until the next control the decoder accepts, duel rule included.
@@ -31,7 +33,8 @@ A frame's *side* is the team every Smart Tagging phase covering it votes for
 5. Dating: `gap` switches on the unit's first live frame; `phase` on the onset of the rival's
    side run that holds its first rival frame, but never before the frame after the carried team's
    last *observation* (its own control, or a restart forced to it) nor before the half starts --
-   an observation beats an estimate (DECISIONS 32, 35).
+   an observation beats an estimate (DECISIONS 32, 35). No restart lies inside a firing unit
+   (rule 2), so a switch is never dated before one either.
 6. `D` is written over the result as in the delivered chain. With no unit firing, the output is
    `engine.chain`'s frame for frame.
 
@@ -202,6 +205,8 @@ def st_switches(
         live = np.flatnonzero(~dead[start:stop]) + start
         if not len(live):
             continue
+        if any(start <= frame < stop for frame in forced):
+            continue  # a restart inside the unit decides who has the ball there (rule 2)
         carried = int(state[live[0]])
         if carried == NONE or np.any(state[live] != carried):
             continue
@@ -231,10 +236,8 @@ def chain(
     side = match_sides() if side is None else np.asarray(side)
     dead = engine.delivered_dead(ev) if dead is None else np.asarray(dead, dtype=bool)
     runs = engine.halves()
-    ctrl = engine.control(f, params)
-    switch = engine.uncontested(ctrl, f, params.radius_m) if params.duel else None
-    accepted = switch if switch is not None else ctrl
-    forced = engine.restart_controls(ev.restarts, accepted)
+    ctrl, switch, forced = engine.inputs(f, params, ev.restarts)
+    forced = forced or {}
     moves = st_switches(ctrl, switch, forced, f.present, dead, side, runs, variant, params.dwell)
     # A restart wins a shared frame; st_switches already skips those, this keeps it true by order.
     state = engine.decode(ctrl, runs, params.dwell, {**moves, **forced}, switch)
@@ -433,7 +436,13 @@ def measure(out_dir: Path) -> dict:
     return result
 
 
-def _bench_changed(f, ev, gt, cut, variant: Variant) -> dict:
+def _bench_changed(
+    f: engine.Features,
+    ev: dead_ball.Evidence,
+    gt: np.ndarray,
+    cut: Sequence,
+    variant: Variant,
+) -> dict:
     """Diagnostic: on each donor, the window frames the rule changes and how many match the GT.
 
     It says *where* the bench's verdict comes from: transplanted gaps fall on play where the ball

@@ -209,6 +209,23 @@ def restart_controls(restarts: Sequence, ctrl: np.ndarray | None = None) -> dict
     return {frame: next(iter(team)) for frame, team in teams.items() if len(team) == 1}
 
 
+def inputs(
+    f: Features, params: Params, restarts: Sequence | None
+) -> tuple[np.ndarray, np.ndarray | None, dict[int, int] | None]:
+    """`decode`'s inputs under these thresholds: `(ctrl, switch, forced)`.
+
+    `switch` is `None` without the duel rule and `forced` is `None` without `restarts`. The one
+    preamble of the delivered chain: the research lanes call it instead of copying it.
+    """
+    ctrl = control(f, params)
+    switch = uncontested(ctrl, f, params.radius_m) if params.duel else None
+    # A restart is cancelled only by a control the decoder accepts: a duel observes no possession
+    # (DECISIONS 35).
+    accepted = switch if switch is not None else ctrl
+    forced = restart_controls(restarts, accepted) if restarts is not None else None
+    return ctrl, switch, forced
+
+
 def chain(
     f: Features,
     params: Params,
@@ -220,12 +237,7 @@ def chain(
     Control, decode with the restarts that apply under these thresholds, then `D` over the
     stoppages. Shared by `run` and the sensitivity sweep, so the sweep measures what is delivered.
     """
-    ctrl = control(f, params)
-    switch = uncontested(ctrl, f, params.radius_m) if params.duel else None
-    # A restart is cancelled only by a control the decoder accepts: a duel observes no possession
-    # (DECISIONS 35).
-    accepted = switch if switch is not None else ctrl
-    forced = restart_controls(restarts, accepted) if restarts is not None else None
+    ctrl, switch, forced = inputs(f, params, restarts)
     state = decode(ctrl, halves(), params.dwell, forced, switch)
     out = labels(state)
     if dead is not None:

@@ -297,3 +297,19 @@ Lo que queda como resultado, y vale más que la recomendación:
 - **DFL** es Bundesliga con tracking corregido; la regla `onset` usa solo la velocidad de los
   jugadores, cuya distribución coincide con la nuestra (dead-v2 §2.2), pero el umbral es un único
   número sin validar frame a frame en Metrica.
+
+## Revisión de código (PR #56)
+
+- **"Difieren" contaba la ausencia (corregido).** `first_control_differs_from_first_accepted`
+  contaba como "otro equipo" una parada sin ningún control sin disputa antes de la siguiente.
+  Ahora se cuentan aparte (`first_control_vs_accepted`: `..._differs_...` y
+  `first_control_without_uncontested_control`). Re-medido con `--explore`: W1 1 que difiere y 0
+  sin control sin disputa de 44; `onset` 1 y 0 de 43. **La cifra "1 de 44" no cambia** y la
+  sección 2.2 sigue valiendo.
+- **Preámbulo compartido.** `chain` usa `engine.inputs` y sigue `params.duel` (antes también; ahora
+  sin copia); `explore` también. Prueba sintética con `engine.DEFAULT` y `engine.D31`. La entrega
+  sigue byte a byte igual (sha256 `72c98ed4bb4a…`).
+- **Tipos.** `p90_window` y `dfl_players` anotados.
+- **Deuda aceptada (8).** `speed_quantiles` se calcula dos veces por segmento y `floor_at` es un
+  bucle O(n × barreras): rendimiento de un módulo de investigación.
+- **Deuda aceptada (9).** Constantes y formateadores duplicados entre los módulos de la ronda 2.

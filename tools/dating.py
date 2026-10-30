@@ -144,11 +144,11 @@ class Chain:
     dead: np.ndarray
 
 
-def delivered(f: engine.Features, ev: dead_ball.Evidence) -> Chain:
-    params = engine.DEFAULT
-    ctrl = engine.control(f, params)
-    switch = engine.uncontested(ctrl, f, params.radius_m)
-    forced = engine.restart_controls(ev.restarts, switch)
+def delivered(
+    f: engine.Features, ev: dead_ball.Evidence, params: engine.Params = engine.DEFAULT
+) -> Chain:
+    ctrl, switch, forced = engine.inputs(f, params, ev.restarts)
+    forced = forced or {}
     state = engine.decode(ctrl, engine.halves(), params.dwell, forced, switch)
     return Chain(ctrl, state, forced, engine.delivered_dead(ev))
 
@@ -198,6 +198,38 @@ PRIOR_ORDER = ("first", "touch")  # proposal, section 6: used only among variant
 # -- exploration, without ground truth ------------------------------------------------------------
 
 
+def reach(f: engine.Features, radius_m: float = engine.DEFAULT.radius_m) -> np.ndarray:
+    """Per frame, why `touch` does or does not name a team: one of `REACH`.
+
+    `unseen` no ball; `off` a ball outside the pitch; `nobody` nobody within `radius_m`; `tie` both
+    teams' nearest equally close within it; `near` one team strictly nearer within it (`touch`).
+    """
+    nearest = np.fmin(f.home_m, f.away_m)
+    out = np.full(len(f.present), "unseen", dtype=object)
+    out[f.present & ~f.in_pitch] = "off"
+    inside = f.present & f.in_pitch
+    within = inside & (nearest <= radius_m)
+    out[inside & ~within] = "nobody"
+    out[within & (f.home_m == f.away_m)] = "tie"
+    out[within & (f.home_m != f.away_m)] = "near"
+    return out
+
+
+REACH = ("unseen", "off", "nobody", "tie", "near")
+
+
+def shift_row(name: str, shift: np.ndarray) -> str:
+    """One row of the redating table; an empty `shift` (no natural change) prints zeros."""
+    shift = np.asarray(shift, dtype=np.int64)
+    moved = shift[shift > 0]
+    mean = float(shift.mean()) if len(shift) else 0.0
+    most = int(shift.max()) if len(shift) else 0
+    return (
+        f"| `{name}` | {len(moved)} de {len(shift)} | {_f(mean, 1)} | {_pctl(moved)} "
+        f"| {most} | {int(shift.sum())} |"
+    )
+
+
 def _pctl(values: Sequence[float]) -> str:
     if not len(values):
         return "—"
@@ -214,9 +246,8 @@ def explore(f: engine.Features, ev: dead_ball.Evidence) -> str:
     inside = np.zeros(len(chain.state), dtype=bool)
     for h in changes:
         inside[h.after + 1 : h.frame] = True
-    missing = int((inside & ~f.present).sum())
-    seen_far = int((inside & f.present & (near == NONE)).sum())
-    seen_near = int((inside & (near != NONE)).sum())
+    why = reach(f)[inside]
+    count = {k: int((why == k).sum()) for k in REACH}
     lines = [
         "Exploración sin ground truth: los traspasos de la cadena entregada en el partido.",
         "",
@@ -226,21 +257,19 @@ def explore(f: engine.Features, ev: dead_ball.Evidence) -> str:
         "|---|---:|",
         f"| hueco del traspaso (l, c), frames, p10/25/50/75/90 | {_pctl(gaps)} |",
         f"| frames dentro de traspasos | {int(inside.sum())} |",
-        f"| de ellos, sin balón | {_share(missing, inside.sum())} |",
-        f"| balón visto, nadie a ≤ 1,5 m | {_share(seen_far, inside.sum())} |",
-        f"| balón visto, alguien a ≤ 1,5 m | {_share(seen_near, inside.sum())} |",
+        f"| de ellos, sin balón | {_share(count['unseen'], inside.sum())} |",
+        f"| balón visto fuera del campo | {_share(count['off'], inside.sum())} |",
+        f"| balón visto en el campo, nadie a ≤ 1,5 m | {_share(count['nobody'], inside.sum())} |",
+        f"| balón visto en el campo, empate a ≤ 1,5 m | {_share(count['tie'], inside.sum())} |",
+        f"| balón visto en el campo, un equipo más cerca a ≤ 1,5 m "
+        f"| {_share(count['near'], inside.sum())} |",
         "",
         "| variante | cambios movidos | adelanto medio | adelanto de los movidos p10/25/50/75/90 "
         "| adelanto máx. | frames reetiquetados |",
         "|---|---:|---:|---:|---:|---:|",
     ]
     for name, evidence in (("first", chain.ctrl), ("touch", near)):
-        shift = np.array([h.frame - anchor(h, evidence) for h in changes])
-        moved = shift[shift > 0]
-        lines.append(
-            f"| `{name}` | {len(moved)} de {len(shift)} | {_f(shift.mean(), 1)} | {_pctl(moved)} "
-            f"| {shift.max()} | {int(shift.sum())} |"
-        )
+        lines.append(shift_row(name, np.array([h.frame - anchor(h, evidence) for h in changes])))
     speeds = np.array([f.speed_mps[anchor(h, near)] for h in changes if anchor(h, near) < h.frame])
     known = speeds[np.isfinite(speeds)]
     lines += [
@@ -261,7 +290,9 @@ def _share(part: float, whole: float) -> str:
 # -- the per-possession IoU sign test (proposal, section 5) ---------------------------------------
 
 
-def best_iou(gt_spells, pred_spells) -> np.ndarray:
+def best_iou(
+    gt_spells: Sequence[tuple[int, int, int]], pred_spells: Sequence[tuple[int, int, int]]
+) -> np.ndarray:
     """For each ground-truth spell, the highest IoU of any same-team predicted spell (0 if none)."""
     from tools.bench import pm
 

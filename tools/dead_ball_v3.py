@@ -44,6 +44,7 @@ import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -52,6 +53,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from tools import dead_ball, dead_ball_v2, engine  # noqa: E402
+
+if TYPE_CHECKING:
+    from tools import external
 
 FPS = engine.FPS
 
@@ -82,7 +86,9 @@ DEFAULT = Params()
 # -- the edges ---------------------------------------------------------------------------------
 
 
-def p90_window(players_xy_m: np.ndarray, params: dead_ball_v2.Params = dead_ball_v2.DEFAULT):
+def p90_window(
+    players_xy_m: np.ndarray, params: dead_ball_v2.Params = dead_ball_v2.DEFAULT
+) -> tuple[np.ndarray, np.ndarray]:
     """`(known, window)`: is the frame's own p90 known, and the p90 averaged over +/- 1 s.
 
     The same signal W1 thresholds (`dead_ball_v2.kinematic_mask`, method `rule`), on one half.
@@ -189,10 +195,8 @@ def chain(
         raise ValueError(f"unknown variant {variant!r}; expected one of {', '.join(VARIANTS)}")
     runs = engine.halves()
     dead = dead_ball_v2.dead_union("rule", ev, kinematic, runs)
-    ctrl = engine.control(f, params)
-    switch = engine.uncontested(ctrl, f, params.radius_m) if params.duel else None
-    accepted = switch if switch is not None else ctrl
-    forced = engine.restart_controls(ev.restarts, accepted)
+    ctrl, switch, forced = engine.inputs(f, params, ev.restarts)
+    forced = forced or {}
     if variant in FORCING:
         extra = untagged_restarts(ctrl, dead, runs, [r.frame for r in ev.restarts])
         forced = {**extra, **forced}
@@ -234,7 +238,7 @@ def bench_methods(
 # -- the DFL corpus (offline; public CC-BY data, never mixed with the match data) ---------------
 
 
-def dfl_players(r) -> tuple[np.ndarray, list[tuple[int, int]]]:
+def dfl_players(r: external.Raw) -> tuple[np.ndarray, list[tuple[int, int]]]:
     """Both teams' players of an `external.Raw`, laid out like `external.build`: metres from a
     corner, the halves concatenated with `external.HALF_GAP` empty frames between them."""
     from tools import external
@@ -384,8 +388,7 @@ def explore() -> dict:
     for start, stop in runs:
         inside[start:stop] = True
     kin = {False: match_kinematic(False), True: match_kinematic(True)}
-    ctrl = engine.control(f)
-    accepted = engine.uncontested(ctrl, f, engine.DEFAULT.radius_m)
+    ctrl, accepted, _forced = engine.inputs(f, engine.DEFAULT, None)
     restarts = [r.frame for r in ev.restarts]
     letter = {0: "H", 1: "A"}
     result: dict = {}
@@ -402,14 +405,27 @@ def explore() -> dict:
             "first_control_names_the_rival": sum(
                 base[k] in ("H", "A") and base[k] != letter[t] for k, t in anyc.items()
             ),
-            "first_control_differs_from_first_accepted": sum(
-                acc.get(k) != t for k, t in anyc.items()
-            ),
+            **first_control_vs_accepted(anyc, acc),
             "first_accepted_names_the_rival": sum(
                 base[k] in ("H", "A") and base[k] != letter[t] for k, t in acc.items()
             ),
         }
     return result
+
+
+def first_control_vs_accepted(first: dict[int, int], accepted: dict[int, int]) -> dict[str, int]:
+    """How the untagged restarts by first control (`first`) compare with those by first
+    uncontested control (`accepted`), both keyed by the stoppage's first live frame.
+
+    A stoppage after which no uncontested control comes before the next one is not "a different
+    team": it has no team to compare, and is counted apart.
+    """
+    return {
+        "first_control_differs_from_first_accepted": sum(
+            k in accepted and accepted[k] != t for k, t in first.items()
+        ),
+        "first_control_without_uncontested_control": sum(k not in accepted for k in first),
+    }
 
 
 def _public_report(labels: np.ndarray) -> dict:
@@ -431,7 +447,7 @@ def _public_report(labels: np.ndarray) -> dict:
 # -- command line ------------------------------------------------------------------------------
 
 
-def _json_default(value):
+def _json_default(value: object) -> object:
     if isinstance(value, (np.integer, np.floating)):
         return value.item()
     raise TypeError(type(value).__name__)
