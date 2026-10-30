@@ -1053,3 +1053,22 @@ referencia sin `touch`, con tasas más lejos de la verdad: alarma de escala temp
 `decode(switch=…)`), con etiquetas idénticas frame a frame al V2 del carril. `engine.D31` conserva el
 motor anterior, contra el que los carriles midieron y archivaron. Cadena entregada: **slice 0,5189**,
 banco 0,3792 (poco balón 0,3021).
+
+---
+
+## 35. Una reanudación solo se cancela por un control que el decodificador acepta (pre-registro)
+
+La revisión de #54 encontró una interacción entre la decisión 32 y la regla del duelo (34): una
+reanudación se cancela si en su ventana hay *cualquier* control, también uno disputado; pero el
+decodificador ignora el disputado. Resultado: ni la reanudación ni el control cambian la posesión, y
+el equipo que no saca se queda el balón durante el saque del rival.
+
+**Decidido, antes de medir:** la ventana de la decisión 32 mira solo los controles que el
+decodificador acepta (los que no son duelo). El principio de la 32 era que una **observación de
+posesión** vale más que una estimación; un duelo no observa posesión. Regla: se adopta salvo que
+pierda posesiones en el pareado frente a la cadena actual o rompa un bloque.
+
+Además, un caso límite declarado: si una mitad empieza con una reanudación forzada antes de su primer
+control, el motor trata un primer control disputado del rival como duelo (no cambia la posesión que
+dio la reanudación), y `decoder.decode` lo acepta como primer evento. El motor es el coherente con la
+regla; en BAR-ATH el caso no ocurre (V2 y la cadena entregada son idénticos frame a frame).
