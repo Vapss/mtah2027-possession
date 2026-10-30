@@ -1239,3 +1239,32 @@ el equipo equivocado, y 690 de los 889 caen a menos de 4 s de un cambio verdader
 abre la ronda 4: **32 de las 59 reanudaciones etiquetadas no traen equipo** (los 26 saques de banda y
 los 6 saques de centro), el motor las ignora, y los primeros 9,2 s del partido salen `X` porque no hay
 estado que arrastrar antes del primer control.
+
+## 41. Ronda 4: el equipo de las reanudaciones sin equipo no cambia la entrega; corrección de la 40
+
+Carril restart-team (`docs/proposals/lane-restart-team.md`; pre-registro `a91bf57`, enmienda antes de
+medir `a957841`, resultados `6c11938`). Cuatro reglas para nombrar el equipo de los 26 saques de banda
+y 6 saques de centro que el Smart Tagging deja sin equipo: `law` (la ley: el rival del último equipo
+en posesión; tras gol, quien lo encajó), `pos` (el único equipo que tiene el balón en la ventana del
+tag, después de la salida), `pos+law` y `agree` (solo cuando las dos coinciden). **Negativo: ninguna
+pasa todas las compuertas; la cadena entregada se mantiene** (`72c98ed4bb4a…`).
+
+- **`law` es casi azar en DFL** (acierto 0,518): el equipo que la cadena lleva cuando el balón sale es
+  el del último toque solo la mitad de las veces. La premisa "tras un saque de banda el motor arrastra
+  al equipo equivocado" es cierta en ~50%, no siempre.
+- **`pos` es buena evidencia y cambia poco.** En DFL acierta 0,925 (pedía 0,95), y 0,94–0,98 cuando la
+  ventana llega al balón real; gana 7 y 6 de 7 partidos. En el partido nombra casi siempre al equipo
+  que ya se arrastra: cambia 48 frames, ninguno del slice (banco idéntico), y el Smart Tagging coincide
+  en 7 de 7 reanudaciones forzadas. `agree` da exactamente las mismas etiquetas.
+- **Ninguna nombra el saque inicial** del partido: su estimación cae en el primer frame de la mitad y
+  la ventana de `pos` queda vacía. En DFL, las filas de saque de inicio de mitad no dicen nada del
+  método: el primer tag sintético de cada partido recibe siempre el error −2 s y queda en el primer
+  frame de la mitad por construcción (revisión del PR #58).
+
+**Corrección de la decisión 40.** El `spellF1` oficial no ve las `X`: `fill_abstentions` las rellena
+hacia delante y, al inicio de una ventana, hacia atrás. Los 9,2 s sin estado del inicio no son una
+posesión perdida: se rellenan con `A`, que acierta 166 de los 230 frames. Contado sobre lo que ve el
+scorer (`tools/headroom.py`, ahora así): el equipo correcto en nuestros frames con equipo lleva el
+slice a 0,8343 (banco 0,8132), no a 0,8889; el 12,4% de los frames vivos lleva el equipo equivocado
+(723), 591 a menos de 4 s de un cambio verdadero. La conclusión de la 40 no cambia: el margen está en
+*cuándo* cambia el equipo en juego abierto, no en `D` ni en las reanudaciones.

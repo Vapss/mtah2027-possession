@@ -10,7 +10,10 @@ says where a better rule would have room to win:
 
 - **oracle D**: our carried team everywhere, `D` exactly where the truth has it (and its two
   halves: only removing our false `D`, only adding the `D` we miss);
-- **oracle team**: our `D`, the true team on the frames both we and the truth call live.
+- **oracle team**: our `D`, the true team on the frames where we name a team (`H`/`A`) and the
+  truth calls live. Our abstentions (`X`) stay: the scorer fills them from their neighbours
+  (`fill_abstentions`), so giving them the truth would credit what the scorer never sees
+  (DECISIONS 41).
 
 It also splits the live frames that carry the wrong team by their distance to the nearest true
 change of label, and counts the tagged restarts that carry no team (`engine.restart_controls`
@@ -67,16 +70,35 @@ def oracles(carried: np.ndarray, labels: np.ndarray, truth: np.ndarray) -> dict[
     remove_false[false_d] = carried[false_d]
     add_missed = labels.copy()
     add_missed[is_d] = "D"
+    # Only frames we name a team on: an abstention (`X`) is filled by the scorer from its
+    # neighbours (`fill_abstentions`), so the truth is not given to it here.
     oracle_team = labels.copy()
-    both_live = (labels != "D") & live
+    both_live = ((labels == "H") | (labels == "A")) & live
     oracle_team[both_live] = truth[both_live]
     return dict(zip(ORACLES, (oracle_d, remove_false, add_missed, oracle_team)))
 
 
+def scorer_filled(labels: np.ndarray) -> np.ndarray:
+    """`X` filled as the official temporal metrics see it (forward, then back-filled at the head):
+    the official `possession_metrics.fill_abstentions` over one run, in letters."""
+    labels = np.asarray(labels, dtype=object)
+    codes = np.full(len(labels), bench.pm.X, dtype=np.int64)
+    for letter, code in bench._CODES.items():
+        codes[labels == letter] = code
+    filled = bench.pm.fill_abstentions(codes, [(0, len(labels))])
+    letters = {code: letter for letter, code in bench._CODES.items()}
+    return np.array([letters[int(c)] for c in filled], dtype=object)
+
+
 def team_error(labels: np.ndarray, truth: np.ndarray, window: tuple[int, int]) -> dict:
-    """The live frames with the wrong team inside `window`, by distance to a true change (s)."""
+    """The live frames with the wrong team inside `window`, by distance to a true change (s).
+
+    Counted on the labels the official `spellF1` sees (`scorer_filled`); `unlabelled` is how many
+    of the window's frames we left as `X`.
+    """
     a, b = window
-    labels, truth = np.asarray(labels, dtype=object)[a:b], np.asarray(truth, dtype=object)[a:b]
+    raw, truth = np.asarray(labels, dtype=object)[a:b], np.asarray(truth, dtype=object)[a:b]
+    labels = scorer_filled(raw)
     live = (labels != "D") & ((truth == "H") | (truth == "A"))
     wrong = live & (labels != truth)
     changes = np.flatnonzero(truth[1:] != truth[:-1]) + 1
@@ -90,13 +112,15 @@ def team_error(labels: np.ndarray, truth: np.ndarray, window: tuple[int, int]) -
         top = np.iinfo(np.int64).max if hi is None else hi * FPS
         key = f"{lo}-{hi if hi is not None else 'inf'} s"
         bands[key] = int((wrong & (nearest >= lo * FPS) & (nearest < top)).sum())
-    lead = np.flatnonzero(labels != "X")
+    lead = np.flatnonzero(raw != "X")
+    head = int(lead[0]) if lead.size else b - a
     return {
         "live": int(live.sum()),
         "wrong": int(wrong.sum()),
-        "wrong_unlabelled": int((wrong & (labels == "X")).sum()),
+        "unlabelled": int((raw == "X").sum()),
+        "leading_unlabelled_s": head / FPS,
+        "leading_wrong_after_fill": int(wrong[:head].sum()),
         "wrong_by_distance_to_a_change": bands,
-        "leading_unlabelled_s": (int(lead[0]) if lead.size else b - a) / FPS,
     }
 
 
@@ -160,10 +184,15 @@ def report(result: dict, command: str, commit: str | None) -> str:
         "",
         "## El equipo en los frames vivos (slice limpio)",
         "",
+        "Contado sobre las etiquetas que ve el `spellF1` oficial: las `X` rellenadas como hace",
+        "`fill_abstentions` (hacia delante, y hacia atrás al inicio de la ventana).",
+        "",
         f"Frames vivos para nosotros y para la verdad: {t['live']}; con el equipo equivocado:"
-        f" {t['wrong']} ({bl._dec(100 * t['wrong'] / max(1, t['live']), 1)}%), de ellos"
-        f" {t['wrong_unlabelled']} sin etiqueta (`X`): los primeros"
-        f" {bl._dec(t['leading_unlabelled_s'], 1)} s de la ventana, antes del primer estado.",
+        f" {t['wrong']} ({bl._dec(100 * t['wrong'] / max(1, t['live']), 1)}%). Dejamos"
+        f" {t['unlabelled']} frames de la ventana en `X`; empieza con"
+        f" {bl._dec(t['leading_unlabelled_s'], 1)} s sin estado, que el scorer rellena con la"
+        f" primera etiqueta: {t['leading_wrong_after_fill']} de esos frames quedan con el equipo"
+        " equivocado.",
         "",
         "| distancia al cambio verdadero más cercano | frames con el equipo equivocado |",
         "|---|---:|",
