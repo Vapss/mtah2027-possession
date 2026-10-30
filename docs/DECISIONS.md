@@ -1268,3 +1268,28 @@ scorer (`tools/headroom.py`, ahora así): el equipo correcto en nuestros frames 
 slice a 0,8343 (banco 0,8132), no a 0,8889; el 12,4% de los frames vivos lleva el equipo equivocado
 (723), 591 a menos de 4 s de un cambio verdadero. La conclusión de la 40 no cambia: el margen está en
 *cuándo* cambia el equipo en juego abierto, no en `D` ni en las reanudaciones.
+
+## 42. Ronda 5: un juez externo de *cuándo* cambia la posesión; la fecha no cambia la entrega
+
+Carril m-dating (`docs/proposals/lane-m-dating.md`; instrumento y calibración `7a77aeb`, pre-registro
+`181f808` antes de medir ninguna variante, resultados `809a497`). **Negativo: la cadena entregada se
+mantiene** (`72c98ed4bb4a…`). Lo que queda es el instrumento.
+
+- **Un juez externo con la escala de tiempo del reto.** `tools/metrica_open.py` carga los partidos
+  abiertos de Metrica (g1, g2) y construye una verdad de posesión desde sus eventos (cada cambio,
+  fechado en la primera acción anotada del nuevo equipo). Da 3,65 y 3,35 posesiones/min, dentro de
+  la banda de BAR-ATH (3,4 ± 0,5), no las 4,58 de DFL. Por eso, a diferencia de DFL (decisión 37),
+  **puede juzgar reglas que cambian el número de posesiones.** Su límite: el balón de esas muestras
+  está sincronizado con los eventos (a 0,06 m del pie en cada uno), mucho más limpio que el nuestro
+  en los toques.
+- **Calibración: la cadena no llega tarde allí.** Mediana del retraso de los cambios emparejados
+  +0,04 s (g1) y +0,16 s (g2), con una cola tardía (p90 +1,4..+2,3 s). El síntoma del slice
+  (+1,4 s de mediana) no se reproduce con un balón limpio.
+- **Tres reglas de fecha** (`first`, `reception`, `relaxed`; constantes fijadas en g1): las tres
+  ganan en g2 (mediana \|retraso\| 0,16 → 0,00–0,04 s) y **las tres fallan en DFL** (la mediana con
+  signo se aleja de 0); `reception` y `relaxed` además pierden una posesión en el slice y bajan el
+  banco; `first` mueve 280 frames del partido con Δ 0. Con un balón ruidoso en el toque, un toque
+  temprano es tan a menudo falso como verdadero: **el límite de la fecha es el balón, no la regla.**
+- **Lo que abre la ronda 6:** con el balón limpio de Metrica, la cadena **no detecta un tercio de los
+  cambios en juego** (81 de 251 en g1, 71 de 216 en g2, ningún cambio de la cadena a ±5 s) y añade
+  casi otros tantos. Es una cuestión de *si*, no de *cuándo*, y este juez puede arbitrarla.
