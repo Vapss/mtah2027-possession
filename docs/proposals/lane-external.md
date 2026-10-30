@@ -127,8 +127,10 @@ legítimo, y se fijan ahora:
 
 Todas las tablas completas (por partido, limpio y degradado, `spellF1` y `macroF1`, partidos ganados)
 están en `docs/analysis/external.md`, generado por
-`python tools/external.py --score --write docs/analysis/external.md` desde el commit del
-pre-registro (`ba5a142`). Aquí van los resúmenes y su lectura.
+`python tools/external.py --score --write docs/analysis/external.md`. La primera ejecución fue desde
+el commit del pre-registro (`ba5a142`); la de `910f4fa` solo añade las tablas de escala temporal
+por partido que pidió el coordinador, y reproduce todas las puntuaciones byte a byte. Una segunda
+ejecución desde el mismo commit da el fichero idéntico. Aquí van los resúmenes y su lectura.
 
 ### 2.1 P1, dominio: **fuera de dominio para parámetros con escala temporal**
 
@@ -212,6 +214,42 @@ La degradación transplantada cuesta en el corpus lo mismo, en relativo, que en 
 comporta igual sobre otros partidos: es una buena señal para el banco, porque ya no depende solo de
 las 17 posesiones del bloque 1.
 
+### 2.6 Arbitraje de los decodificadores del carril decode (post hoc, a petición del coordinador)
+
+No pre-registrado aquí: el coordinador pidió usar el corpus como árbitro de las variantes de
+`tools/decoder.py` (rama `research-decode-lane` en `1974f54`), retenidas porque cambian la escala
+temporal de la posesión. El fichero se copió sin commitear y se corrió
+`python tools/external.py --score --extra tools.decoder:METHODS` (sin cambiar nada del corpus, que
+ya estaba comprometido); el `engine` del decodificador sale como `decoder.engine` y da exactamente
+nuestro `engine`. Sin Smart Tagging, el `D` y el control en la reanudación de esas variantes están
+mudos, igual que en `engine`: la comparación aísla la parte de decodificación.
+
+| método | público | banco: media | banco: < 50% balón | ext. limpio | ext. degradado | /min degradado | gana a `engine`, degradado |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `engine` | 0,4585 | 0,3516 | 0,2782 | 0,3767 | 0,2631 | 2,34 | — |
+| `mid` | 0,4780 | 0,3672 | 0,2833 | 0,3533 | 0,2443 | 2,34 | 0/7 |
+| `uncontested` | 0,5189 | 0,3792 | 0,3021 | 0,3495 | 0,2394 | 1,81 | 0/7 |
+| `touch` | 0,5600 | 0,3847 | 0,3060 | 0,3303 | 0,2185 | 1,62 | 0/7 |
+| `viterbi` | 0,4114 | 0,3396 | 0,2355 | 0,2633 | 0,1740 | 1,41 | 0/7 |
+| `mid+uncontested+touch` | 0,5829 | 0,4008 | 0,3208 | 0,3055 | 0,2051 | 1,45 | 0/7 |
+
+(ground truth: 4,58 posesiones/min.) En el corpus degradado **todas las variantes pierden contra
+`engine` en 7/7 partidos**; en el limpio también, salvo `uncontested`, que gana uno (J03WQQ). Es
+justo al revés que en público y banco. La tabla de escala temporal lo explica: degradadas, las
+variantes que fusionan posesiones predicen medianas de 12–33 s y 1,2–2,0 posesiones/min por
+partido, frente a una verdad de 3,0–4,7 s y 3,8–5,3/min. `mid` no cambia el ritmo (solo re-data el
+cambio) y también pierde 7/7, lo que sugiere (sin verificarlo) que la DFL fecha el cambio en el
+primer control del nuevo equipo, como `engine`.
+
+**Cómo leerlo.** P1 ya dijo que el corpus no puede fijar escalas temporales, y el sesgo tiene un
+sentido conocido: su verdad es *más fina* que la nuestra (4,58 frente a 3,4/min), así que castiga
+fusionar posesiones más de lo que lo haría BAR-ATH. El corpus no demuestra que las variantes sean
+peores en nuestro partido. Sí demuestra dos cosas: su ganancia en público y banco **no es una
+propiedad general de la posesión**, sino que depende de la definición del ground truth; y bajo
+nuestro patrón de balón las que fusionan llevan el ritmo predicho de 2,34/min (el de `engine`, ya
+corto frente a 4,58) a 1,4–1,8/min de media. Antes de entregar una de ellas, la prueba que falta es
+la de nuestro partido: posesiones por minuto por bloque en `tools/blocks.py` frente a ~3,4.
+
 ## 3. Recomendación
 
 1. **Usar el corpus degradado** (`external.score(method, external.load_all(), degraded=True)`) como
@@ -221,9 +259,19 @@ las 17 posesiones del bloque 1.
    en ≥ 5/7 no está demostrado.
 2. **No usarlo para fijar parámetros con escala temporal** (P1 falla) **ni para medir reglas de `D`**
    (2.3: su `D` es otra cosa). Si un método mejora por su `D` en el corpus, eso no dice nada de BAR-ATH.
+   Para los decodificadores (2.6) el corpus es una **alarma, no un veredicto**: pierden 7/7, pero
+   el sesgo del dominio va contra ellos. La decisión debe salir del informe de bloques de nuestro
+   partido.
 3. **No usarlo para nada que necesite el Smart Tagging** (reanudaciones): ahí el corpus es ciego, y
    la cadena entregada se reduce a `engine-bare`.
 4. El limpio sirve de techo: cuánto pierde un método por el balón que no vemos (−28/−30% aquí).
+5. **Cómo enchufar un método**: cualquier función del banco, `(features, evidence) -> H/A/D/X`, sin
+   tocar este módulo: `python tools/external.py --score --extra tools.<módulo>:METHODS`. Da público,
+   banco y corpus (limpio y degradado) en la misma ejecución, con escala temporal por partido.
+   Requisitos: las mitades se piden a `engine.halves`, `dead_ball.halves` o `ball_gaps.half_runs`
+   (se sustituyen también si se importaron por nombre); nada de Smart Tagging ni del tracking crudo.
+   Datos: `MTAH_EXTERNAL_DIR/idsse/` con los 21 ficheros del espejo (§1.1); la primera carga
+   construye la caché en ~70 s y luego tarda unos segundos.
 
 ## 4. Limitaciones
 

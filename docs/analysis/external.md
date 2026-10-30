@@ -1,6 +1,6 @@
 # Corpus externo: IDSSE (DFL, 7 partidos)
 
-Generado por `python tools/external.py --score --write docs/analysis/external.md` desde el commit `ba5a142a`. No se edita a mano. Ground truth: `D` donde
+Generado por `python tools/external.py --score --write docs/analysis/external.md` desde el commit `910f4fa1`. No se edita a mano. Ground truth: `D` donde
 `BallStatus` = 0, si no el equipo de `BallPossession`. Puntuado con
 `possession_metrics.evaluate`. Protocolo y lectura: `docs/proposals/lane-external.md`.
 
@@ -68,6 +68,32 @@ Generado por `python tools/external.py --score --write docs/analysis/external.md
 | J03WQQ | 60,4% | 0,4084 | 0,5649 | 0,4991 | 0,4084 |
 | J03WR9 | 61,1% | 0,3671 | 0,6424 | 0,4629 | 0,3671 |
 | mean | 60,5% | 0,3664 | 0,6151 | 0,4772 | 0,3664 |
+
+## Escala temporal por partido — limpio
+
+| partido | verdad /min | verdad mediana s | verdad < 1 s | `engine-bare` /min | `engine-bare` mediana s | `engine-bare` < 1 s | `engine-out` /min | `engine-out` mediana s | `engine-out` < 1 s | `smooth50` /min | `smooth50` mediana s | `smooth50` < 1 s | `engine` /min | `engine` mediana s | `engine` < 1 s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| J03WMX | 5,25 | 3,0 | 16,8% | 3,79 | 6,0 | 18,7% | 4,62 | 3,6 | 20,7% | 3,70 | 9,1 | 3,6% | 3,79 | 6,0 | 18,7% |
+| J03WN1 | 5,30 | 3,1 | 15,2% | 4,10 | 5,1 | 20,7% | 4,87 | 3,5 | 23,0% | 4,62 | 7,1 | 6,2% | 4,10 | 5,1 | 20,7% |
+| J03WOH | 4,39 | 3,9 | 11,4% | 3,53 | 7,6 | 16,7% | 4,20 | 4,7 | 17,4% | 4,19 | 6,8 | 8,6% | 3,53 | 7,6 | 16,7% |
+| J03WOY | 4,80 | 3,6 | 9,0% | 3,38 | 6,0 | 16,8% | 4,19 | 4,4 | 17,6% | 3,91 | 7,3 | 8,6% | 3,38 | 6,0 | 16,8% |
+| J03WPY | 4,32 | 3,8 | 13,5% | 3,17 | 6,6 | 18,4% | 3,88 | 5,4 | 18,3% | 3,85 | 9,0 | 5,6% | 3,17 | 6,6 | 18,4% |
+| J03WQQ | 4,23 | 4,7 | 9,2% | 3,58 | 7,6 | 15,0% | 3,98 | 6,1 | 16,1% | 4,28 | 7,8 | 6,7% | 3,58 | 7,6 | 15,0% |
+| J03WR9 | 3,78 | 4,2 | 11,1% | 2,93 | 8,6 | 12,5% | 3,58 | 6,0 | 14,0% | 3,21 | 9,8 | 4,8% | 2,93 | 8,6 | 12,5% |
+| mean | 4,58 | 3,8 | 12,3% | 3,50 | 6,8 | 17,0% | 4,19 | 4,8 | 18,2% | 3,96 | 8,1 | 6,3% | 3,50 | 6,8 | 17,0% |
+
+## Escala temporal por partido — degradado
+
+| partido | verdad /min | verdad mediana s | verdad < 1 s | `engine-bare` /min | `engine-bare` mediana s | `engine-bare` < 1 s | `engine-out` /min | `engine-out` mediana s | `engine-out` < 1 s | `smooth50` /min | `smooth50` mediana s | `smooth50` < 1 s | `engine` /min | `engine` mediana s | `engine` < 1 s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| J03WMX | 5,25 | 3,0 | 16,8% | 2,41 | 7,3 | 16,6% | 3,10 | 4,4 | 17,5% | 3,98 | 6,8 | 16,0% | 2,41 | 7,3 | 16,6% |
+| J03WN1 | 5,30 | 3,1 | 15,2% | 2,75 | 6,3 | 19,6% | 3,41 | 3,9 | 21,4% | 4,66 | 5,8 | 13,2% | 2,75 | 6,3 | 19,6% |
+| J03WOH | 4,39 | 3,9 | 11,4% | 2,34 | 9,2 | 15,4% | 2,86 | 6,3 | 16,0% | 4,18 | 5,7 | 16,2% | 2,34 | 9,2 | 15,4% |
+| J03WOY | 4,80 | 3,6 | 9,0% | 2,38 | 7,8 | 15,5% | 3,02 | 4,7 | 17,4% | 4,23 | 5,7 | 16,4% | 2,38 | 7,8 | 15,5% |
+| J03WPY | 4,32 | 3,8 | 13,5% | 2,16 | 7,7 | 17,5% | 2,79 | 5,7 | 17,6% | 4,20 | 6,0 | 14,4% | 2,16 | 7,7 | 17,5% |
+| J03WQQ | 4,23 | 4,7 | 9,2% | 2,43 | 10,1 | 10,8% | 2,80 | 6,5 | 12,4% | 4,52 | 5,7 | 19,8% | 2,43 | 10,1 | 10,8% |
+| J03WR9 | 3,78 | 4,2 | 11,1% | 1,89 | 16,7 | 13,0% | 2,41 | 7,6 | 14,8% | 3,64 | 7,0 | 14,0% | 1,89 | 16,7 | 13,0% |
+| mean | 4,58 | 3,8 | 12,3% | 2,34 | 9,3 | 15,5% | 2,91 | 5,6 | 16,8% | 4,20 | 6,1 | 15,7% | 2,34 | 9,3 | 15,5% |
 
 ## Posesiones por minuto y %D predichos (media de partidos)
 
