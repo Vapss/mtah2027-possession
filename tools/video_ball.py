@@ -1,0 +1,548 @@
+"""Lane ball-video: recover the ball from the tactical video where the tracking lost it.
+
+    # the detector runs in its own environment (requirements-video.txt: torch, ultralytics)
+    python tools/video_ball.py sample --out runs/video_ball/sample.npz
+    python tools/video_ball.py detect --frames runs/video_ball/sample.npz \\
+        --out runs/video_ball/sample_det.npz
+    python tools/video_ball.py feasibility --frames runs/video_ball/sample.npz \\
+        --detections runs/video_ball/sample_det.npz
+
+Why
+---
+The tracking has no ball on 41% of the graded frames, and the engine has no evidence there. The
+rules allow replacing the provided tracking with our own detection, and the tactical video is the
+frame-index authority: row `i` of a submission is frame `i` of the video, and the per-frame
+homography maps the pitch to the image. So a ball found in pixel `(u, v)` of frame `i` is a ball
+at pitch position `H_i^-1 (u, v)`, in the same normalised 0-1 coordinates as the tracking.
+
+Split
+-----
+Everything that touches the video or a neural network (`read_frames`, `Detector`) imports its
+libraries lazily and runs only in the separate environment. Everything that turns detections into
+evidence (`to_pitch`, `plausible`, `merge_ball`) is numpy only, so the engine side of the lane
+needs nothing the delivered path does not already have.
+
+Nothing here writes a frame, a crop or an image: the detector reads frames from an ffmpeg pipe and
+only numbers leave it. The detections themselves are frame-level derived data from the licensed
+video, so they live in `runs/` (gitignored) and are never committed.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+import time
+from collections.abc import Iterator, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+
+import numpy as np
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+
+import games  # noqa: E402
+
+FPS = int(games.GAMES[games.GAME]["fps"])
+PITCH_M = np.asarray(games.GAMES[games.GAME]["pitch"], dtype=float)
+WIDTH, HEIGHT = 1920, 1080
+SPORTS_BALL = 32  # the COCO class id of "sports ball"
+SEED = 2027
+
+
+# -- the video ---------------------------------------------------------------------------------
+
+
+def read_frames(video: str | Path, start: int, count: int) -> Iterator[np.ndarray]:
+    """Frames `start .. start+count-1` of the video as BGR `(1080, 1920, 3)` arrays.
+
+    `-ss` before `-i` is ffmpeg's accurate seek: it decodes from the previous keyframe and drops
+    frames until the requested timestamp, so frame `start` is frame `start` (checked against a
+    sequential decode by hash in the proposal, section 2).
+    """
+    cmd = ["ffmpeg", "-v", "error", "-nostdin"]
+    if start:
+        cmd += ["-ss", f"{start / FPS:.4f}"]
+    cmd += ["-i", str(video), "-frames:v", str(count), "-f", "rawvideo", "-pix_fmt", "bgr24", "-"]
+    size = WIDTH * HEIGHT * 3
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=size * 4)
+    assert process.stdout is not None
+    try:
+        for _ in range(count):
+            buffer = process.stdout.read(size)
+            if len(buffer) < size:
+                raise RuntimeError(f"video ended before frame {start + count - 1}")
+            yield np.frombuffer(buffer, np.uint8).reshape(HEIGHT, WIDTH, 3)
+    finally:
+        process.stdout.close()
+        process.wait()
+
+
+@dataclass(frozen=True)
+class DetectorConfig:
+    """What runs on each frame. Fixed in the pre-registration, not swept."""
+
+    weights: str = "yolo11x.pt"
+    imgsz: int = 1920  # the native width: the ball is ~6 px across, downscaling erases it
+    conf: float = 0.05  # keep weak boxes; the confidence threshold is applied later, in numpy
+    max_det: int = 5  # boxes kept per frame, best first
+    half: bool = True
+
+
+DEFAULT_DETECTOR = DetectorConfig()
+
+
+class Detector:
+    """A COCO detector restricted to `sports ball`. Imports torch only when constructed."""
+
+    def __init__(self, config: DetectorConfig = DEFAULT_DETECTOR, device: str = "cuda:0") -> None:
+        from ultralytics import YOLO
+
+        self.config = config
+        self.device = device
+        self.model = YOLO(config.weights)
+
+    def __call__(self, frames: Sequence[np.ndarray]) -> list[np.ndarray]:
+        """Per frame, `(k, 5)` float arrays `[u, v, w, h, conf]`, centre in pixels, best first."""
+        c = self.config
+        results = self.model.predict(
+            list(frames),
+            imgsz=c.imgsz,
+            conf=c.conf,
+            classes=[SPORTS_BALL],
+            max_det=c.max_det,
+            half=c.half,
+            device=self.device,
+            verbose=False,
+        )
+        out = []
+        for r in results:
+            boxes = r.boxes
+            xywh = boxes.xywh.float().cpu().numpy() if len(boxes) else np.zeros((0, 4))
+            conf = boxes.conf.float().cpu().numpy() if len(boxes) else np.zeros(0)
+            rows = np.column_stack([xywh, conf]).astype(np.float64)
+            out.append(rows[np.argsort(-rows[:, 4], kind="stable")])
+        return out
+
+
+def detect_frames(
+    video: str | Path,
+    frames: np.ndarray,
+    detector: Detector,
+    batch: int = 8,
+) -> tuple[dict[str, np.ndarray], dict]:
+    """Run `detector` on the given frame indices, reading contiguous runs in one pass each."""
+    frames = np.unique(np.asarray(frames, dtype=np.int64))
+    breaks = np.flatnonzero(np.diff(frames) != 1) + 1
+    rows: list[np.ndarray] = []
+    t_decode = t_detect = 0.0
+    for run in np.split(frames, breaks):
+        start, count = int(run[0]), len(run)
+        reader = read_frames(video, start, count)
+        done = 0
+        while done < count:
+            t0 = time.perf_counter()
+            chunk = [next(reader) for _ in range(min(batch, count - done))]
+            t1 = time.perf_counter()
+            for offset, boxes in enumerate(detector(chunk)):
+                index = np.full((len(boxes), 1), start + done + offset, dtype=np.float64)
+                rows.append(np.hstack([index, boxes]))
+            t_detect += time.perf_counter() - t1
+            t_decode += t1 - t0
+            done += len(chunk)
+        reader.close()
+    table = np.vstack(rows) if rows else np.zeros((0, 6))
+    detections = {
+        "frame": table[:, 0].astype(np.int64),
+        # Rounded on the way out: the stored file must not depend on the last bits of a GPU sum.
+        "u": np.round(table[:, 1], 1),
+        "v": np.round(table[:, 2], 1),
+        "w": np.round(table[:, 3], 1),
+        "h": np.round(table[:, 4], 1),
+        "conf": np.round(table[:, 5], 3),
+    }
+    timing = {
+        "frames": int(len(frames)),
+        "decode_s": round(t_decode, 2),
+        "detect_s": round(t_detect, 2),
+        "fps": round(len(frames) / max(1e-9, t_decode + t_detect), 2),
+    }
+    return detections, timing
+
+
+# -- pixels to pitch (numpy only) ----------------------------------------------------------------
+
+
+def to_pitch(matrices: np.ndarray, u: np.ndarray, v: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Pixel centres -> normalised pitch `(x, y)`, one homography per row (the ground plane).
+
+    `matrices[k]` maps the pitch to the image for the frame of detection `k` (the starter's
+    convention), so the inverse goes the other way. A ball in the air sits above its ground point,
+    so its projection lands *behind* it, further from the camera -- the error grows with height.
+    """
+    inverse = np.linalg.inv(np.asarray(matrices, dtype=float))
+    u, v = np.asarray(u, dtype=float), np.asarray(v, dtype=float)
+    den = inverse[:, 2, 0] * u + inverse[:, 2, 1] * v + inverse[:, 2, 2]
+    x = (inverse[:, 0, 0] * u + inverse[:, 0, 1] * v + inverse[:, 0, 2]) / den
+    y = (inverse[:, 1, 0] * u + inverse[:, 1, 1] * v + inverse[:, 1, 2]) / den
+    return x, y
+
+
+def best_per_frame(
+    frame: np.ndarray, conf: np.ndarray, n_frames: int, min_conf: float = 0.0
+) -> np.ndarray:
+    """Index into the detection table of each frame's most confident box, `-1` where none."""
+    best = np.full(n_frames, -1, dtype=np.int64)
+    keep = np.flatnonzero(conf >= min_conf)
+    # Ascending confidence, so the last write per frame is the best; ties go to the earlier row.
+    order = keep[np.lexsort((-np.arange(len(keep)), conf[keep]))]
+    best[frame[order]] = order
+    return best
+
+
+# -- plausibility and merge (numpy only) ---------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Filter:
+    """Which video balls count as evidence. Fixed in the pre-registration (proposal, section 3)."""
+
+    min_conf: float = 0.3
+    # The tracking's own ball ranges over -0.04..1.04: on the pitch or just outside it (a ball
+    # going out is still a ball). Anything further out is a spectator's ball or a false box.
+    margin: float = 0.05
+    # The hardest shot is ~35 m/s. Two balls `k` frames apart further than this allows are not
+    # the same ball. The ground projection of a lofted ball moves faster than the ball itself,
+    # so this bound is loose on purpose.
+    max_speed_mps: float = 35.0
+    # A ball is accepted only when another ball (video or tracking) within this many frames
+    # agrees with it: an isolated single-frame box is the commonest false positive.
+    support_frames: int = 5
+    slack_m: float = 1.0  # detection noise added to the speed bound
+
+
+DEFAULT_FILTER = Filter()
+
+
+def candidates(
+    det: dict[str, np.ndarray], matrices: np.ndarray, n_frames: int, flt: Filter = DEFAULT_FILTER
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Best box per frame above `min_conf`, projected: `(x, y, ok)` per frame, NaN where none."""
+    best = best_per_frame(det["frame"], det["conf"], n_frames, flt.min_conf)
+    has = best >= 0
+    x = np.full(n_frames, np.nan)
+    y = np.full(n_frames, np.nan)
+    rows = best[has]
+    x[has], y[has] = to_pitch(matrices[det["frame"][rows]], det["u"][rows], det["v"][rows])
+    lo, hi = -flt.margin, 1 + flt.margin
+    ok = has & (x >= lo) & (x <= hi) & (y >= lo) & (y <= hi)
+    x[~ok] = np.nan
+    y[~ok] = np.nan
+    return x, y, ok
+
+
+def supported(
+    x: np.ndarray, y: np.ndarray, ok: np.ndarray, ref: np.ndarray, flt: Filter = DEFAULT_FILTER
+) -> np.ndarray:
+    """`ok` frames whose ball is consistent with another ball within `support_frames`.
+
+    `ref` is `(n, 2)` normalised positions of the reference balls (video candidates and the
+    tracking's ball, NaN where none). A frame never supports itself.
+    """
+    pos = np.column_stack([x, y]) * PITCH_M
+    refm = ref * PITCH_M
+    keep = np.zeros(len(x), dtype=bool)
+    for k in range(1, flt.support_frames + 1):
+        bound = flt.max_speed_mps * k / FPS + flt.slack_m
+        for shift in (k, -k):
+            other = np.full_like(refm, np.nan)
+            if shift > 0:
+                other[shift:] = refm[:-shift]
+            else:
+                other[:shift] = refm[-shift:]
+            dist = np.hypot(*(pos - other).T)
+            keep |= ok & (dist <= bound)
+    return keep
+
+
+def video_ball(
+    det: dict[str, np.ndarray],
+    matrices: np.ndarray,
+    tracking_ball: np.ndarray,
+    flt: Filter = DEFAULT_FILTER,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Per frame, the accepted video ball `(n, 2)` (NaN where none) and its mask."""
+    n = len(matrices)
+    x, y, ok = candidates(det, matrices, n, flt)
+    # References: the tracking where it has a ball, the video candidates elsewhere.
+    ref = np.array(tracking_ball[:, :2], dtype=float)
+    lost = np.isnan(ref[:, 0])
+    ref[lost, 0], ref[lost, 1] = x[lost], y[lost]
+    keep = supported(x, y, ok, ref, flt)
+    xy = np.column_stack([x, y])
+    xy[~keep] = np.nan
+    return xy, keep
+
+
+def merge_ball(tracking_ball: np.ndarray, video_xy: np.ndarray, video_ok: np.ndarray) -> np.ndarray:
+    """The tracking's ball where it has one; the accepted video ball in its gaps.
+
+    The tracking is never overwritten: where both exist it is the reference the whole engine was
+    built and measured on. A filled ball gets z = NaN, which nothing downstream reads.
+    """
+    merged = np.array(tracking_ball, dtype=float)
+    fill = np.isnan(merged[:, 0]) & np.asarray(video_ok, dtype=bool)
+    merged[fill, 0] = video_xy[fill, 0]
+    merged[fill, 1] = video_xy[fill, 1]
+    merged[fill, 2] = np.nan
+    return merged
+
+
+# -- feasibility (no ground truth) -------------------------------------------------------------
+
+
+def sample_frames(
+    present: np.ndarray,
+    runs: Sequence[tuple[int, int]],
+    n_clusters: int = 200,
+    length: int = 10,
+    seed: int = SEED,
+) -> dict[str, np.ndarray]:
+    """Two frame sets inside the halves: runs of `length` frames with the tracking's ball on every
+    frame, and runs with it on none. Clusters keep the seeks cheap; 200 x 10 = 2000 frames each."""
+    rng = np.random.default_rng(seed)
+    inside = np.zeros(len(present), dtype=bool)
+    for start, stop in runs:
+        inside[start:stop] = True
+    out = {}
+    for name, want in (("with_ball", True), ("gap", False)):
+        ok = inside & (present == want)
+        # A start is valid when the whole run of `length` frames qualifies.
+        window = np.convolve(ok.astype(int), np.ones(length, dtype=int), "valid") == length
+        starts = np.flatnonzero(window)
+        chosen = np.sort(rng.choice(starts, size=n_clusters, replace=False))
+        out[name] = (chosen[:, None] + np.arange(length)[None, :]).ravel()
+    return out
+
+
+def agreement(
+    det: dict[str, np.ndarray],
+    frames: np.ndarray,
+    ball_xy: np.ndarray,
+    matrices: np.ndarray,
+    thresholds: Sequence[float],
+) -> list[dict]:
+    """Against the tracking's ball: per confidence threshold, how often the best box exists and how
+    often it lies within 1 / 2 m of the tracking ball (recall), and among frames with a box, how
+    often it is within 2 m (precision against the tracking)."""
+    n = len(matrices)
+    x, y = to_pitch(matrices[det["frame"]], det["u"], det["v"])
+    rows = []
+    for t in thresholds:
+        best = best_per_frame(det["frame"], det["conf"], n, t)[frames]
+        has = best >= 0
+        err = np.full(len(frames), np.inf)
+        dx = (x[best[has]] - ball_xy[frames[has], 0]) * PITCH_M[0]
+        dy = (y[best[has]] - ball_xy[frames[has], 1]) * PITCH_M[1]
+        err[has] = np.hypot(dx, dy)
+        rows.append(
+            {
+                "conf": t,
+                "found": float(has.mean()),
+                "recall_1m": float((err <= 1).mean()),
+                "recall_2m": float((err <= 2).mean()),
+                "precision_2m": float((err[has] <= 2).mean()) if has.any() else float("nan"),
+                "median_err_m": float(np.median(err[has])) if has.any() else float("nan"),
+            }
+        )
+    return rows
+
+
+def diagnose(
+    det: dict[str, np.ndarray],
+    frames: np.ndarray,
+    ball: np.ndarray,
+    players_m: np.ndarray,
+    matrices: np.ndarray,
+    min_conf: float = 0.3,
+) -> dict:
+    """Alignment (agreement with the tracking at frame `i + k`), the any-box oracle, and where the
+    false positives sit. `players_m` is `(n, slots, 2)` in metres."""
+    n = len(matrices)
+    frames = np.unique(frames)
+    x, y = to_pitch(matrices[det["frame"]], det["u"], det["v"])
+    best = best_per_frame(det["frame"], det["conf"], n, min_conf)[frames]
+    has = best >= 0
+    f, b = frames[has], best[has]
+
+    def err(at: np.ndarray, rows: np.ndarray) -> np.ndarray:
+        dx = (x[rows] - ball[at, 0]) * PITCH_M[0]
+        return np.hypot(dx, (y[rows] - ball[at, 1]) * PITCH_M[1])
+
+    offsets = {}
+    for k in (-4, -2, -1, 0, 1, 2, 4):
+        at = f + k
+        ok = (at >= 0) & (at < n)
+        at = np.clip(at, 0, n - 1)
+        ok &= ~np.isnan(ball[at, 0])
+        offsets[k] = float((err(at[ok], b[ok]) <= 1).mean())
+    e0 = err(f, b)
+    inset = np.isin(det["frame"], frames)
+    all_err = err(det["frame"][inset], np.flatnonzero(inset))
+    hit = np.zeros(n, dtype=bool)
+    hit[det["frame"][inset][all_err <= 2]] = True
+    far = e0 > 5
+    px, py = x[b[far]] * PITCH_M[0], y[b[far]] * PITCH_M[1]
+    gap_to_player = np.nanmin(
+        np.hypot(players_m[f[far], :, 0] - px[:, None], players_m[f[far], :, 1] - py[:, None]),
+        axis=1,
+    )
+    spots = np.array([[52.65, 34.0], [11.0, 34.0], [PITCH_M[0] - 11.0, 34.0]])
+    on_spot = np.min(np.hypot(px[:, None] - spots[:, 0], py[:, None] - spots[:, 1]), axis=1) <= 1
+    return {
+        "min_conf": min_conf,
+        "within_1m_at_offset": offsets,
+        "error_percentiles_m": np.percentile(e0, [25, 50, 75]).round(2).tolist(),
+        "oracle_any_box_2m": float(hit[frames].mean()),
+        "false_over_5m_share": float(far.mean()),
+        "false_nearest_player_median_m": float(np.nanmedian(gap_to_player)),
+        "false_within_1_5m_of_player": float(np.mean(gap_to_player <= 1.5)),
+        "false_within_1m_of_a_spot": float(on_spot.mean()),
+        "box_wh_median_px": [float(np.median(det["w"])), float(np.median(det["h"]))],
+    }
+
+
+def video_only_features(tracking, teams, det, matrices, flt: Filter):
+    """Engine features with the ball taken from the video alone (the tracking's ball dropped).
+
+    Support comes from other video balls only, never from the tracking, so the comparison with
+    the tracking's own control on the same frames is not circular.
+    """
+    from tools import atd, engine
+
+    x, y, ok = candidates(det, matrices, len(matrices), flt)
+    keep = supported(x, y, ok, np.column_stack([x, y]), flt)
+    ball = np.full((len(matrices), 3), np.nan)
+    ball[keep, 0], ball[keep, 1] = x[keep], y[keep]
+    return engine.features(atd.Tracking(tracking.players_array, ball), teams)
+
+
+def control_agreement(
+    det, matrices, tracking, teams, sets, ctrl_atd, state, live, thresholds
+) -> list[dict]:
+    """The engine's control computed from the video ball, against the tracking's.
+
+    The engine reads the ball only through control frames (a player within 1.5 m, a slow ball),
+    so a video ball matters only where it makes one. Per threshold: on frames with the tracking's
+    ball, how many video controls there are and how many name the other team than the tracking's
+    control; on both frame sets, how often a video control agrees with the engine's decoded state.
+    """
+    from tools import engine
+
+    rows = []
+    for t in thresholds:
+        cv = engine.control(video_only_features(tracking, teams, det, matrices, Filter(min_conf=t)))
+        wb, gap = sets["with_ball"], sets["gap"]
+        v, a = cv[wb], ctrl_atd[wb]
+        both = (v != engine.NONE) & (a != engine.NONE)
+        row = {
+            "conf": t,
+            "atd_control_share": float((a != engine.NONE).mean()),
+            "video_control_share": float((v != engine.NONE).mean()),
+            "other_team_vs_atd_control": float((v[both] != a[both]).mean()),
+            "gap_video_control_share": float((cv[gap] != engine.NONE).mean()),
+        }
+        for name, fr in (("with_ball", wb), ("gap", gap)):
+            vc = (cv[fr] != engine.NONE) & live[fr]
+            row[f"{name}_n_live_controls"] = int(vc.sum())
+            row[f"{name}_agree_state"] = float((cv[fr][vc] == state[fr][vc]).mean())
+        rows.append(row)
+    return rows
+
+
+def load_matrices() -> np.ndarray:
+    """The tactical homographies, `(n, 3, 3)`: the starter's own loader, imported, not copied."""
+    sys.path.insert(0, str(REPO_ROOT / "starter"))
+    import load_homography
+
+    matrices, _err, valid = load_homography.load()
+    if not valid.all():
+        raise ValueError("the tactical homography is expected valid on every frame")
+    return matrices
+
+
+def _load_npz(path: Path) -> dict[str, np.ndarray]:
+    with np.load(path) as data:
+        return {key: data[key] for key in data.files}
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Ball from the tactical video (lane ball-video)")
+    sub = parser.add_subparsers(dest="command", required=True)
+    p = sub.add_parser("sample", help="choose the feasibility frames (tracking only)")
+    p.add_argument("--out", type=Path, required=True)
+    p = sub.add_parser("detect", help="run the detector on frames (video environment)")
+    p.add_argument("--frames", type=Path, required=True, help="npz of frame arrays, or 'halves'")
+    p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--weights", default=DetectorConfig.weights)
+    p.add_argument("--imgsz", type=int, default=DetectorConfig.imgsz)
+    p.add_argument("--batch", type=int, default=8)
+    p = sub.add_parser("feasibility", help="detections against the tracking ball")
+    p.add_argument("--frames", type=Path, required=True)
+    p.add_argument("--detections", type=Path, required=True)
+    args = parser.parse_args(argv)
+
+    from tools import atd
+    from tools.ball_gaps import half_runs
+
+    if args.command == "sample":
+        _ball, present = atd.load("tactical").ball()
+        chosen = sample_frames(present, half_runs())
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        np.savez(args.out, **chosen)
+        print(json.dumps({k: len(v) for k, v in chosen.items()}))
+        return 0
+    if args.command == "detect":
+        sets = _load_npz(args.frames)
+        frames = np.unique(np.concatenate(list(sets.values())))
+        config = DetectorConfig(weights=args.weights, imgsz=args.imgsz)
+        detections, timing = detect_frames(games.video_path(), frames, Detector(config), args.batch)
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        np.savez(args.out, **detections)
+        print(json.dumps({"config": config.__dict__, **timing}))
+        return 0
+    if args.command == "feasibility":
+        from tools import dead_ball, emision, engine
+
+        sets = _load_npz(args.frames)
+        det = _load_npz(args.detections)
+        matrices = load_matrices()
+        tracking = atd.load("tactical")
+        ball, _present = tracking.ball()
+        n = len(matrices)
+        thresholds = (0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7)
+        rows = agreement(det, sets["with_ball"], ball, matrices, thresholds)
+        for row in rows:
+            best = best_per_frame(det["frame"], det["conf"], n, row["conf"])
+            row["gap_found"] = float((best[sets["gap"]] >= 0).mean())
+        teams = emision.team_slots()
+        ev = dead_ball.load_evidence()
+        dead = dead_ball.dead_mask(ev, engine.halves(), "out")
+        f = engine.features(tracking, teams)
+        _ctrl, state, lab = engine.chain(f, engine.DEFAULT, ev.restarts, dead)
+        live = (state != engine.NONE) & (lab != "D")
+        ctrl_rows = control_agreement(
+            det, matrices, tracking, teams, sets, engine.control(f), state, live, (0.2, 0.3, 0.5)
+        )
+        players_m = tracking.players_array[:, :, :2] * PITCH_M
+        diag = diagnose(det, sets["with_ball"], ball, players_m, matrices)
+        report = {"position": rows, "control": ctrl_rows, "diagnose": diag}
+        print(json.dumps(report, indent=1))
+        return 0
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
