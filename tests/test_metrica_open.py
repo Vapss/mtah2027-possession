@@ -159,8 +159,7 @@ def test_set_pieces_and_goal_kicks_become_restarts_with_their_team() -> None:
             (H, "SET PIECE", "THROW IN", 400, 400),
             (A, "PASS", "GOAL KICK", 900, 950),
             (H, "BALL LOST", "GOAL KICK-INTERCEPTION", 1200, 1230),  # a failed goal kick
-            (H, "SET PIECE", "KICK OFF-RETAKEN", 1500, 1500),  # taken again: not the restart
-            (H, "SET PIECE", "KICK OFF", 1600, 1600),
+            (H, "SET PIECE", "KICK OFF-RETAKEN", 1500, 1500),  # play followed it: a restart
         ]
     )
     found = mo.restarts(ev, [(0, 2000)])
@@ -170,10 +169,8 @@ def test_set_pieces_and_goal_kicks_become_restarts_with_their_team() -> None:
         (400, "Throw-in", H),
         (900, "Goal Kick", A),
         (1200, "Goal Kick", H),
-        (1600, dead_ball.KICK_OFF_GOAL, H),
+        (1500, dead_ball.KICK_OFF_GOAL, H),
     ]
-    second = mo.restarts(ev[ev["start"] >= 1500], [(1500, 2000)])
-    assert [(r.frame, r.kind) for r in second] == [(1600, dead_ball.KICK_OFF_START)]
     assert found[1].tag_start == 400 - 125  # Smart Tagging's window: restart_s before the restart
     assert found[0].tag_start == 0  # never before the half
 

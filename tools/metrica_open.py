@@ -283,8 +283,9 @@ def restarts(events: pd.DataFrame, runs: list[tuple[int, int]]) -> tuple[dead_ba
             key = "GOAL KICK" if _kind(row) == "GOAL KICK" else row.subtype.split("-")[0]
             if row.type != "SET PIECE" and key != "GOAL KICK":
                 continue
-            if "RETAKEN" in row.subtype:
-                continue  # a set piece taken again: the retake, logged next, is the restart
+            # A `-RETAKEN` set piece is kept: play followed it (a pass, a ball lost) before the
+            # referee had it taken again, so it restarted play too (g2: 3 of them, 17-58 s before
+            # the next set piece).
             kind = RESTART_KIND.get(key)
             if kind is None:
                 raise ValueError(f"set piece {row.subtype!r} has no restart kind")
