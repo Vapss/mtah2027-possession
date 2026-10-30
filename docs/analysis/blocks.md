@@ -1,6 +1,6 @@
 # D6 — Holdout estructural: el partido en 22 bloques de 5 minutos
 
-Generado por `python tools/blocks.py evaluation/results/baseline_smooth50.csv submissions/backup.csv submissions/engine.csv --write docs/analysis/blocks.md` desde el commit `0a9ec188`. No se edita a mano.
+Generado por `python tools/blocks.py evaluation/results/baseline_smooth50.csv submissions/backup.csv submissions/engine.csv --write docs/analysis/blocks.md` desde el commit `80c4e968`. No se edita a mano.
 
 Diagnóstico de cordura, **no una métrica que optimizar** (#36). No usa ground truth: cada
 bloque se describe con la submission, el tracking y el Smart Tagging. El bloque 1★ es la
@@ -20,7 +20,7 @@ con ese equipo.
 | 1★ | 1 | 5,0 | 88,2% | 5,20 | 4,80 | 4,80 |
 | 2 | 1 | 5,0 | 82,7% | 5,00 | 4,00 | 4,60 |
 | 3 | 1 | 5,0 | 76,5% | 6,60 | 5,20 | 5,60 |
-| 4 | 1 | 5,0 | 72,3% | 7,60 | 6,00 | 5,00 |
+| 4 | 1 | 5,0 | 72,3% | 7,60 | 6,00 | 5,20 |
 | 5 | 1 | 5,0 | 56,0% | 4,80 | 3,40 | 4,20 |
 | 6 | 1 | 5,0 | 64,7% | 6,80 | 5,40 | 4,40 |
 | 7 | 1 | 5,0 | 36,9% | 2,40 | 1,40 | 1,20 |
@@ -37,9 +37,9 @@ con ese equipo.
 | 18 | 2 | 5,0 | 20,3% | 2,60 | 1,80 | 2,20 |
 | 19 | 2 | 5,0 | 48,6% | 8,40 | 3,60 | 4,00 |
 | 20 | 2 | 5,0 | 47,9% | 4,40 | 2,80 | 3,20 |
-| 21 | 2 | 5,0 | 60,0% | 5,80 | 3,40 | 4,20 |
+| 21 | 2 | 5,0 | 60,0% | 5,80 | 3,40 | 4,40 |
 | 22 | 2 | 2,9 | 71,7% | 8,20 | 4,44 | 2,73 |
-| **partido** | | 105,9 | 59,3% | **5,61** | **3,75** | **3,63** |
+| **partido** | | 105,9 | 59,3% | **5,61** | **3,75** | **3,64** |
 
 ## `baseline_smooth50`
 
@@ -108,7 +108,7 @@ Rango de posesiones/min entre bloques: 1,00 .. 6,00; bloques sin ninguna posesi�
 | 1★ | 88,2% | 24 | 4,80 | 12,9 s | 13,9% | 8,3% | 54,9% | 68,3% | 69,6% |
 | 2 | 82,7% | 23 | 4,60 | 11,7 s | 13,6% | 9,5% | 80,5% | 80,3% | 78,9% |
 | 3 | 76,5% | 28 | 5,60 | 8,8 s | 10,5% | 13,3% | 69,1% | 67,5% | 84,8% |
-| 4 | 72,3% | 25 | 5,00 | 10,3 s | 23,5% | 9,4% | 57,1% | 75,9% | 80,1% |
+| 4 | 72,3% | 26 | 5,20 | 9,9 s | 23,5% | 9,4% | 55,1% | 75,9% | 80,1% |
 | 5 | 56,0% | 21 | 4,20 | 15,1 s | 30,2% | 6,0% | 67,1% | 63,0% | 62,1% |
 | 6 | 64,7% | 22 | 4,40 | 10,9 s | 12,6% | 14,3% | 47,0% | 64,9% | 80,1% |
 | 7 | 36,9% | 6 | 1,20 | 42,8 s | 54,1% | 11,6% | 26,6% | 31,2% | 74,4% |
@@ -125,8 +125,8 @@ Rango de posesiones/min entre bloques: 1,00 .. 6,00; bloques sin ninguna posesi�
 | 18 | 20,3% | 11 | 2,20 | 26,7 s | 76,9% | 4,4% | 91,2% | 26,8% | 93,2% |
 | 19 | 48,6% | 20 | 4,00 | 10,8 s | 10,8% | 28,1% | 63,3% | 45,7% | 62,5% |
 | 20 | 47,9% | 16 | 3,20 | 20,4 s | 23,9% | 0,0% | 42,3% | 75,1% | 59,2% |
-| 21 | 60,0% | 21 | 4,20 | 12,4 s | 16,7% | 14,9% | 47,5% | 42,8% | 75,6% |
+| 21 | 60,0% | 22 | 4,40 | 11,8 s | 16,7% | 14,9% | 46,2% | 42,8% | 75,6% |
 | 22 | 71,7% | 8 | 2,73 | 12,0 s | 25,1% | 23,1% | 16,2% | 38,2% | 60,8% |
-| **partido** | **59,3%** | **384** | **3,63** | **14,5 s** | **3,6%** | **12,3%** | **56,1%** | **58,9%** | **73,1%** |
+| **partido** | **59,3%** | **386** | **3,64** | **14,4 s** | **3,6%** | **12,3%** | **56,0%** | **58,9%** | **73,1%** |
 
 Rango de posesiones/min entre bloques: 0,67 .. 5,60; bloques sin ninguna posesión: 0.
