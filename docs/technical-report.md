@@ -5,8 +5,9 @@ Equipo: TODO (nombre del equipo; el archivo entregado debe llamarse `<equipo>.md
 
 Convenciones. `Dnn` es la entrada `nn` de [`docs/DECISIONS.md`](DECISIONS.md); los carriles de
 investigación están en `docs/proposals/lane-*.md` y las tablas generadas en `docs/analysis/`. Cada
-número de este documento está copiado de esas fuentes, que dicen cómo regenerarlo. Los números
-marcados con ⟨r2⟩ dependen de la cadena entregada final y se refrescan tras la ronda 2. "Slice"
+número de este documento está copiado de esas fuentes, que dicen cómo regenerarlo. Los números de
+la cadena entregada son los de su versión final (SHA-256 `72c98ed4bb4a…`), la que dejó la ronda 1
+(D34, D36) y que ninguna de las cinco rondas siguientes cambió (rondas 2–6, D39–D43). "Slice"
 es la ventana pública de 5 minutos con ground truth (bloque 1★, 17 posesiones); "partido" son los
 dos medios tiempos (158.857 frames graduados). Los datos del partido son licenciados: aquí solo hay
 agregados ya publicados en el repositorio.
@@ -27,14 +28,14 @@ aprendido, ni pesos: solo umbrales físicos fijados antes de medir, en numpy y p
 | instrumento | `smooth50` (suelo oficial) | cadena entregada | fuente |
 |---|---:|---:|---|
 | `spellF1` partido completo (oficial) | **0,2433** | desconocido (GT privado) | EVALUATION.md |
-| `spellF1` slice público | 0,3256 | 0,5368 ⟨r2⟩ | D36, `engine-sensitivity.md` |
-| `macroF1` slice público | 0,6207 | 0,8533 ⟨r2⟩ | D12, `engine-sensitivity.md` |
-| banco de trasplante: media de 19 donantes | 0,2150 | 0,4351 ⟨r2⟩ | `bench.md` |
-| banco: media de los 6 donantes con < 50% de balón | 0,1657 | 0,3595 ⟨r2⟩ | `bench.md` |
-| banco: peor donante | 0,0842 | 0,2400 ⟨r2⟩ | `bench.md` |
-| bloques: posesiones/min del partido (slice: 3,4) | 5,61 | 3,62 ⟨r2⟩ | `blocks.md` |
-| bloques: acuerdo con el Smart Tagging | 67,2% | 77,1% ⟨r2⟩ | `blocks.md` |
-| bloques: `%D` del partido / bloques sin posesión | 32,3% / 0 | 40,0% ⟨r2⟩ / 0 | `blocks.md`, D36 |
+| `spellF1` slice público | 0,3256 | 0,5368 | D36, `engine-sensitivity.md` |
+| `macroF1` slice público | 0,6207 | 0,8533 | D12, `engine-sensitivity.md` |
+| banco de trasplante: media de 19 donantes | 0,2150 | 0,4351 | `bench.md` |
+| banco: media de los 6 donantes con < 50% de balón | 0,1657 | 0,3595 | `bench.md` |
+| banco: peor donante | 0,0842 | 0,2400 | `bench.md` |
+| bloques: posesiones/min del partido (slice: 3,4) | 5,61 | 3,62 | `blocks.md` |
+| bloques: acuerdo con el Smart Tagging | 67,2% | 77,1% | `blocks.md` |
+| bloques: `%D` del partido / bloques sin posesión | 32,3% / 0 | 40,0% / 0 | `blocks.md`, D36 |
 
 El banco está calibrado contra los números oficiales: para `smooth50` predice 0,2150 frente al
 0,2433 oficial, algo pesimista (D33). Es la estimación más honesta que tenemos del partido completo.
@@ -91,6 +92,25 @@ fija escalas de tiempo ni reglas de `D` por su puntuación; sí sirve para robus
 escala temporal. Reproduce la caída relativa del banco por balón perdido (−28% frente a −34% en
 `smooth50`) y su orden de métodos, lo que valida el banco desde fuera.
 
+**Partidos abiertos de Metrica** (D42, D43, `tools/metrica_open.py`). Los dos partidos de muestra de
+Metrica con tracking (g1, g2) y su registro de eventos, sincronizado al frame, dan una verdad de
+posesión independiente de nuestro motor: cada cambio se fecha en la primera acción anotada del nuevo
+equipo. Su escala sí es comparable a la nuestra (3,65 y 3,35 posesiones/min), así que juzga *si*
+cambia la posesión, que DFL no puede (D37), y es un segundo juez de *cuándo*, junto a DFL. Dos
+límites, medidos: el balón de la muestra está sincronizado con los eventos (mediana de 0,06 m entre
+el jugador que actúa y el balón; el 94,6% y el 96,0% de los eventos a ≤ 2 m), mucho más limpio que
+el nuestro en el toque, por lo que las reglas de la ronda 6 se juzgaron
+también con un balón degradado a nuestra precisión (ruido de posición σ = 0,85 m fijado sin
+etiquetas, y nuestros huecos; D43); y sus eventos dan la posesión a quien *toca* un balón suelto,
+mientras el reto la da a quien lo *controla*.
+
+**Auditoría del margen** (D40, D41, `tools/headroom.py`, `docs/analysis/headroom.md`). Un
+diagnóstico con la GT pública que no elige nada: cambia un componente de la cadena por la verdad y
+mide cuánto `spellF1` libera. `D` perfecto lleva el slice de 0,5368 a 0,6162; el equipo correcto en
+los frames en que nombramos equipo, a 0,8343 (banco 0,8132). El 12,4% de los frames vivos lleva el
+equipo equivocado, y 591 de esos 723 frames están a menos de 4 s de un cambio verdadero: el margen
+que queda es *cuándo* cambia el equipo cerca de un toque, no el balón muerto.
+
 **Pre-registro.** Cada carril escribió y commiteó sus variantes, compuertas y regla de elección
 antes de medir, y las secciones de resultados se añadieron después sin tocar las anteriores. La
 regla se aplica aunque elija un número menor: entregamos I1 (0,4585) en vez de I0 (0,4667) (D30),
@@ -122,7 +142,7 @@ en el 38,8% a > 20 m/s; con el balón en vuelo el más cercano suele ser un riva
 (D29). Un balón fuera del campo no se controla (D31): no está en juego. El barrido pre-registrado de
 27 configuraciones (radio 1,0/1,5/2,0 × velocidad 3/5/7 × `dwell` 1/5/12) sobre la cadena entregada
 no encuentra **ninguna** que gane al default por la regla: `spellF1` 0,3680..0,5375 frente a
-0,5368 ⟨r2⟩ (`engine-sensitivity.md`).
+0,5368 (`engine-sensitivity.md`).
 
 ### 4b. La regla del duelo (D34)
 
@@ -160,10 +180,10 @@ a 2,89 m del jugador, así que ni está quieto ni está solo. Una parada es un *
   (2022), con identidades de jugador, reportan un 92% de acierto en esta tarea; la regla no usa
   identidades (`lane-dead-v2.md` §2.2).
 
-Resultado de la unión (D36): recall de `D` en el slice 0,384 → 0,897 ⟨r2⟩ con precisión 0,877 ⟨r2⟩;
-banco 0,3792 → 0,4351 ⟨r2⟩ (poco balón 0,3021 → 0,3595 ⟨r2⟩); acuerdo con el Smart Tagging 73,4% →
-77,1% ⟨r2⟩; en DFL, sobre el motor anterior, 0,376 → 0,432 en los 7 de 7 partidos. El slice da
-0,5189 → 0,5368 ⟨r2⟩ con una sola posesión discordante: la evidencia fuerte son las tres fuentes
+Resultado de la unión (D36): recall de `D` en el slice 0,384 → 0,897 con precisión 0,877;
+banco 0,3792 → 0,4351 (poco balón 0,3021 → 0,3595); acuerdo con el Smart Tagging 73,4% →
+77,1%; en DFL, sobre el motor anterior, 0,376 → 0,432 en los 7 de 7 partidos. El slice da
+0,5189 → 0,5368 con una sola posesión discordante: la evidencia fuerte son las tres fuentes
 independientes del slice.
 
 ### 4d. Reanudaciones (D30, D32, D35)
@@ -188,7 +208,7 @@ el mismo frame con equipos distintos, no se fuerza ninguna.
 | Vídeo táctico | **probado; detector COCO negativo** | Ver abajo. |
 | Vídeo y tracking broadcast | **no usado** | Ver abajo. |
 | Datos externos DFL/IDSSE | **usado** para fijar las constantes de W1 y como árbitro | Sección 3; revirtió V6 y confirmó la alarma de escala temporal de `touch` (sección 6). |
-| Metrica sample data | **descartado como ground truth** | Solo eventos: el `D` habría que construirlo con nuestras propias reglas, y validar con ellas sería circular (`lane-external.md` §1.1). |
+| Metrica sample data | **usado como juez externo** de cuándo y si cambia la posesión (sección 3); nunca para fijar `D` | Su verdad de eventos no da un `D` propio (habría que construirlo con nuestras reglas, y validar con ellas sería circular, `lane-external.md` §1.1), pero sí fecha los cambios de equipo sin pasar por el motor (D42). |
 
 **Vídeo táctico.** El carril ball-video intentó recuperar el balón donde el ATD lo pierde, con
 YOLO11x COCO `sports ball` a resolución nativa (el balón mide ~6 px). Como rastreador de posición
@@ -225,6 +245,13 @@ decidió no tomar ninguna decisión de fusión con evidencia del slice y dejar e
 | Modelos aprendidos de balón muerto (W2–W4) | logística ridge sobre 29 rasgos, fijada en DFL | 0,5026 en el slice, pero precisión de `D` 0,787 < 0,80 (W4: 0,761) por desborde en los bordes | D36, `lane-dead-v2.md` §9 |
 | Quietud hacia atrás tras gol (`out+still`) | extender la parada mientras el campo está quieto | el bloque 7 llega a 50,4% de `D` (compuerta: < 50%): la quietud antes del saque tras un gol se estira hasta el tope de 120 s | `lane-d.md` §9–10 |
 | Mínimo de 1 s fuera para abrir parada | filtrar "ruido de línea" | los 77 frames eliminados en el slice eran `D` real; revertida | D31 |
+| Fechar cada cambio antes (ronda 2) | el duelo decide *si*, la fecha va al primer control o toque del nuevo equipo | al primer control: mueve 29 de 301 cambios (casi nulo); al primer toque: slice −0,0526 y Smart Tagging 77,1% → 74,2% | D39, `lane-dating.md` |
+| Inicio de las paradas en la deceleración (U1, ronda 2) | adelantar el inicio de W1 | en DFL el error de inicio baja de 5,4 a 0,5 s y gana 7/7, pero slice −0,0105 y banco algo menor: no adoptada, no refutada | D39, `lane-dead-v3.md` |
+| Smart Tagging dentro de huecos largos (ronda 2) | cambiar de equipo si las fases lo contradicen | no se activa en el slice y baja el banco: con W1 la mayoría de los huecos largos ya son `D` | D39, `lane-st-gaps.md` |
+| Final de las paradas (`cut`, `kick`, ronda 3) | una reanudación etiquetada corta el tramo de los jugadores | `cut`: slice +0,0105 y banco 0,4474, pero gana 3 de 7 partidos DFL (pedía 6); `kick`: slice −0,0211 | D40, `lane-d-edges.md` |
+| Equipo de los saques sin equipo (ronda 4) | nombrar el equipo de 26 saques de banda y 6 de centro | por la ley, acierto 0,518 en DFL; por posición, 0,925 (pedía 0,95) y cambia 48 frames del partido, ninguno del slice | D41, `lane-restart-team.md` |
+| Fecha juzgada en Metrica (ronda 5) | redatar al toque del nuevo equipo | gana con el balón limpio de Metrica y falla las tres en DFL; dos pierden una posesión del slice (−0,0105, −0,0211) | D42, `lane-m-dating.md` |
+| Recuperar cambios perdidos (ronda 6) | cambiar con un control sostenido o un relevo rápido | `relay` y `relay+settle`: 4,11 / 4,03 posesiones/min, Smart Tagging −4,2 puntos, slice −0,0526; `persist` y `settle` mueven 42 y 16 frames | D43, `lane-m-whether.md` |
 
 ## 7. Limitaciones, y qué haríamos con más tiempo
 
@@ -237,7 +264,7 @@ decidió no tomar ninguna decisión de fusión con evidencia del slice y dejar e
   en el slice (sección 5).
 - **Los bordes de `D`.** Todo el `D` falso de W1 en el slice es desborde en los bordes de paradas
   reales (185 frames de desborde, 152 sin cubrir), y el acierto de equipo en vivo baja de 0,835 a
-  0,814 (`lane-dead-v2.md` §8, §10). El 40,0% ⟨r2⟩ de `D` del partido, con máximo de 65,5% ⟨r2⟩ en
+  0,814 (`lane-dead-v2.md` §8, §10). El 40,0% de `D` del partido, con máximo de 65,5% en
   el bloque 9 (D36), está dentro del rango DFL (40,7–51,7%) pero muy por encima del 19,6% del slice; la
   definición de parada de Metrica podría ser otra, y fuera del slice no se puede comprobar. Siguen
   abiertos: un parpadeo de balón fuera hasta 40 s antes de una falta sin salida real (D31), las 29
@@ -254,14 +281,24 @@ decidió no tomar ninguna decisión de fusión con evidencia del slice y dejar e
   posesiones porque su verdad es más fina que la nuestra, así que es una alarma y no un veredicto
   (`lane-external.md` §2.6); el radio del duelo (1,5 m) es además holgado frente a los 0,5–1 m de la
   literatura (`lane-decode.md` §10).
-- **La fecha de los cambios.** La mejor regla de fecha empareja 6 de 20 transiciones del slice a
-  ±1 s; los errores grandes son cambios equivocados, no mal fechados (`lane-decode.md` §10).
+- **El equipo cerca de un cambio es donde queda el margen, y nuestro balón lo limita.** La
+  auditoría (sección 3) pone ahí casi todo el `spellF1` que falta. Con el balón limpio de Metrica la
+  cadena fecha bien los cambios (mediana +0,04 / +0,16 s) y las reglas de fecha mejoran; con el
+  nuestro, y con el de DFL, un toque temprano es tan a menudo falso como verdadero (D42). Con un
+  balón degradado a nuestra precisión, la propia cadena entregada pasa de 17 a 48–69 cambios
+  sobrantes en Metrica, y las reglas que recuperan cambios con el balón limpio añaden más (D43). El
+  límite es la precisión del balón en el toque, no la regla.
+- **Las verdades externas no tienen la definición del reto.** DFL y los eventos de Metrica dan la
+  posesión a quien toca un balón suelto; el reto, a quien lo controla. Por eso un juez externo puede
+  premiar reglas que añaden cambios y BAR-ATH las rechaza (D37, D43).
 
 Con más tiempo: un detector de balón que generalice entre mitades (el afinado no lo hizo, D38) y,
-si recupera balón en huecos reales, reevaluar la imputación con verdad física (D34); `rule+first-control`, la
-candidata natural para dar el balón tras una parada sin tag (`lane-dead-v2.md` §10); una quietud
-tras gol con tope de 40 s y el modelo de `D` con otra compuerta, cada uno con su propio
-pre-registro (`lane-d.md` §10, `lane-dead-v2.md` §10).
+si recupera balón en huecos reales, reevaluar la imputación con verdad física (D34); una verdad de
+Metrica con la definición del reto (un `RECOVERY` abre posesión solo si su equipo vuelve a jugar el
+balón antes que el rival), el juez que faltó para decidir *si* cambia la posesión (D43). Ya se
+midieron y no entraron: `rule+first-control` y el inicio de las paradas en la deceleración (U1),
+solo y combinado (U3 `onset+first-control` pierde en el slice, D39; `cut+onset` empeora el error de
+inicio en DFL, D40), y el corte de las paradas en la reanudación (D40).
 
 ## 8. Reproducción
 
@@ -297,24 +334,28 @@ python tools/repro.py --against submissions/engine.csv       # = make repro
 ```
 
 Sale con 0 e imprime un único SHA-256 si coinciden; el de la cadena actual empieza por
-`72c98ed4bb4a` ⟨r2⟩ (D36). La cadena vive en Python, no solo en el Makefile, porque `make` no viene
+`72c98ed4bb4a` (D36). La cadena vive en Python, no solo en el Makefile, porque `make` no viene
 en un Windows de serie (D28).
 
-**Tiempo de ejecución.** TODO: no hay una medición publicada de la cadena completa. Lo medido: la
-primera carga del tracking cuesta 3 s y 230 MB por proceso (D14) y las paradas de los jugadores
-añaden unos 15 s por corrida (`lane-dead-v2.md` §9); `make repro` cuesta el doble porque construye
-dos veces (D28).
+**Tiempo de ejecución** (`docs/analysis/runtime.md`, que da los comandos). En un portátil con un
+Intel Core i9-13980HX, 16 GB de RAM, Windows 11 y Python 3.12.3, `make engine` tarda 14 s (13,8 /
+13,8 / 14,1 s en tres corridas, con el mismo SHA-256 las tres) y `make repro`, que construye dos
+veces, 27 s. Por etapas: cargar el tracking y calcular los rasgos 4,1 s, las paradas de los
+jugadores 6,0 s, la decodificación 0,04 s; el resto es el artefacto, el ensamblador y el validador
+oficial.
 
 ## Referencias
 
 - Bassek, M., Rein, R., Weber, H., Memmert, D. (2025). *Scientific Data* 12:195,
   doi:10.1038/s41597-025-04505-y. Datos IDSSE/DFL, CC-BY 4.0; depósito figshare
   doi:10.6084/m9.figshare.28196177 (usamos el espejo `pysport/idsse-data`, `lane-external.md` §1.1).
-- Vidal-Codina, F. et al. (2022): el duelo anula la posesión. TODO: referencia bibliográfica
-  completa (en las fuentes solo aparece citada por autor y año, `lane-decode.md` §2c).
-- Lang, S. et al. (2022): detección de paradas desde el tracking. TODO: referencia bibliográfica
-  completa (`lane-dead-v2.md` §2.2).
-- Kim et al. (2023). TODO: ninguna fuente del repositorio cita este trabajo; falta indicar qué
-  aporta y su referencia completa antes de mantenerlo aquí.
-- Link, D., Hoernig, M. (2017): la posesión de equipo empieza en el primer toque tras el de un
+- Vidal-Codina, F., Evans, N., El Fakir, B., Billingham, J. (2022). Automatic event detection in
+  football using tracking data. *Sports Engineering* 25:18. arXiv:2202.00804. Origen de la regla
+  del duelo: un balón disputado no cambia la posesión (sección 4b, `lane-decode.md` §2c).
+- Lang, S., Wild, R., Isenko, A., Link, D. (2022). Predicting the in-game status in soccer with
+  machine learning using spatiotemporal player tracking data. *Scientific Reports* 12:16291,
+  doi:10.1038/s41598-022-19948-1. Estado vivo/muerto solo desde los jugadores, 92% de acierto por
+  frame; referencia para W1 (sección 4c, `lane-dead-v2.md` §2.2).
+- Link, D., Hoernig, M. (2017). Individual ball possession in soccer. *PLOS ONE* 12(7):e0179953,
+  doi:10.1371/journal.pone.0179953. La posesión de equipo empieza en el primer toque tras el de un
   rival; contexto del carril decode, no usado en la entrega (`lane-decode.md` §2c).

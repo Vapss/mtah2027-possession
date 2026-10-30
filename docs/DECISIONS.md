@@ -1280,8 +1280,8 @@ mantiene** (`72c98ed4bb4a…`). Lo que queda es el instrumento.
   fechado en la primera acción anotada del nuevo equipo). Da 3,65 y 3,35 posesiones/min, dentro de
   la banda de BAR-ATH (3,4 ± 0,5), no las 4,58 de DFL. Por eso, a diferencia de DFL (decisión 37),
   **puede juzgar reglas que cambian el número de posesiones.** Su límite: el balón de esas muestras
-  está sincronizado con los eventos (a 0,06 m del pie en cada uno), mucho más limpio que el nuestro
-  en los toques.
+  está sincronizado con los eventos (mediana de 0,06 m entre el jugador que actúa y el balón; el
+  94,6% y el 96,0% de los eventos a ≤ 2 m), mucho más limpio que el nuestro en los toques.
 - **Calibración: la cadena no llega tarde allí.** Mediana del retraso de los cambios emparejados
   +0,04 s (g1) y +0,16 s (g2), con una cola tardía (p90 +1,4..+2,3 s). El síntoma del slice
   (+1,4 s de mediana) no se reproduce con un balón limpio.
