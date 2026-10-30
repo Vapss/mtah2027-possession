@@ -1,6 +1,8 @@
 """Lane m-whether: WHETHER possession changes in open play, judged on Metrica's open games.
 
     python tools/change_whether.py --anatomy       # STEP 1: what the misses and extras are made of
+    python tools/change_whether.py --explore       # section 5: the rules' grids, Metrica g1 only
+    python tools/change_whether.py --measure       # section 7: g2, DFL, BAR-ATH, slice, bench
 
 Round 5 (`tools/change_dating.py`, lane-m-dating.md) dated the delivered chain's changes against
 the event truth of Metrica's open games (`tools/metrica_open.py`, rules E1-E5) and left a third of
@@ -500,6 +502,142 @@ def metrica_dead_on(game, ev: dead_ball.Evidence) -> np.ndarray:
     return dead_ball_v2.dead_union("rule", ev, kinematic, runs)
 
 
+# -- the variants (pre-registered, lane-m-whether.md section 6) --------------------------------
+#
+# Each one is the delivered chain (control, duel rule, restarts, `D`) with ONE change to whether
+# a change happens; the date of the changes it keeps is the chain's. Constants were fixed on
+# Metrica g1, clean and degraded (section 5), never on BAR-ATH's labels or on g2.
+
+PERSIST_S = 1.0  # V1: a contested control kept this long is a won duel (g1, section 5)
+SETTLE_S = 0.5  # V2: an A -> B -> A whose B lasts less than this is not a possession (g1)
+RELAY_S = 3.0  # V3: the confirming touch of the same team must come this soon (g1)
+PERSIST_GRID = (0.2, 0.4, 0.6, 0.8, 1.0)
+SETTLE_GRID = (0.5, 1.0, 2.0, 3.0)
+RELAY_GRID = (0.5, 1.0, 2.0, 3.0)
+
+
+def sustained(ctrl: np.ndarray, switch: np.ndarray, runs, frames: int) -> np.ndarray:
+    """V1: `switch` plus every run of at least `frames` consecutive control frames of one team
+    (`engine.control`, contested or not): a duel the rival keeps winning that long has been won.
+    The run counts from its first frame, so the change is dated where the control began."""
+    if frames < 1:
+        raise ValueError(f"frames must be at least 1, got {frames}")
+    out = switch.copy()
+    for team in (0, 1):
+        for start, stop in stretches(ctrl == team, runs):
+            if stop - start >= frames:
+                out[start:stop] = team
+    return out
+
+
+def relayed(
+    ctrl: np.ndarray, switch: np.ndarray, f: engine.Features, runs, frames: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """V3: a touch (`touch`: the team nearest within reach, at any speed) on which the other team
+    is beyond reach becomes a control when the next touch of the half, within `frames` of it, is
+    the same team's again: the team touched it twice with nobody else touching it in between.
+    It is accepted at its first uncontested frame; `(ctrl, switch)` with those frames added."""
+    t = touch(f)
+    ctrl, switch = ctrl.copy(), switch.copy()
+    for start, stop in runs:
+        episodes: list[list[int]] = []  # [first, stop, team] of each maximal one-team touch run
+        for i in (np.flatnonzero(t[start:stop] != NONE) + start).tolist():
+            if episodes and episodes[-1][2] == t[i] and episodes[-1][1] == i:
+                episodes[-1][1] = i + 1
+            else:
+                episodes.append([i, i + 1, int(t[i])])
+        for (a0, b0, team), (a1, _b1, nxt) in zip(episodes, episodes[1:]):
+            if nxt != team or a1 - b0 > frames:
+                continue
+            seg = np.arange(a0, b0)
+            other = (f.away_m if team == 0 else f.home_m)[seg]
+            clear = seg[np.nan_to_num(other, nan=-np.inf) > REACH_M]
+            if clear.size:
+                ctrl[clear[0]] = switch[clear[0]] = team
+    return ctrl, switch
+
+
+def settled(
+    state: np.ndarray, runs, forced: dict[int, int], dead: np.ndarray, frames: int
+) -> np.ndarray:
+    """V2: `state` without the natural A -> B -> A whose B lasts less than `frames`, with no
+    stoppage inside it and neither change forced by a restart: B goes back to A. Left to right,
+    so a removed pair never makes a new one."""
+    out = state.copy()
+    changes = cd.state_changes(state, runs)
+    i = 0
+    while i + 1 < len(changes):
+        (c, _new), (back, old) = changes[i], changes[i + 1]
+        same_half = _half(runs, c) == _half(runs, back)
+        if (
+            same_half
+            and old == int(state[c - 1])
+            and back - c < frames
+            and c not in forced
+            and back not in forced
+            and not dead[c:back].any()
+        ):
+            out[c:back] = old
+            i += 2
+        else:
+            i += 1
+    return out
+
+
+VARIANTS = ("persist", "settle", "relay", "relay+settle")
+PRIOR_ORDER = ("persist", "settle", "relay", "relay+settle")  # section 6.4, before measuring
+REFERENCE = "engine"
+
+
+def variant_chain(
+    name: str,
+    f: engine.Features,
+    ev: dead_ball.Evidence,
+    runs: Sequence[tuple[int, int]],
+    dead: np.ndarray,
+    constants: dict[str, float] | None = None,
+) -> cd.Chain:
+    """The delivered chain on these inputs with the variant's rule (`engine`: none). `constants`
+    overrides the pre-registered seconds (`persist`, `settle`, `relay`): the exploration only."""
+    runs = [tuple(r) for r in runs]
+    if name == REFERENCE:
+        return cd.delivered(f, ev, runs, dead)
+    parts = name.split("+")
+    if not set(parts) <= {"persist", "settle", "relay"} or len(set(parts)) != len(parts):
+        raise ValueError(f"unknown variant {name!r}; expected engine or one of {VARIANTS}")
+    seconds = {"persist": PERSIST_S, "settle": SETTLE_S, "relay": RELAY_S, **(constants or {})}
+
+    def frames(key: str) -> int:
+        return int(round(seconds[key] * FPS))
+
+    ctrl, switch, _forced = engine.inputs(f, engine.DEFAULT, ev.restarts)
+    if "persist" in parts:
+        switch = sustained(ctrl, switch, runs, frames("persist"))
+    if "relay" in parts:
+        ctrl, switch = relayed(ctrl, switch, f, runs, frames("relay"))
+    # A restart is cancelled only by a control the decoder accepts (DECISIONS 35): the variant's.
+    forced = engine.restart_controls(ev.restarts, switch)
+    state = engine.decode(ctrl, runs, engine.DEFAULT.dwell, forced, switch)
+    dead = np.asarray(dead, dtype=bool)
+    if "settle" in parts:
+        state = settled(state, runs, forced, dead, frames("settle"))
+    return cd.Chain(ctrl, switch, forced, state, dead)
+
+
+def _bar_ath(name: str):
+    def method(f: engine.Features, ev: dead_ball.Evidence) -> np.ndarray:
+        chain = variant_chain(name, f, ev, engine.halves(), engine.delivered_dead(ev))
+        return cd.finish(chain.state, chain.dead)
+
+    method.__name__ = f"m_whether_{name.replace('+', '_')}"
+    return method
+
+
+# bench-style `(features, evidence) -> labels` on BAR-ATH's halves, the reference first; the
+# reference is the delivered file byte for byte (`tests/test_change_whether.py`).
+METHODS = {REFERENCE: _bar_ath(REFERENCE), **{name: _bar_ath(name) for name in VARIANTS}}
+
+
 # -- the report --------------------------------------------------------------------------------
 
 
@@ -790,14 +928,425 @@ def _only(state: np.ndarray, runs) -> np.ndarray:
     return out
 
 
+def spell_f1(truth_labels: np.ndarray, labels: np.ndarray) -> float:
+    """The official spellF1 of `labels` against a per-frame truth (`H`/`A`/`D`/`X`), graded where
+    the truth is not `X`, abstentions filled as the scorer fills them (`bench.spell_f1`)."""
+    from tools import bench
+
+    gt = bench.pm.label_codes(list(truth_labels))
+    return bench.spell_f1(gt, np.asarray(labels, dtype=object), bench.pm.valid_runs(gt))
+
+
+@dataclass(frozen=True)
+class Scored:
+    fair: Fair
+    spell_f1: float
+
+
+def score_metrica(game, truth: Truth, chain: cd.Chain, runs) -> Scored:
+    labels = cd.finish(chain.state, chain.dead)
+    pred = cd.state_changes(chain.state, runs)
+    return Scored(fair(truth, pred), spell_f1(game.truth.labels(), labels))
+
+
+# The rule that fixes each constant on g1 (section 5, declared before running it): the grid value
+# with the fewest missed + spurious changes summed over g1 clean and g1 degraded; on a tie, the one
+# that changes the chain least (the longest persistence, the shortest settle and relay windows).
+CONSERVATIVE = {"persist": max, "settle": min, "relay": min}
+GRIDS = {"persist": PERSIST_GRID, "settle": SETTLE_GRID, "relay": RELAY_GRID}
+
+
+def choose(errors: dict[float, int], key: str) -> float:
+    best = min(errors.values())
+    return CONSERVATIVE[key](v for v, e in errors.items() if e == best)
+
+
+def _g1_conditions(game) -> dict:
+    """g1 clean and degraded (noise and our ball-presence pattern), as `(f, ev, dead)`."""
+    from tools import external
+
+    runs = [tuple(r) for r in game.runs]
+    f, ev = degraded(game, external.our_ball_halves(), NOISE_SIGMA_M)
+    return {
+        "limpio": (game.features, game.evidence, cd.metrica_dead(game)),
+        "degradado": (f, ev, metrica_dead_on(game, ev)),
+    }, runs
+
+
+def explore() -> str:
+    """Section 5: every grid value of every rule on Metrica g1, clean and degraded, the precision
+    of the evidence each rule adds there, and the constants the declared rule fixes. g2 is not
+    loaded."""
+    from tools import metrica_open
+
+    game = metrica_open.load("g1")
+    truth = metrica_truth(game)
+    conditions, runs = _g1_conditions(game)
+    owner = np.where(truth.dead, NONE, truth.team).astype(np.int8)
+    head = (
+        "| regla | constante s | condición | cambios cadena | perdidos | sobrantes "
+        "| perdidos + sobrantes | spellF1 (eventos) |"
+    )
+    lines = [
+        "Exploración en Metrica g1, limpio y degradado (g2 no se carga).",
+        "",
+        head,
+        "|---|---:|---|---:|---:|---:|---:|---:|",
+    ]
+
+    def row(rule: str, value: str, cond: str, s: Scored) -> str:
+        r = s.fair
+        return (
+            f"| {rule} | {value} | {cond} | {r.chain} | {len(r.missed)} | {len(r.spurious)} "
+            f"| {len(r.missed) + len(r.spurious)} | {_abs(s.spell_f1, 4)} |"
+        )
+
+    for cond, (f, ev, dead) in conditions.items():
+        s = score_metrica(game, truth, variant_chain(REFERENCE, f, ev, runs, dead), runs)
+        lines.append(row("`engine`", "—", cond, s))
+    chosen = {}
+    for key, grid in GRIDS.items():
+        errors = {}
+        for value in grid:
+            total = 0
+            for cond, (f, ev, dead) in conditions.items():
+                chain = variant_chain(key, f, ev, runs, dead, {key: value})
+                s = score_metrica(game, truth, chain, runs)
+                total += len(s.fair.missed) + len(s.fair.spurious)
+                lines.append(row(f"`{key}`", _abs(value, 1), cond, s))
+            errors[value] = total
+        chosen[key] = choose(errors, key)
+    # V4 combines the two rules chosen alone, with their own constants: no joint tuning.
+    for cond, (f, ev, dead) in conditions.items():
+        chain = variant_chain("relay+settle", f, ev, runs, dead, chosen)
+        value = f"{_abs(chosen['relay'], 1)} + {_abs(chosen['settle'], 1)}"
+        lines.append(row("`relay+settle`", value, cond, score_metrica(game, truth, chain, runs)))
+    lines += ["", "Precisión de la evidencia que añade cada regla en g1 limpio:", ""]
+    lines += [
+        "| evidencia | n | la verdad dice el equipo nuevo al final |",
+        "|---|---:|---:|",
+    ]
+    f, ev, dead = conditions["limpio"]
+    base = cd.delivered(f, ev, runs, dead)
+    rival = rival_of(base.state)
+    for value in PERSIST_GRID:
+        spans = [(a, b) for a, b in stretches(vetoed(base), runs) if b - a >= round(value * FPS)]
+        hit = [owner[b - 1] == rival[a] for a, b in spans]
+        lines.append(
+            f"| tramo vetado ≥ {_abs(value, 1)} s | {len(spans)} "
+            f"| {_pct(float(np.mean(hit))) if hit else '—'} |"
+        )
+    for value in RELAY_GRID:
+        ctrl, switch = relayed(base.ctrl, base.switch, f, runs, int(round(value * FPS)))
+        added = np.flatnonzero((switch != base.switch) & (switch == rival))
+        # The event is logged at the touch, give or take a frame or two: half a second of slack.
+        hit = [bool((owner[i : i + FPS // 2 + 1] == rival[i]).any()) for i in added]
+        lines.append(
+            f"| toque confirmado del rival a ≤ {_abs(value, 1)} s | {len(added)} "
+            f"| {_pct(float(np.mean(hit))) if hit else '—'} |"
+        )
+    lines += [
+        "",
+        "Constantes que fija la regla declarada: "
+        + ", ".join(f"`{k}` {_abs(v, 1)} s" for k, v in chosen.items())
+        + ".",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+# -- the measurements, the gates, the choice (section 6) ---------------------------------------
+
+BALLS = ("limpio", "degradado")
+
+
+def metrica_measure(names: Sequence[str]) -> dict[str, dict[str, dict[str, Scored]]]:
+    """`{game: {ball: {variant: Scored}}}` on the held-out g2 and, for information, g1."""
+    from tools import external, metrica_open
+
+    donors = external.our_ball_halves()
+    out: dict[str, dict[str, dict[str, Scored]]] = {}
+    for gname in ("g2", "g1"):
+        game = metrica_open.load(gname)
+        truth = metrica_truth(game)
+        runs = [tuple(r) for r in game.runs]
+        f, ev = degraded(game, donors, NOISE_SIGMA_M)
+        inputs = {
+            "limpio": (game.features, game.evidence, cd.metrica_dead(game)),
+            "degradado": (f, ev, metrica_dead_on(game, ev)),
+        }
+        out[gname] = {
+            ball: {
+                n: score_metrica(game, truth, variant_chain(n, fb, evb, runs, dead), runs)
+                for n in names
+            }
+            for ball, (fb, evb, dead) in inputs.items()
+        }
+    return out
+
+
+def dfl_measure(names: Sequence[str]) -> dict[str, dict[str, dict[str, float]]]:
+    """`{ball: {variant: {match: spellF1}}}` on the seven DFL matches against their per-frame
+    truth: the delivered chain with the events' set pieces as restarts and the delivered `D`
+    (`change_dating.dfl_inputs`); "con nuestro balón" lays our ball-presence pattern over each."""
+    from tools import bench, dead_ball_v2, external
+
+    donors = external.our_ball_halves()
+    out: dict[str, dict[str, dict[str, float]]] = {
+        "limpio": {n: {} for n in names},
+        "con nuestro balón": {n: {} for n in names},
+    }
+    for match_id in external.MATCHES:
+        game = cd.dfl_load(match_id)
+        f, ev, runs, dead = cd.dfl_inputs(game)
+        n_frames = len(f.present)
+        f2, ev2 = bench.degrade(f, ev, (0, n_frames), external.keep_mask(game.match, donors))
+        kinematic = dead_ball_v2.kinematic_mask(game.players_m, game.pitch, runs, "rule")
+        dead2 = dead_ball_v2.dead_union("rule", ev2, kinematic, runs)
+        for ball, (fb, evb, db) in {
+            "limpio": (f, ev, dead),
+            "con nuestro balón": (f2, ev2, dead2),
+        }.items():
+            for n in names:
+                chain = variant_chain(n, fb, evb, runs, db)
+                labels = cd.finish(chain.state, chain.dead)
+                out[ball][n][match_id] = spell_f1(game.match.truth, labels)
+    return out
+
+
+LOW_BALL_BLOCKS = cd.LOW_BALL_BLOCKS
+RATE_BAND = cd.RATE_BAND
+MAX_BLOCK_DEAD = cd.MAX_BLOCK_DEAD
+ST_DROP = cd.ST_DROP
+BLOCK_RATIO = (0.5, 2.0)  # a block's possessions/min halved or doubled against the reference
+
+
+def bar_ath_measure(names: Sequence[str]) -> dict[str, dict]:
+    """BAR-ATH without ground truth (Smart Tagging, the block report), the public slice paired
+    against the first name (the reference) and the bench."""
+    from tools import bench, compare_submissions
+    from tools import blocks as bl
+    from tools import smart_tagging as st
+
+    pm = bench.pm
+    f, ev, gt, cut = bench.load()
+    votes = st.possession_votes(st.load())
+    runs = [(start, stop) for _half, start, stop in bl.halves()]
+    base_codes, base_labels, base_rates = None, None, None
+    out = {}
+    for name in names:
+        labels = METHODS[name](f, ev)
+        chain = variant_chain(name, f, ev, engine.halves(), engine.delivered_dead(ev))
+        codes = pm.label_codes(list(labels))
+        rows = bl.measure(list(labels), f.present, votes, cut, runs)
+        per_block, whole = rows[:-1], rows[-1]
+        rates = np.array([r.rate for r in per_block])
+        if base_codes is None:
+            base_codes, base_labels, base_rates = codes, labels, rates
+        result = pm.evaluate(gt, codes)
+        paired = compare_submissions.compare_codes(gt, base_codes, codes)
+        sign = paired["sign_diagnostic"]
+        summary = bench.summary(bench.bench(METHODS[name], f, ev, gt, cut))
+        ratio = rates / np.where(base_rates > 0, base_rates, np.nan)
+        out[name] = {
+            "spell_f1": result["spell_f1_mean"],
+            "macro_f1": result["macro_f1"],
+            "delta": paired["delta_mean_spell_f1_b_minus_a"],
+            "wins_a": sign["wins_a"],
+            "wins_b": sign["wins_b"],
+            "jackknife": paired["jackknife"]["mean_delta_range"],
+            "bench_mean": summary["mean"],
+            "bench_low": summary["low_mean"],
+            "bench_min": summary["min"],
+            "rate": whole.rate,
+            "min_block_rate": float(rates.min()),
+            "max_block_rate": float(rates.max()),
+            "block_ratio": (float(np.nanmin(ratio)), float(np.nanmax(ratio))),
+            "empty_blocks": int((rates == 0).sum()),
+            "max_block_dead": max(r.dead for r in per_block),
+            "longest": whole.longest,
+            "max_block_longest": max(r.longest for r in per_block),
+            "st": whole.st_agree,
+            "st_low": float(np.mean([per_block[i - 1].st_agree for i in LOW_BALL_BLOCKS])),
+            "dead": whole.dead,
+            "moved_frames": int((labels != base_labels).sum()),
+            "changes": len(cd.state_changes(chain.state, engine.halves())),
+        }
+    return out
+
+
+Gate = cd.Gate
+
+
+def _errors(s: Scored) -> int:
+    return len(s.fair.missed) + len(s.fair.spurious)
+
+
+def gates(metrica: dict, bar: dict, name: str) -> list[Gate]:
+    """The pre-registered gates of section 6.3, for `name` against the reference. DFL is
+    reported, not gated (DECISIONS 37)."""
+    ref = REFERENCE
+    out = []
+    for ball in BALLS:
+        a, b = metrica["g2"][ball][ref], metrica["g2"][ball][name]
+        ok = b.spell_f1 > a.spell_f1 and _errors(b) < _errors(a)
+        out.append(
+            Gate(
+                f"Metrica g2 {ball}",
+                bool(ok),
+                f"spellF1 {_abs(a.spell_f1, 4)} → {_abs(b.spell_f1, 4)}; perdidos + sobrantes "
+                f"{_errors(a)} → {_errors(b)}",
+            )
+        )
+    a, b = bar[ref], bar[name]
+    lo, hi = b["block_ratio"]
+    ok = (
+        RATE_BAND[0] <= b["rate"] <= RATE_BAND[1]
+        and BLOCK_RATIO[0] < lo
+        and hi < BLOCK_RATIO[1]
+        and b["st"] >= a["st"] - ST_DROP
+        and b["max_block_dead"] <= MAX_BLOCK_DEAD
+    )
+    out.append(
+        Gate(
+            "BAR-ATH sin GT",
+            bool(ok),
+            f"{_abs(a['rate'])} → {_abs(b['rate'])} pos/min; bloque frente a la referencia "
+            f"×{_abs(lo)} .. ×{_abs(hi)}; ST {_pct(a['st'])} → {_pct(b['st'])}; %D máx. por "
+            f"bloque {_pct(b['max_block_dead'])}",
+        )
+    )
+    ok = b["delta"] >= 0 and b["wins_a"] <= b["wins_b"]
+    out.append(
+        Gate(
+            "slice público (pareado)",
+            bool(ok),
+            f"Δ {_dec(b['delta'], 4)}; wins ref–var {b['wins_a']}–{b['wins_b']}",
+        )
+    )
+    ok = b["bench_mean"] >= a["bench_mean"] and b["bench_low"] >= a["bench_low"]
+    out.append(
+        Gate(
+            "banco",
+            bool(ok),
+            f"media {_abs(a['bench_mean'], 4)} → {_abs(b['bench_mean'], 4)}; "
+            f"poco balón {_abs(a['bench_low'], 4)} → {_abs(b['bench_low'], 4)}",
+        )
+    )
+    return out
+
+
+def select(passed: dict[str, list[Gate]]) -> str | None:
+    """The first variant of `PRIOR_ORDER` passing every gate; `None` keeps the delivered chain."""
+    ok = {name for name, g in passed.items() if all(x.passed for x in g)}
+    return next((name for name in PRIOR_ORDER if name in ok), None)
+
+
+def dfl_wins(dfl: dict, ball: str, name: str) -> tuple[int, int, int]:
+    """`(wins, ties, losses)` of `name` against the reference over the seven DFL matches."""
+    a, b = dfl[ball][REFERENCE], dfl[ball][name]
+    diff = [b[m] - a[m] for m in a]
+    return (
+        sum(d > 1e-12 for d in diff),
+        sum(abs(d) <= 1e-12 for d in diff),
+        sum(d < -1e-12 for d in diff),
+    )
+
+
+def measure_report() -> str:
+    """Every number of section 6.2 in its order, the gates and the choice; pasted unedited."""
+    names = (REFERENCE, *VARIANTS)
+    metrica = metrica_measure(names)
+    dfl = dfl_measure(names)
+    bar = bar_ath_measure(names)
+    lines = ["### Metrica (g2 reservado; g1, donde se fijaron las constantes, informativo)", ""]
+    head = (
+        "| variante | balón | cambios cadena | emparejados | perdidos en juego | sobrantes "
+        "| perdidos + sobrantes | mediana \\|·\\| s (en juego) | spellF1 (eventos) |"
+    )
+    for gname in ("g2", "g1"):
+        lines += [f"**{gname}**", "", head, "|---|---|---:|---:|---:|---:|---:|---:|---:|"]
+        for ball in BALLS:
+            for n in names:
+                s = metrica[gname][ball][n]
+                r = s.fair
+                lines.append(
+                    f"| `{n}` | {ball} | {r.chain} | {r.matched} | {len(r.missed)} "
+                    f"| {len(r.spurious)} | {_errors(s)} | {_abs(r.lag['median_abs'])} "
+                    f"| {_abs(s.spell_f1, 4)} |"
+                )
+        lines.append("")
+    lines += ["### DFL (secundario, decisión 37: se reporta, no veta un cambio de número)", ""]
+    matches = list(dfl["limpio"][REFERENCE])
+    for ball in dfl:
+        lines += [
+            f"**{ball}**",
+            "",
+            "| variante | " + " | ".join(matches) + " | media | gana / empata / pierde |",
+            "|---|" + "---:|" * (len(matches) + 2),
+        ]
+        for n in names:
+            v = dfl[ball][n]
+            w = "—" if n == REFERENCE else "{} / {} / {}".format(*dfl_wins(dfl, ball, n))
+            cells = " | ".join(_abs(v[m], 4) for m in matches)
+            lines.append(f"| `{n}` | {cells} | {_abs(float(np.mean(list(v.values()))), 4)} | {w} |")
+        lines.append("")
+    lines += [
+        "### BAR-ATH: sin GT (informe por bloques, Smart Tagging), slice público y banco",
+        "",
+        "| variante | frames movidos | cambios | pos/min | bloque mín–máx | bloque / ref. "
+        "| posesión más larga (partido / bloque máx.) | %D máx. bloque | ST partido "
+        "| ST bloques 7/9/11/18 | spellF1 | macroF1 | Δ | wins ref–var | jackknife Δ "
+        "| banco media | poco balón | peor |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for n in names:
+        b = bar[n]
+        jack = " .. ".join(_dec(v, 4) for v in b["jackknife"])
+        lo, hi = b["block_ratio"]
+        lines.append(
+            f"| `{n}` | {b['moved_frames']} | {b['changes']} | {_abs(b['rate'])} "
+            f"| {_abs(b['min_block_rate'])}–{_abs(b['max_block_rate'])} "
+            f"| ×{_abs(lo)} .. ×{_abs(hi)} | {_pct(b['longest'])} / {_pct(b['max_block_longest'])} "
+            f"| {_pct(b['max_block_dead'])} | {_pct(b['st'])} | {_pct(b['st_low'])} "
+            f"| {_abs(b['spell_f1'], 4)} | {_abs(b['macro_f1'], 4)} | {_dec(b['delta'], 4)} "
+            f"| {b['wins_a']}–{b['wins_b']} | {jack} | {_abs(b['bench_mean'], 4)} "
+            f"| {_abs(b['bench_low'], 4)} | {_abs(b['bench_min'], 4)} |"
+        )
+    passed = {n: gates(metrica, bar, n) for n in VARIANTS}
+    lines += ["", "### Compuertas (frente a `engine`)", ""]
+    heads = [g.name for g in passed[VARIANTS[0]]]
+    lines += ["| variante | " + " | ".join(heads) + " |", "|---|" + "---|" * len(heads)]
+    for n in VARIANTS:
+        cells = " | ".join(
+            ("pasa" if g.passed else "**falla**") + f" ({g.detail})" for g in passed[n]
+        )
+        lines.append(f"| `{n}` | {cells} |")
+    choice = select(passed)
+    lines += [
+        "",
+        "Elección por la regla (orden previo "
+        + " > ".join(f"`{n}`" for n in PRIOR_ORDER)
+        + "): "
+        + (f"**`{choice}`**." if choice else "**ninguna; se mantiene la cadena entregada**."),
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Lane m-whether: whether possession changes")
     parser.add_argument("--anatomy", action="store_true", help="STEP 1: g1, BAR-ATH, the slice")
+    parser.add_argument("--explore", action="store_true", help="section 5: g1 only, the grids")
+    parser.add_argument("--measure", action="store_true", help="section 7: every gate, the choice")
     args = parser.parse_args(argv)
-    if not args.anatomy:
-        parser.error("say --anatomy")
+    if not (args.anatomy or args.explore or args.measure):
+        parser.error("say --anatomy, --explore or --measure")
     try:
-        text = anatomy_report()
+        if args.measure:
+            text = measure_report()
+        elif args.explore:
+            text = explore()
+        else:
+            text = anatomy_report()
     except (OSError, ValueError) as problem:
         print(f"change whether failed: {problem}", file=sys.stderr)
         return 1

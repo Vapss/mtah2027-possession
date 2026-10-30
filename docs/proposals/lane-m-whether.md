@@ -284,3 +284,166 @@ se parece a g1 degradado (dominan los sobrantes), no a g1 limpio. Se reporta; no
    el degradado. La compuerta exige las dos.
 4. El veto del duelo es una categoría pequeña (14) de tramos cortos; levantarlo entero cuesta más
    de lo que da. Solo un veto **sostenido** es candidato.
+
+---
+
+*Lo que sigue es el pre-registro (commit 2), escrito antes de medir ninguna variante en g2, en DFL,
+en BAR-ATH, en el slice ni en el banco. Las secciones 1–4 no cambian.*
+
+## 5. Exploración en g1 (declarada; g2 no se carga)
+
+**Qué se miró antes de escribir las reglas.** La anatomía (secciones 3 y 4) y, durante ella, dos
+prototipos en g1 limpio fuera del repositorio: un veto sostenido y un "dos toques del mismo equipo",
+con números del mismo orden que los de la tabla de abajo. Nada de g2, DFL, BAR-ATH, el slice ni el
+banco se midió con ninguna regla.
+
+**Cómo se fija cada constante (escrito en el código, `choose`, antes de correr la rejilla).** En
+cada rejilla se toma el valor con **menos perdidos + sobrantes sumados en g1 limpio y g1
+degradado** (instrumento corregido); en un empate, el que menos cambia la cadena (la persistencia
+más larga, las ventanas de `settle` y `relay` más cortas). La V4 combina las dos reglas con las
+constantes que cada una tiene sola: sin ajuste conjunto.
+
+Salida sin editar de `python tools/change_whether.py --explore`:
+
+Exploración en Metrica g1, limpio y degradado (g2 no se carga).
+
+| regla | constante s | condición | cambios cadena | perdidos | sobrantes | perdidos + sobrantes | spellF1 (eventos) |
+|---|---:|---|---:|---:|---:|---:|---:|
+| `engine` | — | limpio | 236 | 84 | 17 | 101 | 0,6812 |
+| `engine` | — | degradado | 205 | 135 | 48 | 183 | 0,4743 |
+| `persist` | 0,2 | limpio | 254 | 78 | 29 | 107 | 0,6968 |
+| `persist` | 0,2 | degradado | 255 | 128 | 91 | 219 | 0,4424 |
+| `persist` | 0,4 | limpio | 240 | 82 | 19 | 101 | 0,6992 |
+| `persist` | 0,4 | degradado | 227 | 131 | 66 | 197 | 0,4587 |
+| `persist` | 0,6 | limpio | 238 | 82 | 17 | 99 | 0,6964 |
+| `persist` | 0,6 | degradado | 215 | 133 | 57 | 190 | 0,4571 |
+| `persist` | 0,8 | limpio | 238 | 82 | 17 | 99 | 0,6958 |
+| `persist` | 0,8 | degradado | 211 | 132 | 51 | 183 | 0,4679 |
+| `persist` | 1,0 | limpio | 238 | 82 | 17 | 99 | 0,6958 |
+| `persist` | 1,0 | degradado | 209 | 133 | 50 | 183 | 0,4733 |
+| `settle` | 0,5 | limpio | 226 | 88 | 11 | 99 | 0,6812 |
+| `settle` | 0,5 | degradado | 199 | 139 | 47 | 186 | 0,4743 |
+| `settle` | 1,0 | limpio | 218 | 94 | 9 | 103 | 0,6790 |
+| `settle` | 1,0 | degradado | 187 | 145 | 41 | 186 | 0,4705 |
+| `settle` | 2,0 | limpio | 196 | 114 | 7 | 121 | 0,6477 |
+| `settle` | 2,0 | degradado | 169 | 157 | 35 | 192 | 0,4547 |
+| `settle` | 3,0 | limpio | 180 | 130 | 7 | 137 | 0,6102 |
+| `settle` | 3,0 | degradado | 157 | 165 | 31 | 196 | 0,4481 |
+| `relay` | 0,5 | limpio | 270 | 66 | 29 | 95 | 0,6766 |
+| `relay` | 0,5 | degradado | 226 | 122 | 56 | 178 | 0,4805 |
+| `relay` | 1,0 | limpio | 276 | 63 | 35 | 98 | 0,6591 |
+| `relay` | 1,0 | degradado | 236 | 115 | 58 | 173 | 0,4769 |
+| `relay` | 2,0 | limpio | 290 | 57 | 42 | 99 | 0,6476 |
+| `relay` | 2,0 | degradado | 246 | 109 | 59 | 168 | 0,4761 |
+| `relay` | 3,0 | limpio | 290 | 56 | 41 | 97 | 0,6418 |
+| `relay` | 3,0 | degradado | 246 | 107 | 57 | 164 | 0,4796 |
+| `relay+settle` | 3,0 + 0,5 | limpio | 278 | 60 | 33 | 93 | 0,6455 |
+| `relay+settle` | 3,0 + 0,5 | degradado | 238 | 113 | 56 | 169 | 0,4769 |
+
+Precisión de la evidencia que añade cada regla en g1 limpio:
+
+| evidencia | n | la verdad dice el equipo nuevo al final |
+|---|---:|---:|
+| tramo vetado ≥ 0,2 s | 25 | 76,0% |
+| tramo vetado ≥ 0,4 s | 10 | 100,0% |
+| tramo vetado ≥ 0,6 s | 7 | 100,0% |
+| tramo vetado ≥ 0,8 s | 7 | 100,0% |
+| tramo vetado ≥ 1,0 s | 5 | 100,0% |
+| toque confirmado del rival a ≤ 0,5 s | 102 | 70,6% |
+| toque confirmado del rival a ≤ 1,0 s | 168 | 63,1% |
+| toque confirmado del rival a ≤ 2,0 s | 222 | 62,6% |
+| toque confirmado del rival a ≤ 3,0 s | 233 | 62,7% |
+
+Constantes que fija la regla declarada: `persist` 1,0 s, `settle` 0,5 s, `relay` 3,0 s.
+
+**Lo que dice (g1, donde se fijaron las constantes).**
+
+- **El veto sostenido es preciso pero raro.** Los tramos vetados de ≥ 0,4 s son un cambio en la
+  verdad el 100% de las veces (10 de 10), pero los de ≥ 0,2 s solo el 76%. Con el balón ruidoso,
+  aceptar duelos cuesta: por debajo de 0,8 s los sobrantes del degradado suben de 48 a 57–91 (a 0,8
+  y 1,0 s, a 51 y 50).
+  La regla elige 1,0 s: 2 perdidos menos en limpio (84 → 82), los mismos errores en el degradado.
+- **`settle` cambia errores de sitio, no el `spellF1`.** Quitar idas y vueltas < 0,5 s baja los
+  sobrantes (17 → 11, 48 → 47) y sube los perdidos (84 → 88): las posesiones de < 0,5 s que quita son
+  verdaderas casi tantas veces como falsas. El `spellF1` contra los eventos no se mueve (0,6812 y
+  0,4743, iguales a la referencia): a IoU 0,5 una posesión de medio segundo casi nunca empareja.
+- **`relay` recupera perdidos con un toque confirmado del 63–71% de precisión** (frente al 39% del
+  toque rápido solo, sección 4.4) y es la que más baja los errores: 101 → 97 en limpio, 183 → 164 en
+  el degradado con 3 s. Pero **añade cambios** (236 → 290 en g1 limpio, +23%) y **baja el `spellF1`
+  limpio** (0,6812 → 0,6418), mientras sube el degradado (0,4743 → 0,4796): los cambios que recupera
+  parten posesiones largas que la cadena ya emparejaba.
+- **Ninguna regla sube el `spellF1` en limpio y en degradado a la vez en g1**: `persist` sube el
+  limpio (0,6958) y baja el degradado (0,4733); `relay` y `relay+settle`, al revés; `settle` empata
+  en los dos. Es la tensión de la sección 4.3: un balón limpio pide más cambios y uno ruidoso pide
+  menos. **Predicción declarada antes de medir: el carril es probablemente negativo**, porque la
+  compuerta M (abajo) exige las dos cosas en g2.
+
+## 6. Pre-registro
+
+### 6.1 Variantes (cuatro, ni una más)
+
+Todas son la cadena entregada (control, regla del duelo, reanudaciones forzadas con la cancelación
+de la decisión 35 por los controles que la variante acepta, el `D` entregado) con **un** cambio en
+*si* hay cambio. La fecha de los cambios que conservan es la de la cadena.
+
+| | nombre | regla | constante (g1, sección 5) | categoría que ataca |
+|---|---|---|---|---|
+| V1 | `persist` | un tramo de ≥ `PERSIST_S` frames seguidos de control de un equipo (`engine.control`, con o sin disputa) se acepta entero: un duelo que el rival sigue ganando tanto tiempo está ganado; el cambio se fecha al inicio del tramo | `PERSIST_S` = 1,0 s | veto del duelo (y sus reflejos) |
+| V2 | `settle` | se borra todo A → B → A natural cuya B dure < `SETTLE_S`, sin parada dentro y sin que ninguno de los dos cambios lo fuerce una reanudación (B vuelve a A); de izquierda a derecha, un par borrado no crea otro | `SETTLE_S` = 0,5 s | ida y vuelta (sobrantes con el balón ruidoso) |
+| V3 | `relay` | un toque (el equipo más cercano a ≤ 1,5 m, a cualquier velocidad, en el campo) con el otro equipo fuera de alcance se vuelve control si el **siguiente** toque de la mitad, a ≤ `RELAY_S` del final de este, es del mismo equipo: tocó dos veces sin que nadie más tocara entre medias; se acepta en su primer frame sin disputa | `RELAY_S` = 3,0 s | toque rápido (y sus reflejos) |
+| V4 | `relay+settle` | V3 y luego V2, con sus constantes | 3,0 s + 0,5 s | los dos lados a la vez |
+| ref | `engine` | ninguna: la cadena entregada, byte a byte (`72c98ed4bb4a…`, fijado por un test) | — | — |
+
+Con constantes neutras (`persist` infinito, `settle` y `relay` 0) cada variante es la referencia
+frame a frame (test). Ninguna mueve un frame `D`; `settle` solo quita cambios.
+
+**Conocimiento previo, declarado.** Los números de g1 de la sección 5, y con ellos la predicción
+de que ninguna pasa M. Además, sin medirlo: `relay` añade un 23% de cambios en g1 y la cadena ya
+está en 3,62 posesiones/min en BAR-ATH, con la banda en 3,9; si en BAR-ATH añade lo mismo, se sale.
+`persist` a 1,0 s afectará a muy pocos tramos en BAR-ATH (la anatomía cuenta 2 vetos de ≥ 1 s en el
+partido).
+
+### 6.2 Mediciones, en este orden (`python tools/change_whether.py --measure`)
+
+1. **Metrica g2 (reservado), limpio y degradado** (σ = 0,85 m, semilla 2, nuestro balón visto): por
+   variante, cambios de la cadena, emparejados, perdidos en juego, sobrantes y su suma (instrumento
+   corregido), la mediana de |retraso| de los emparejados en juego y el `spellF1` oficial contra la
+   verdad de eventos (`H`/`A`/`D` de E1–E5, graduado donde no es `X`). g1, informativo.
+2. **DFL** (secundario): `spellF1` oficial de cada variante contra la verdad por frame de los 7
+   partidos (la cadena con las reanudaciones de los eventos y el `D` entregado, como
+   `change_dating.dfl_inputs`), limpio y con nuestro balón visto (`external.keep_mask`); victorias,
+   empates y derrotas frente a `engine` sobre 7. **Se reporta, no es compuerta** (decisión 37: DFL
+   cuenta 4,58 posesiones/min y no puede vetar sola un cambio de número). Una variante que pierda
+   ≥ 6 de 7 con los dos balones necesita una explicación escrita en la sección 8.
+3. **BAR-ATH sin GT**: informe por bloques (posesiones/min del partido, mín–máx por bloque y la
+   razón de cada bloque frente a la referencia), la posesión más larga (partido y bloque máximo),
+   `%D` máximo por bloque, acuerdo con el Smart Tagging (partido y bloques 7/9/11/18), frames
+   movidos y cambios.
+4. **Slice público**, pareado con `compare_submissions.compare_codes` frente a `engine`: `spellF1`,
+   `macroF1`, Δ, `wins` a IoU 0,5, jackknife.
+5. **Banco de trasplante**: media de los donantes, media con < 50% de balón, peor donante.
+
+### 6.3 Compuertas (todas obligatorias, frente a `engine`)
+
+| | compuerta |
+|---|---|
+| M | **Metrica g2 reservado, limpio Y degradado:** `spellF1` contra la verdad de eventos **estrictamente mayor** y perdidos + sobrantes (instrumento corregido) **estrictamente menos**, en los dos balones. Un empate falla. |
+| B | **BAR-ATH sin GT:** posesiones/min del partido en 3,4 ± 0,5 (2,9 .. 3,9); ningún bloque con sus posesiones/min a la mitad o al doble de las de la referencia (razón estrictamente dentro de (0,5; 2)); acuerdo con el Smart Tagging del partido no más de 1,0 punto por debajo; ningún bloque con > 70% de `D`. |
+| P | **Slice público:** Δ pareado ≥ 0 y `wins_a` ≤ `wins_b`. |
+| C | **Banco:** media de donantes y media con poco balón, ambas no más bajas. |
+
+DFL (6.2.2) se reporta junto a las compuertas sin serlo.
+
+### 6.4 Regla de selección
+
+**Orden previo, escrito antes de medir: V1 `persist` > V2 `settle` > V3 `relay` > V4
+`relay+settle`.** V1 toca solo la regla del duelo, la que más ganó en la historia de la cadena, en
+su caso más claro (un duelo largo) y con una constante física; V2 no añade ningún cambio, solo
+quita, así que no puede inflar la escala; V3 añade evidencia nueva (el toque a cualquier velocidad)
+que es ruidosa en el toque, justo lo que la ronda 5 encontró frágil; V4 son dos reglas y dos
+constantes. Se elige **la primera de ese orden que pase las cuatro compuertas**; las diferencias de
+`spellF1` entre variantes que pasan no reordenan nada. Si ninguna pasa, el resultado es **negativo
+y se mantiene la cadena entregada**, con qué compuerta falla y por cuánto.
+
+Todo sale de `python tools/change_whether.py --measure` y se pega sin editar en la sección 7, que se
+añade en el commit 3 sin tocar lo anterior.

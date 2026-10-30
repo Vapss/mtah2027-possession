@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+from _bundle import requires_bundle
 
 from tools import change_dating as cd
 from tools import change_whether as cw
@@ -327,3 +328,193 @@ def test_the_dead_ball_on_a_degraded_game_is_the_delivered_union(tmp_path) -> No
     assert np.array_equal(cw.metrica_dead_on(game, game.evidence), expected)
     ev = dead_ball.Evidence((), np.zeros(40, bool), np.ones(40, bool), np.zeros(40, bool))
     assert cw.metrica_dead_on(game, ev).shape == (40,)
+
+
+# -- the variants (pre-registered) -------------------------------------------------------------
+
+
+def test_a_contested_control_kept_long_enough_becomes_a_switch() -> None:
+    ctrl = np.array([N, A, A, A, N, A, A, N, H, H, H], dtype=np.int8)
+    switch = np.full(11, N, dtype=np.int8)
+    out = cw.sustained(ctrl, switch, [(0, 11)], 3)
+    assert out.tolist() == [N, A, A, A, N, N, N, N, H, H, H]
+    assert cw.sustained(ctrl, switch, [(0, 2), (2, 11)], 3).tolist()[1:4] == [N, N, N]  # halves
+    with pytest.raises(ValueError, match="frames"):
+        cw.sustained(ctrl, switch, [(0, 11)], 0)
+
+
+def test_a_relay_is_two_touches_of_one_team_with_nobody_between() -> None:
+    far = 9.0
+    #        0    1    2    3    4    5    6    7    8    9
+    home = [far, far, far, far, far, far, 0.5, far, far, far]
+    away = [far, 0.5, 0.6, far, 0.4, far, far, far, 0.3, far]
+    f = _features(home, away, [12.0] * 10)
+    ctrl = np.full(10, N, dtype=np.int8)
+    switch = ctrl.copy()
+    c2, s2 = cw.relayed(ctrl, switch, f, [(0, 10)], frames=3)
+    # Away touches at 1-2, again at 4 (2 frames later): accepted at 1. Its touch at 4 is followed
+    # by a home touch at 6, and home's by away's at 8: neither is confirmed.
+    assert np.flatnonzero(s2 != N).tolist() == [1] and s2[1] == A and c2[1] == A
+    # The gap is counted from the end of the first touch (3) to the start of the next (4).
+    assert cw.relayed(ctrl, switch, f, [(0, 10)], frames=1)[1][1] == A
+    assert (cw.relayed(ctrl, switch, f, [(0, 10)], frames=0)[1] == N).all()
+    # Contested: home within reach on every frame of the away touch, so nothing is accepted.
+    home_close = [far, 1.0, 1.2, far, far, far, 0.5, far, far, far]
+    f2 = _features(home_close, away, [12.0] * 10)
+    assert (cw.relayed(ctrl, switch, f2, [(0, 10)], frames=3)[1] == N).all()
+    # A half edge between the two touches breaks the relay.
+    assert (cw.relayed(ctrl, switch, f, [(0, 4), (4, 10)], frames=3)[1] == N).all()
+
+
+def test_settle_removes_a_short_return_and_nothing_else() -> None:
+    state = np.array([H] * 10 + [A] * 3 + [H] * 20 + [A] * 30, dtype=np.int8)
+    runs = [(0, 63)]
+    dead = np.zeros(63, bool)
+    out = cw.settled(state, runs, {}, dead, frames=5)
+    assert out.tolist() == [H] * 33 + [A] * 30  # the 3-frame A spell went back to H
+    assert cw.settled(state, runs, {}, dead, frames=3).tolist() == state.tolist()  # 3 is not < 3
+    assert cw.settled(state, runs, {10: A}, dead, frames=5).tolist() == state.tolist()  # forced
+    assert cw.settled(state, runs, {13: H}, dead, frames=5).tolist() == state.tolist()
+    stopped = dead.copy()
+    stopped[11] = True
+    assert cw.settled(state, runs, {}, stopped, frames=5).tolist() == state.tolist()
+    assert cw.settled(state, [(0, 12), (12, 63)], {}, dead, frames=5).tolist() == state.tolist()
+
+
+def test_settle_never_makes_a_new_pair_out_of_a_removed_one() -> None:
+    state = np.array([H] * 10 + [A] * 2 + [H] * 2 + [A] * 20, dtype=np.int8)
+    out = cw.settled(state, [(0, 34)], {}, np.zeros(34, bool), frames=5)
+    # H->A at 10 and A->H at 12 go; the H->A at 14 stays a change.
+    assert cd.state_changes(out, [(0, 34)]) == [(14, A)]
+
+
+def _random_inputs(seed: int):
+    rng = np.random.default_rng(seed)
+    n = 3000
+    f = engine.Features(
+        rng.uniform(0, 3, n),
+        rng.uniform(0, 3, n),
+        np.ones(n, bool),
+        rng.uniform(0, 12, n),
+        np.ones(n, bool),
+    )
+    restarts = (dead_ball.Restart(2000, 1875, "Throw-in", H),)
+    ev = dead_ball.Evidence(restarts, np.zeros(n, bool), np.ones(n, bool), np.zeros(n, bool))
+    dead = np.zeros(n, bool)
+    dead[1000:1100] = True
+    return f, ev, [(0, 1500), (1500, 3000)], dead
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_the_reference_is_the_delivered_chain_and_neutral_constants_change_nothing(seed) -> None:
+    f, ev, runs, dead = _random_inputs(seed)
+    ref = cw.variant_chain("engine", f, ev, runs, dead)
+    expected = cd.delivered(f, ev, runs, dead)
+    assert np.array_equal(ref.state, expected.state) and ref.forced == expected.forced
+    neutral = {"persist": 10_000.0, "settle": 0.0, "relay": 0.0}
+    for name in cw.VARIANTS:
+        chain = cw.variant_chain(name, f, ev, runs, dead, neutral)
+        assert np.array_equal(chain.state, ref.state), name
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_no_variant_moves_a_d_frame_and_settle_only_removes_changes(seed) -> None:
+    f, ev, runs, dead = _random_inputs(seed)
+    ref = cw.variant_chain("engine", f, ev, runs, dead)
+    base = cd.state_changes(ref.state, runs)
+    for name in cw.VARIANTS:
+        chain = cw.variant_chain(name, f, ev, runs, dead)
+        labels = cd.finish(chain.state, chain.dead)
+        assert ((labels == "D") == dead).all(), name
+    settled = cw.variant_chain("settle", f, ev, runs, dead)
+    assert set(cd.state_changes(settled.state, runs)) <= set(base)
+    assert ((settled.state == N) == (ref.state == N)).all()
+
+
+def test_a_kept_duel_cancels_a_restart_and_a_short_one_does_not() -> None:
+    n = 400
+    away = np.full(n, 9.0)
+    away[120:150] = 0.5  # a contested away control, 30 frames, inside the restart's window
+    home = np.full(n, 9.0)
+    home[120:150] = 1.0
+    home[10] = 0.3  # home has the ball before
+    f = _features(list(home), list(away), [1.0] * n)
+    restarts = (dead_ball.Restart(200, 75, "Throw-in", H),)
+    ev = dead_ball.Evidence(restarts, np.zeros(n, bool), np.ones(n, bool), np.zeros(n, bool))
+    dead = np.zeros(n, bool)
+    ref = cw.variant_chain("engine", f, ev, [(0, n)], dead)
+    assert ref.forced == {200: H}  # the duel inside the window does not cancel it (DECISIONS 35)
+    held = cw.variant_chain("persist", f, ev, [(0, n)], dead, {"persist": 1.0})
+    assert held.forced == {} and held.state[130] == A  # kept 1.2 s: a won duel, it cancels it
+    brief = cw.variant_chain("persist", f, ev, [(0, n)], dead, {"persist": 2.0})
+    assert brief.forced == {200: H} and np.array_equal(brief.state, ref.state)
+
+
+def test_an_unknown_or_repeated_variant_is_refused() -> None:
+    f, ev, runs, dead = _random_inputs(0)
+    for name in ("touch", "persist+persist", "relay+"):
+        with pytest.raises(ValueError, match="unknown variant"):
+            cw.variant_chain(name, f, ev, runs, dead)
+
+
+def test_the_constant_rule_takes_the_fewest_errors_then_the_most_conservative_value() -> None:
+    assert cw.choose({0.2: 10, 0.4: 8, 0.6: 8}, "persist") == 0.6
+    assert cw.choose({0.5: 9, 1.0: 9, 2.0: 12}, "settle") == 0.5
+    assert cw.choose({0.5: 9, 1.0: 7, 3.0: 7}, "relay") == 1.0
+
+
+def test_the_selection_follows_the_prior_order_never_the_numbers() -> None:
+    ok, ko = cw.Gate("g", True, ""), cw.Gate("g", False, "")
+    passed = {"persist": [ko], "settle": [ok], "relay": [ok], "relay+settle": [ok]}
+    assert cw.select(passed) == "settle"
+    assert cw.select({n: [ko] for n in cw.VARIANTS}) is None
+    assert cw.PRIOR_ORDER == ("persist", "settle", "relay", "relay+settle")
+
+
+def _scored(errors: int, f1: float) -> cw.Scored:
+    fair = cw.Fair(0, 0, tuple((i, 0) for i in range(errors)), (), (), cd.lag_stats([]))
+    return cw.Scored(fair, f1)
+
+
+def test_the_gates_need_both_balls_on_g2_and_every_bar_ath_condition() -> None:
+    metrica = {
+        "g2": {
+            "limpio": {"engine": _scored(10, 0.5), "x": _scored(9, 0.51)},
+            "degradado": {"engine": _scored(20, 0.4), "x": _scored(19, 0.40)},
+        }
+    }
+    ref = {
+        "rate": 3.6,
+        "block_ratio": (1.0, 1.0),
+        "st": 0.77,
+        "max_block_dead": 0.6,
+        "delta": 0.0,
+        "wins_a": 0,
+        "wins_b": 0,
+        "bench_mean": 0.43,
+        "bench_low": 0.36,
+    }
+    bar = {"engine": ref, "x": dict(ref, rate=4.0)}
+    g = {x.name: x.passed for x in cw.gates(metrica, bar, "x")}
+    assert g["Metrica g2 limpio"] and not g["Metrica g2 degradado"]  # a spellF1 tie fails
+    assert not g["BAR-ATH sin GT"]  # 4,0 pos/min is outside 3,4 ± 0,5
+    assert g["slice público (pareado)"] and g["banco"]
+    bar["x"] = dict(ref, block_ratio=(0.5, 1.2))  # one block halved
+    assert not {x.name: x.passed for x in cw.gates(metrica, bar, "x")}["BAR-ATH sin GT"]
+    bar["x"] = dict(ref, st=0.759)  # more than one point of Smart Tagging lost
+    assert not {x.name: x.passed for x in cw.gates(metrica, bar, "x")}["BAR-ATH sin GT"]
+    bar["x"] = dict(ref, wins_a=1, wins_b=0)
+    assert not {x.name: x.passed for x in cw.gates(metrica, bar, "x")}["slice público (pareado)"]
+
+
+@requires_bundle
+def test_the_reference_variant_is_the_delivered_file_byte_for_byte() -> None:
+    import hashlib
+
+    from tools import bench
+
+    f, ev, _gt, _cut = bench.load()
+    labels = cw.METHODS["engine"](f, ev)
+    table = pd.DataFrame({"frame": np.arange(len(labels)), "label": labels})
+    csv = table.to_csv(index=False, lineterminator="\n")
+    assert hashlib.sha256(csv.encode()).hexdigest().startswith("72c98ed4bb4a")  # DECISIONS 36
