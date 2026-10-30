@@ -447,3 +447,178 @@ y se mantiene la cadena entregada**, con qué compuerta falla y por cuánto.
 
 Todo sale de `python tools/change_whether.py --measure` y se pega sin editar en la sección 7, que se
 añade en el commit 3 sin tocar lo anterior.
+
+---
+
+*Lo que sigue se escribió después de medir (commit 3). Las secciones 1–6 son las de los commits
+`c9c4990` (anatomía) y `971c386` (pre-registro), sin cambios.*
+
+## 7. Mediciones
+
+Salida de `python tools/change_whether.py --measure`, pegada sin editar (dos corridas, salida
+idéntica):
+
+### Metrica (g2 reservado; g1, donde se fijaron las constantes, informativo)
+
+**g2**
+
+| variante | balón | cambios cadena | emparejados | perdidos en juego | sobrantes | perdidos + sobrantes | mediana \|·\| s (en juego) | spellF1 (eventos) |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| `engine` | limpio | 214 | 198 | 72 | 16 | 88 | 0,16 | 0,6499 |
+| `persist` | limpio | 214 | 198 | 72 | 16 | 88 | 0,08 | 0,6534 |
+| `settle` | limpio | 208 | 195 | 75 | 13 | 88 | 0,16 | 0,6483 |
+| `relay` | limpio | 264 | 228 | 44 | 36 | 80 | 0,46 | 0,6193 |
+| `relay+settle` | limpio | 258 | 225 | 47 | 33 | 80 | 0,48 | 0,6195 |
+| `engine` | degradado | 180 | 125 | 130 | 55 | 185 | 0,88 | 0,4430 |
+| `persist` | degradado | 182 | 127 | 129 | 55 | 184 | 0,84 | 0,4422 |
+| `settle` | degradado | 178 | 125 | 130 | 53 | 183 | 0,88 | 0,4446 |
+| `relay` | degradado | 220 | 153 | 102 | 67 | 169 | 0,68 | 0,4541 |
+| `relay+settle` | degradado | 214 | 153 | 102 | 61 | 163 | 0,70 | 0,4561 |
+
+**g1**
+
+| variante | balón | cambios cadena | emparejados | perdidos en juego | sobrantes | perdidos + sobrantes | mediana \|·\| s (en juego) | spellF1 (eventos) |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| `engine` | limpio | 236 | 219 | 84 | 17 | 101 | 0,04 | 0,6812 |
+| `persist` | limpio | 238 | 221 | 82 | 17 | 99 | 0,04 | 0,6958 |
+| `settle` | limpio | 226 | 215 | 88 | 11 | 99 | 0,04 | 0,6812 |
+| `relay` | limpio | 290 | 249 | 56 | 41 | 97 | 0,28 | 0,6418 |
+| `relay+settle` | limpio | 278 | 245 | 60 | 33 | 93 | 0,32 | 0,6455 |
+| `engine` | degradado | 205 | 157 | 135 | 48 | 183 | 0,32 | 0,4743 |
+| `persist` | degradado | 209 | 159 | 133 | 50 | 183 | 0,34 | 0,4733 |
+| `settle` | degradado | 199 | 152 | 139 | 47 | 186 | 0,32 | 0,4743 |
+| `relay` | degradado | 246 | 189 | 107 | 57 | 164 | 0,62 | 0,4796 |
+| `relay+settle` | degradado | 238 | 182 | 113 | 56 | 169 | 0,60 | 0,4769 |
+
+### DFL (secundario, decisión 37: se reporta, no veta un cambio de número)
+
+**limpio**
+
+| variante | J03WMX | J03WN1 | J03WOH | J03WOY | J03WPY | J03WQQ | J03WR9 | media | gana / empata / pierde |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `engine` | 0,4593 | 0,4737 | 0,5152 | 0,5376 | 0,4975 | 0,5271 | 0,5233 | 0,5048 | — |
+| `persist` | 0,4626 | 0,4729 | 0,5205 | 0,5348 | 0,4973 | 0,5262 | 0,5205 | 0,5050 | 2 / 0 / 5 |
+| `settle` | 0,4593 | 0,4757 | 0,5200 | 0,5337 | 0,4939 | 0,5233 | 0,5259 | 0,5045 | 3 / 1 / 3 |
+| `relay` | 0,4948 | 0,4820 | 0,5298 | 0,5321 | 0,5023 | 0,5302 | 0,5383 | 0,5156 | 6 / 0 / 1 |
+| `relay+settle` | 0,4938 | 0,4823 | 0,5326 | 0,5287 | 0,4977 | 0,5307 | 0,5388 | 0,5149 | 6 / 0 / 1 |
+
+**con nuestro balón**
+
+| variante | J03WMX | J03WN1 | J03WOH | J03WOY | J03WPY | J03WQQ | J03WR9 | media | gana / empata / pierde |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `engine` | 0,3412 | 0,3538 | 0,3841 | 0,4087 | 0,3747 | 0,4247 | 0,3920 | 0,3827 | — |
+| `persist` | 0,3455 | 0,3541 | 0,3903 | 0,4087 | 0,3758 | 0,4235 | 0,3914 | 0,3842 | 4 / 0 / 3 |
+| `settle` | 0,3412 | 0,3534 | 0,3883 | 0,4087 | 0,3744 | 0,4230 | 0,3940 | 0,3833 | 2 / 2 / 3 |
+| `relay` | 0,3711 | 0,3480 | 0,4150 | 0,4021 | 0,3782 | 0,4335 | 0,4038 | 0,3931 | 5 / 0 / 2 |
+| `relay+settle` | 0,3678 | 0,3446 | 0,4146 | 0,4016 | 0,3714 | 0,4347 | 0,4019 | 0,3910 | 4 / 0 / 3 |
+
+### BAR-ATH: sin GT (informe por bloques, Smart Tagging), slice público y banco
+
+| variante | frames movidos | cambios | pos/min | bloque mín–máx | bloque / ref. | posesión más larga (partido / bloque máx.) | %D máx. bloque | ST partido | ST bloques 7/9/11/18 | spellF1 | macroF1 | Δ | wins ref–var | jackknife Δ | banco media | poco balón | peor |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `engine` | 0 | 303 | 3,62 | 1,01–6,00 | ×1,00 .. ×1,00 | 1,0% / 34,3% | 65,5% | 77,1% | 85,6% | 0,5368 | 0,8533 | +0,0000 | 0–0 | +0,0000 .. +0,0000 | 0,4351 | 0,3595 | 0,2400 |
+| `persist` | 42 | 305 | 3,62 | 1,01–6,00 | ×1,00 .. ×1,00 | 1,0% / 34,3% | 65,5% | 77,1% | 85,6% | 0,5368 | 0,8533 | +0,0000 | 0–0 | +0,0000 .. +0,0000 | 0,4351 | 0,3595 | 0,2400 |
+| `settle` | 16 | 299 | 3,58 | 1,01–6,00 | ×0,90 .. ×1,00 | 1,0% / 34,3% | 65,5% | 77,1% | 85,6% | 0,5368 | 0,8533 | +0,0000 | 0–0 | +0,0000 .. +0,0000 | 0,4351 | 0,3595 | 0,2400 |
+| `relay` | 6976 | 353 | 4,11 | 1,01–6,00 | ×1,00 .. ×1,37 | 1,0% / 34,3% | 65,5% | 72,9% | 84,1% | 0,4842 | 0,8580 | -0,0526 | 2–0 | -0,0541 .. -0,0216 | 0,4189 | 0,3345 | 0,2000 |
+| `relay+settle` | 7008 | 345 | 4,03 | 1,01–6,00 | ×1,00 .. ×1,37 | 1,0% / 34,3% | 65,5% | 72,8% | 84,1% | 0,4842 | 0,8580 | -0,0526 | 2–0 | -0,0541 .. -0,0216 | 0,4189 | 0,3345 | 0,2000 |
+
+### Compuertas (frente a `engine`)
+
+| variante | Metrica g2 limpio | Metrica g2 degradado | BAR-ATH sin GT | slice público (pareado) | banco |
+|---|---|---|---|---|---|
+| `persist` | **falla** (spellF1 0,6499 → 0,6534; perdidos + sobrantes 88 → 88) | **falla** (spellF1 0,4430 → 0,4422; perdidos + sobrantes 185 → 184) | pasa (3,62 → 3,62 pos/min; bloque frente a la referencia ×1,00 .. ×1,00; ST 77,1% → 77,1%; %D máx. por bloque 65,5%) | pasa (Δ +0,0000; wins ref–var 0–0) | pasa (media 0,4351 → 0,4351; poco balón 0,3595 → 0,3595) |
+| `settle` | **falla** (spellF1 0,6499 → 0,6483; perdidos + sobrantes 88 → 88) | pasa (spellF1 0,4430 → 0,4446; perdidos + sobrantes 185 → 183) | pasa (3,62 → 3,58 pos/min; bloque frente a la referencia ×0,90 .. ×1,00; ST 77,1% → 77,1%; %D máx. por bloque 65,5%) | pasa (Δ +0,0000; wins ref–var 0–0) | pasa (media 0,4351 → 0,4351; poco balón 0,3595 → 0,3595) |
+| `relay` | **falla** (spellF1 0,6499 → 0,6193; perdidos + sobrantes 88 → 80) | pasa (spellF1 0,4430 → 0,4541; perdidos + sobrantes 185 → 169) | **falla** (3,62 → 4,11 pos/min; bloque frente a la referencia ×1,00 .. ×1,37; ST 77,1% → 72,9%; %D máx. por bloque 65,5%) | **falla** (Δ -0,0526; wins ref–var 2–0) | **falla** (media 0,4351 → 0,4189; poco balón 0,3595 → 0,3345) |
+| `relay+settle` | **falla** (spellF1 0,6499 → 0,6195; perdidos + sobrantes 88 → 80) | pasa (spellF1 0,4430 → 0,4561; perdidos + sobrantes 185 → 163) | **falla** (3,62 → 4,03 pos/min; bloque frente a la referencia ×1,00 .. ×1,37; ST 77,1% → 72,8%; %D máx. por bloque 65,5%) | **falla** (Δ -0,0526; wins ref–var 2–0) | **falla** (media 0,4351 → 0,4189; poco balón 0,3595 → 0,3345) |
+
+Elección por la regla (orden previo `persist` > `settle` > `relay` > `relay+settle`): **ninguna; se mantiene la cadena entregada**.
+
+**Reproducción.** Las etiquetas de cada variante en BAR-ATH son deterministas (SHA-256 del CSV
+`frame,label`): `engine` `72c98ed4bb4af230…` (la cadena entregada, como fija el test), `persist`
+`9a35269460410daa…`, `settle` `4bd6d216c2e171a2…`, `relay` `7cf258178fb71c2d…`, `relay+settle`
+`a72f47de08c6931b…`.
+
+```bash
+export MTAH_DATA_DIR=...                                   # el bundle licenciado (BAR-ATH)
+export MTAH_EXTERNAL_DIR=...                               # metrica/ e idsse/ (por defecto ~/Downloads/external-football-data)
+python tools/change_whether.py --anatomy                   # sección 3
+python tools/change_whether.py --explore                   # sección 5 (solo g1)
+python tools/change_whether.py --measure                   # sección 7
+```
+
+## 8. Resultado: **negativo; se mantiene la cadena entregada**
+
+Aplicando la sección 6 tal cual: **ninguna variante pasa las cuatro compuertas.**
+
+| variante | M g2 limpio | M g2 degradado | B (BAR-ATH sin GT) | P (slice) | C (banco) | DFL (informativo) |
+|---|---|---|---|---|---|---|
+| `persist` | **falla**: `spellF1` +0,0035 pero errores 88 → 88 (empate) | **falla**: `spellF1` −0,0008 | pasa (42 frames movidos) | pasa (Δ 0, 0–0) | pasa (igual) | 2/0/5 limpio, 4/0/3 con nuestro balón |
+| `settle` | **falla**: `spellF1` −0,0016, errores 88 → 88 | pasa: +0,0016, 185 → 183 | pasa (3,58 pos/min) | pasa (Δ 0, 0–0) | pasa (igual) | 3/1/3, 2/2/3 |
+| `relay` | **falla**: `spellF1` −0,0306 aunque errores 88 → 80 | pasa: +0,0111, 185 → 169 | **falla**: 4,11 pos/min, ST −4,2 puntos | **falla**: Δ −0,0526, pierde 2 posesiones | **falla**: −0,0162 / −0,0250 | 6/0/1, 5/0/2 |
+| `relay+settle` | **falla**: −0,0304, 88 → 80 | pasa: +0,0131, 185 → 163 | **falla**: 4,03 pos/min, ST −4,3 | **falla**: Δ −0,0526, 2–0 | **falla**: igual que `relay` | 6/0/1, 4/0/3 |
+
+### Lectura
+
+1. **La predicción del pre-registro se cumple en el partido reservado, con el mismo signo que en
+   g1.** Ninguna regla sube el `spellF1` de g2 con los dos balones. `persist` sube el limpio y baja
+   el degradado; `settle`, al revés y por muy poco; `relay` y `relay+settle` bajan el limpio 0,03 y
+   suben el degradado 0,011–0,013. Es la tensión de la sección 4.3, ahora fuera de muestra: **con un
+   balón limpio en el toque la cadena pierde cambios; con uno como el nuestro, se los inventa, y una
+   regla que arregla uno empeora el otro.**
+2. **Errores y `spellF1` no dicen lo mismo.** `relay` baja los perdidos + sobrantes de g2 en los dos
+   balones (88 → 80, 185 → 169) y aun así baja el `spellF1` limpio: los cambios que recupera son
+   posesiones cortas (toques rápidos, idas y vueltas) que parten posesiones largas que la cadena ya
+   emparejaba a IoU ≥ 0,5. Contar cambios bien no es lo que puntúa.
+3. **DFL favorece a `relay` (6 de 7) y BAR-ATH lo rechaza por tres lados independientes.** En
+   nuestro partido `relay` sube la escala a 4,11 posesiones/min (fuera de 3,4 ± 0,5), baja el
+   acuerdo con el Smart Tagging de 77,1% a 72,9%, pierde 2 posesiones en el slice (Δ −0,0526,
+   jackknife todo negativo: el mismo número que `touch` en lane-dating, decisión 39) y baja el banco
+   (0,4351 → 0,4189; poco balón 0,3595 → 0,3345). DFL cuenta 4,58 posesiones/min, más que nadie, y
+   la decisión 37 ya escribió que un corpus así premia por construcción las reglas que añaden
+   cambios; la de Metrica (3,35–3,65/min) también los cuenta en balón suelto. **No es una
+   contradicción entre jueces, es la diferencia de definición** de la sección 1: la verdad de
+   eventos y DFL dan la posesión a quien toca; el reto, a quien la controla.
+4. **`persist` y `settle` son seguras e inútiles en BAR-ATH.** Mueven 42 y 16 frames, ninguno que
+   el slice o el banco vean, y no cambian ni la escala (3,62 / 3,58) ni el Smart Tagging. Los
+   duelos sostenidos ≥ 1 s y las idas y vueltas < 0,5 s son demasiado raros en nuestro partido para
+   importar. `settle` falla solo M limpio, por 0,0016: la compuerta está escrita, no se reinterpreta.
+5. **La respuesta a la pregunta del carril.** El tercio de cambios "sin pareja" de la ronda 5 era,
+   del lado sobrante, casi todo del instrumento (reanudaciones), y del lado perdido, sobre todo
+   balones sueltos (toques rápidos y sus reflejos, la mitad de < 2 s) que la definición del reto no
+   cuenta como posesión. Lo que queda de "si" con nuestro balón son sobrantes por el ruido del toque
+   (correcciones tardías, idas y vueltas), y la única regla que los quita sin coste (`settle`) es
+   demasiado pequeña para medirse en BAR-ATH.
+
+## 9. Recomendación
+
+- **Se mantiene la cadena entregada** (`72c98ed4bb4a…`). Ninguna variante de "si" entra.
+- **Queda el instrumento corregido**: el emparejamiento de todas las verdades contra todos los
+  cambios (las cuentas de perdidos y sobrantes de la ronda 5 deben leerse con él: en g1, 84 / 17,
+  no 81 / 66) y el **balón degradado con ruido de posición** fijado sin etiquetas (σ = 0,85 m por
+  eje, suavizado 1 s), que reproduce la distancia balón lento → jugador y la parte de controles de
+  BAR-ATH. Es el primer degradado que imita la **precisión** de nuestro balón en el toque, no solo
+  sus huecos; cualquier regla futura juzgada en Metrica debería pasar por él.
+- **Para otra ronda, sin probarlo aquí**: un juez externo de *si* tendría que usar la definición
+  del reto, por ejemplo una verdad de Metrica en la que un `RECOVERY` solo abre posesión si su
+  equipo hace después una acción con el balón (un pase) antes de que el rival lo toque. Con la
+  verdad de eventos tal cual, el margen de "si" que se ve en Metrica es en buena parte de
+  definición, y BAR-ATH lo rechaza.
+
+## 10. Limitaciones
+
+- **Un partido reservado** (g2, 216 cambios en juego) y un único sorteo del ruido por partido
+  (semilla fija). Las diferencias de `persist` y `settle` en g2 (≤ 0,004 de `spellF1`, ≤ 2
+  errores) están por debajo de lo que un segundo sorteo movería; las de `relay` (0,03 y 8–16
+  errores) no.
+- **El modelo de ruido es isotrópico, gaussiano y estacionario**, ajustado a un solo estadístico
+  (la mediana de la distancia del balón lento). Nuestro error real puede depender de la velocidad,
+  de la zona del campo o de la oclusión; la parte de controles (34% frente a 28,5% de BAR-ATH) dice
+  que el degradado sigue siendo algo más limpio que el nuestro.
+- **La verdad de eventos no es la definición del reto** (sección 1). Juzga bien *cuándo* (ronda 5) y
+  mal *si* en balón suelto; por eso la compuerta M exige además el balón degradado y las de BAR-ATH
+  tienen la última palabra.
+- **Prototipos declarados**: el veto sostenido y los dos toques se probaron en g1 limpio durante la
+  anatomía, antes del pre-registro (sección 5). Ninguna regla se miró en g2, DFL, BAR-ATH, el slice
+  ni el banco antes del commit 2.
+- **Deuda aceptada.** `features_from` copia la aritmética de `metrica_open.build` y `touch` la de
+  `change_dating._touch` (privada), para no editar módulos de otra ronda.
