@@ -983,3 +983,140 @@ propia el guardarraíl sigue siendo el informe de bloques (decisión 26).
 **Motor (decisión 32):** 0,4585 limpio, 0,3516 de media (n = 19) y 0,2782 en los 6 donantes con
 menos de la mitad del balón. Es la estimación más honesta disponible de su rendimiento en el
 partido completo.
+
+---
+
+## 34. Ronda 1 de investigación: entra el decodificador sin disputa; la imputación en huecos espera
+
+**Contexto.** Cinco carriles en paralelo (vídeo, imputación, balón muerto v2, decodificador, corpus
+externo), cada uno con su pre-registro antes de medir y con los números reproducidos por el
+coordinador. Los dos primeros en terminar son positivos según sus propias reglas:
+
+- **Decodificador V2 `uncontested`** (`docs/proposals/lane-decode.md`): un control del rival solo
+  cambia la posesión si el jugador más cercano del equipo que la tiene está a más de 1,5 m; un duelo
+  no la cambia (la regla de duelo de la literatura, sin constante nueva). Slice 0,4585 → 0,5189
+  (0 discordantes, jackknife todo positivo), banco 0,3516 → 0,3792 (poco balón 0,2782 → 0,3021),
+  3,29 posesiones/min, acuerdo con el Smart Tagging 73,4%.
+- **Imputación V2** (`docs/proposals/lane-impute.md`): en un hueco cuyos extremos son de equipos
+  distintos, un único punto de cambio colocado por un modelo auto-supervisado (formación, balón
+  interpolado, anclas). Banco 0,3516 → 0,3875, acierto en frames ocultos 0,61 → 0,77; slice sin
+  cambio. El coordinador comprobó que no hay fuga del balón oculto: todo se calcula desde las
+  features degradadas.
+
+**Se suman en el banco:** juntos dan 0,5189 limpio y **0,4143** de media (poco balón 0,3095).
+
+**Pero el Smart Tagging contradice a la imputación en los huecos reales.** En los frames que la
+imputación cambia, el Smart Tagging coincide con el nuevo equipo en el 43% (en los bloques con poco
+balón, una sola decisión de 679 frames, 0%), y su acuerdo en los bloques 7, 9, 11 y 18 cae de 72,4%
+a 66,0%. En el slice, el Smart Tagging acierta el 98% de los frames vivos **sin balón** (391): dentro
+de un hueco real es un juez fiable. El banco y el Smart Tagging no se contradicen por azar: el banco
+trasplanta huecos sobre jugadas donde el balón sí se veía, y los huecos reales ocurren en jugadas
+concretas (balón aéreo, pelotazo, área llena). Es la limitación que declara la decisión 33.
+
+**Decidido.**
+
+- **Entra el decodificador V2** en la cadena entregada: mejora en los tres instrumentos y no tiene
+  señal en contra.
+- **La imputación queda fuera de la entrega**, sin declararla negativa: tiene a favor el banco y en
+  contra la única evidencia sobre huecos reales. Se reevalúa si el carril de vídeo recupera balón en
+  huecos reales, que daría verdad física para juzgarla.
+- **V3 `touch` y V5 del decodificador** (0,56 y 0,58 en el slice) se aplazan al corpus externo con
+  posesión real: su riesgo es de escala temporal, que ni el slice ni el banco pueden juzgar.
+
+**Adenda: V6 sustituye a V2, condicionada al corpus externo.** El seguimiento del carril midió la
+única combinación sin escala temporal que faltaba, V6 = `mid` + `uncontested`, con una regla escrita
+por el coordinador antes de medir (adoptarla si pasa las tres compuertas frente a V2 y no baja la
+media de poco balón). La cumple: slice 0,5189 → 0,5405 (0–2 a IoU 0,5, jackknife +0,011 .. +0,022),
+banco 0,3792 → 0,3944 (poco balón 0,3021 → 0,3072), 3,25 posesiones/min, Smart Tagging 73,1%. Se
+adopta por esa regla, con una cautela declarada: las dos posesiones que gana son las mismas que ganaba
+`mid` solo, cuya regla salió de mirar las latencias del slice, y el banco usa esas mismas 17
+posesiones. **Si el corpus externo, que no está contaminado, la sitúa por debajo de V2, se revierte.**
+
+El bloque 11 (19,9% de balón) no es un problema de decodificación: una posesión de 163 s tiene balón
+en el 17,5% de sus frames, y ~78 s dependen de un duelo de 0,2 s justo tras un hueco de 69,5 s. Es un
+problema de huecos de balón.
+
+**Adenda 2: el corpus externo revierte V6 a V2.** El carril externo convirtió los 7 partidos abiertos
+de DFL/IDSSE (CC-BY) en un corpus puntuable (`tools/external.py`, `docs/analysis/external*.md`). Su
+compuerta de dominio **falla**: la verdad de DFL tiene 4,58 posesiones/min, mediana de 3,8 s y
+41–52% de `D` (nuestro partido: 3,4/min, 7,6 s, 19,6%), así que **no sirve para fijar escalas de
+tiempo ni reglas de `D`**. Sí reproduce la pérdida relativa por balón perdido del banco (−28% frente
+a −34%) y el mismo orden entre métodos, lo que valida el banco desde fuera.
+
+Con su regla pre-registrada, V6 queda por debajo de V2 (0,2319 frente a 0,2394 degradado; V2 gana 6
+de 7 partidos), así que **se revierte a V2**, como decía la adenda anterior. El matiz se declara: lo
+que V6 añade es solo redatar los cambios, que depende de la definición de la verdad, y la de DFL es
+otra; pero la regla estaba escrita y no se reinterpreta. `touch` y V5 pierden 7 de 7 frente a su
+referencia sin `touch`, con tasas más lejos de la verdad: alarma de escala temporal, siguen fuera.
+
+**Integración.** La regla del duelo entra en `tools/engine.py` (`Params.duel = True`, `uncontested`,
+`decode(switch=…)`), con etiquetas idénticas frame a frame al V2 del carril. `engine.D31` conserva el
+motor anterior, contra el que los carriles midieron y archivaron. Cadena entregada: **slice 0,5189**,
+banco 0,3792 (poco balón 0,3021).
+
+---
+
+## 35. Una reanudación solo se cancela por un control que el decodificador acepta (pre-registro)
+
+La revisión de #54 encontró una interacción entre la decisión 32 y la regla del duelo (34): una
+reanudación se cancela si en su ventana hay *cualquier* control, también uno disputado; pero el
+decodificador ignora el disputado. Resultado: ni la reanudación ni el control cambian la posesión, y
+el equipo que no saca se queda el balón durante el saque del rival.
+
+**Decidido, antes de medir:** la ventana de la decisión 32 mira solo los controles que el
+decodificador acepta (los que no son duelo). El principio de la 32 era que una **observación de
+posesión** vale más que una estimación; un duelo no observa posesión. Regla: se adopta salvo que
+pierda posesiones en el pareado frente a la cadena actual o rompa un bloque.
+
+Además, un caso límite declarado: si una mitad empieza con una reanudación forzada antes de su primer
+control, el motor trata un primer control disputado del rival como duelo (no cambia la posesión que
+dio la reanudación), y `decoder.decode` lo acepta como primer evento. El motor es el coherente con la
+regla; en BAR-ATH el caso no ocurre (V2 y la cadena entregada son idénticos frame a frame).
+
+**Resultado.** En BAR-ATH no cambia **ni un frame** de la cadena entregada (la interacción no ocurre en
+este partido): mismo slice 0,5189, mismo banco 0,3792, mismos bloques. Se adopta por la regla, como
+robustez; un test sintético fija el caso que corrige.
+
+---
+
+## 36. El balón muerto también se lee en los jugadores (carril dead-v2, regla W1)
+
+**Contexto.** El recall de `D` de la cadena era 0,384: solo se detectaban las paradas con salida del
+balón del campo y reanudación etiquetada. El carril dead-v2 (`docs/proposals/lane-dead-v2.md`)
+construyó un detector de paradas sin balón y sin identidades, a partir de la velocidad de los
+jugadores, con **todas sus constantes fijadas en los 7 partidos abiertos de DFL** (CC-BY, con estado
+vivo/muerto por frame), no en nuestro slice. Pre-registro antes de medir; números reproducidos por el
+coordinador.
+
+**Decidido (W1 `rule`).** A las paradas etiquetadas se une cada tramo de ≥ 4 s en que el percentil 90
+de las velocidades de los jugadores (el segundo más rápido de ~21), promediado sobre ±1 s, va por
+debajo de 2 m/s; cerrando huecos vivos de < 1 s, medio tiempo a medio tiempo, y nunca con menos de 8
+jugadores seguidos. Solo numpy, sin pesos. `engine.delivered_dead()` es la única definición del `D`
+entregado; la usan `run`, el banco y el barrido.
+
+**Por qué**, medido sobre la cadena con la regla del duelo:
+
+| | sin W1 | con W1 |
+|---|---:|---:|
+| `spellF1` slice | 0,5189 | 0,5368 (+0,018, 1–0; jackknife cambia de signo: dirección) |
+| banco, media / poco balón | 0,3792 / 0,3021 | **0,4351 / 0,3595** |
+| precisión / recall de `D` (slice) | 0,907 / 0,384 | 0,877 / 0,897 |
+| acuerdo con el Smart Tagging | 73,4% | **77,1%** |
+| corpus DFL (motor D31) | 0,376 | 0,432 (7 de 7 partidos) |
+
+La evidencia fuerte no es el slice (17 posesiones, una discordante) sino tres fuentes independientes
+de él que dicen lo mismo: el banco, el Smart Tagging y los partidos de DFL.
+
+**Coste.** El 40,3% de los frames de los medios tiempos pasa a ser `D`, frente al 19,6% del slice; el
+bloque máximo llega a 65,5% (bloque 9). No es una anomalía: el balón está en juego unos 55–60 de los
+90 minutos de un partido, y los primeros 5 minutos son un tramo especialmente vivo. Las variantes con
+modelo aprendido puntúan más en el slice (0,5026 sobre el motor anterior) pero fallan la compuerta de
+precisión de `D` (0,787 < 0,80, por desbordar los bordes de la parada) y quedan fuera.
+
+**Adenda (revisión de #54).** La regla decía que un frame sin cuantil de velocidad propio (menos de 8
+jugadores seguidos) nunca es `D`, pero el código comprobaba la media de la ventana de ±1 s, no el
+frame. Corregido para que cumpla la regla escrita: cambian 452 frames, el `D` del partido pasa de
+40,3% a 40,0%, y el slice (0,5368) y el banco (0,4351 / 0,3595) no cambian. La regla calcula ahora
+solo la señal que usa, no las 29 columnas del modelo, y la máscara de jugadores se calcula siempre
+sobre los medios tiempos del partido. `engine.delivered_dead` usa `dead_ball_v2.dead_union`: una
+sola definición del `D` entregado. Repro: `72c98ed4bb4a…`.

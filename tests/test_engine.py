@@ -132,18 +132,49 @@ def _public_score(table) -> tuple[float, float]:
 
 
 @requires_bundle
-def test_the_bare_engine_reproduces_its_public_score() -> None:
-    """DECISIONS 29 and 31: 0,4390 before a ball off the pitch stopped counting as control, 0,4195
-    after (the bare engine has no restart to hand the ball back); 87,2% team accuracy on live."""
-    spell, accuracy = _public_score(engine.run(dead=False, restarts=False)[0])
+def test_the_engine_before_the_duel_rule_reproduces_its_public_score() -> None:
+    """DECISIONS 29-32 (`engine.D31`): bare 0,4195 and 87,2% team accuracy on live; I0 0,4667;
+    delivered 0,4585, all with the tagged D only (before DECISIONS 36). The research lanes measured
+    against this engine."""
+    spell, accuracy = _public_score(engine.run(engine.D31, dead=False, restarts=False)[0])
     assert round(spell, 4) == 0.4195
     assert round(accuracy, 3) == 0.872
+    assert (
+        round(_public_score(engine.run(engine.D31, restarts=False, kinematic=False)[0])[0], 4)
+        == 0.4667
+    )
+    assert round(_public_score(engine.run(engine.D31, kinematic=False)[0])[0], 4) == 0.4585
 
 
 @requires_bundle
 def test_the_delivered_chain_reproduces_its_public_score() -> None:
-    """DECISIONS 30 anchors: I0 (with D) 0,4667 and I1 (D + restart control, delivered) 0,4585."""
-    assert round(_public_score(engine.run(restarts=False)[0])[0], 4) == 0.4667
+    """DECISIONS 34-36 anchors: bare (duel) 0,4757; tagged D only 0,5189; with the players'
+    stoppages, I0 0,5231 and the delivered chain 0,5368, with 40,0% D in the halves."""
+    assert round(_public_score(engine.run(dead=False, restarts=False)[0])[0], 4) == 0.4757
+    assert round(_public_score(engine.run(kinematic=False)[0])[0], 4) == 0.5189
+    assert round(_public_score(engine.run(restarts=False)[0])[0], 4) == 0.5231
     table, summary = engine.run()
-    assert round(_public_score(table)[0], 4) == 0.4585
-    assert round(summary["dead_share"], 3) == 0.123
+    assert round(_public_score(table)[0], 4) == 0.5368
+    assert round(summary["dead_share"], 3) == 0.400
+
+
+def test_a_duel_in_the_restart_window_does_not_cancel_the_restart() -> None:
+    """DECISIONS 35: away takes a throw-in while home is within 1,5 m; the restart still applies."""
+    from tools.dead_ball import Restart
+
+    n = 30
+    home = np.full(n, 5.0)
+    away = np.full(n, 5.0)
+    home[2], away[2] = 0.5, 3.0  # home controls before the stoppage
+    away[12], home[12] = 0.5, 1.0  # a contested away control inside the restart window [10, 15)
+    f = feats(home=home, away=away, speed=np.full(n, 1.0))
+    restarts = (Restart(15, 10, "Throw-in", 1),)
+    ctrl = engine.control(f)
+    switch = engine.uncontested(ctrl, f, engine.DEFAULT.radius_m)
+    # As engine.chain does now: only an accepted control cancels a restart.
+    forced = engine.restart_controls(restarts, switch)
+    state = engine.decode(ctrl, [(0, n)], 1, forced, switch)
+    assert state[2] == 0 and state[15] == 1  # the throw-in hands the ball to away
+    # Before the fix the duel cancelled the restart and was then ignored: home kept the ball.
+    before = engine.decode(ctrl, [(0, n)], 1, engine.restart_controls(restarts, ctrl), switch)
+    assert before[15] == 0

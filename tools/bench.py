@@ -72,8 +72,8 @@ Method = Callable[[engine.Features, dead_ball.Evidence], np.ndarray]
 
 
 def _engine(f: engine.Features, ev: dead_ball.Evidence) -> np.ndarray:
-    dead = dead_ball.dead_mask(ev, engine.halves(), "out")
-    return engine.chain(f, engine.DEFAULT, ev.restarts, dead)[2]
+    # The delivered chain: its `D` is the delivered one (tagged + players' stoppages, DECISIONS 36).
+    return engine.chain(f, engine.DEFAULT, ev.restarts, engine.delivered_dead(ev))[2]
 
 
 def _engine_bare(f: engine.Features, ev: dead_ball.Evidence) -> np.ndarray:
