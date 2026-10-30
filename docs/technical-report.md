@@ -97,8 +97,9 @@ Metrica con tracking (g1, g2) y su registro de eventos, sincronizado al frame, d
 posesión independiente de nuestro motor: cada cambio se fecha en la primera acción anotada del nuevo
 equipo. Su escala sí es comparable a la nuestra (3,65 y 3,35 posesiones/min), así que juzga *si*
 cambia la posesión, que DFL no puede (D37), y es un segundo juez de *cuándo*, junto a DFL. Dos
-límites, medidos: el balón de la muestra está sincronizado con los eventos (a 0,06 m del pie en cada
-uno), mucho más limpio que el nuestro en el toque, por lo que las reglas de la ronda 6 se juzgaron
+límites, medidos: el balón de la muestra está sincronizado con los eventos (mediana de 0,06 m entre
+el jugador que actúa y el balón; el 94,6% y el 96,0% de los eventos a ≤ 2 m), mucho más limpio que
+el nuestro en el toque, por lo que las reglas de la ronda 6 se juzgaron
 también con un balón degradado a nuestra precisión (ruido de posición σ = 0,85 m fijado sin
 etiquetas, y nuestros huecos; D43); y sus eventos dan la posesión a quien *toca* un balón suelto,
 mientras el reto la da a quien lo *controla*.
