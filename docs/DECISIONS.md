@@ -1120,3 +1120,28 @@ frame. Corregido para que cumpla la regla escrita: cambian 452 frames, el `D` de
 solo la señal que usa, no las 29 columnas del modelo, y la máscara de jugadores se calcula siempre
 sobre los medios tiempos del partido. `engine.delivered_dead` usa `dead_ball_v2.dead_union`: una
 sola definición del `D` entregado. Repro: `72c98ed4bb4a…`.
+
+---
+
+## 37. El corpus externo no arbitra reglas que cambian la escala de la posesión, en ningún sentido
+
+**Una asimetría que se corrige por escrito.** El corpus de DFL se usó para revertir V6 (decisión 34),
+pero en ese mismo corpus la regla del duelo también queda por debajo de la regla de control sin duelo
+(0,2394 frente a 0,2631 degradado, 0 de 7 partidos), y el duelo se adoptó. Las dos comparaciones son
+del mismo tipo: V6 redata los cambios de posesión y el duelo reduce cuántos hay; ambas dependen de la
+definición de posesión de la verdad, y la de DFL es otra (4,58 posesiones/min y 41–52% de `D`, frente
+a 3,4 y 19,6% en nuestro partido; su compuerta de dominio falló). Un corpus que cuenta más cambios
+penaliza por construcción cualquier regla que los reduzca.
+
+**Decidido.** El corpus externo **no arbitra** reglas que cambian la escala temporal o el número de
+cambios de posesión, en ningún sentido. Sirve para lo que sí demostró: la pérdida relativa por balón
+perdido y para fijar constantes físicas que no dependen de la definición de posesión (como las de W1,
+que viene de su estado vivo/muerto por frame).
+
+**Qué cambia en la entrega: nada, y por qué.**
+
+- **El duelo se mantiene**: lo sostienen el slice, el banco, el Smart Tagging y que acerca las
+  posesiones/min a la referencia física (3,64 → 3,29; referencia 3,4).
+- **V6 sigue fuera, por otro motivo que ya bastaba**: su única ganancia en el slice eran las dos
+  posesiones que ganaba `mid`, una regla derivada de mirar las latencias de ese mismo slice, y el banco
+  reutiliza esas 17 posesiones. Sin un juez independiente, una regla contaminada por el slice no entra.
