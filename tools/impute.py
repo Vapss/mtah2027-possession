@@ -272,7 +272,8 @@ def _engine_d31(f: engine.Features, ev: dead_ball.Evidence) -> np.ndarray:
 
 
 def anchors(f: engine.Features, ev: dead_ball.Evidence) -> tuple[np.ndarray, dict[int, int]]:
-    """Control per frame and the restarts the delivered chain forces, as `engine.chain` has them."""
+    """Control per frame and the restarts the D31 engine forces (DECISIONS 29-32), as the lane
+    measured them; the delivered chain cancels restarts with uncontested controls (DECISIONS 35)."""
     ctrl = engine.control(f, engine.DEFAULT)
     return ctrl, engine.restart_controls(ev.restarts, ctrl)
 

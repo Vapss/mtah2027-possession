@@ -869,7 +869,9 @@ def main(argv: list[str] | None = None) -> int:
                 # Public and bench for our registered methods and for every plugged-in one: the
                 # extras share the bench signature by construction.
                 loaded = bench.load()
-                benched = {**bench.METHODS, **extras}
+                # This lane's own methods first: `engine` / `engine-bare` here are the D31 engine
+                # it scored on DFL, never bench's delivered chain under the same name.
+                benched = {**bench.METHODS, **METHODS, **extras}
                 ours = {
                     n: bench.summary(bench.bench(benched[n], *loaded))
                     for n in names

@@ -97,4 +97,4 @@ def test_the_engine_is_reproducible_and_is_the_candidate_entry() -> None:
     first, second = repro.repro("engine")
     assert first == second
     # DECISIONS 30-36: the candidate entry's SHA-256. A change here changes the delivered file.
-    assert first.startswith("58a2fb866423")
+    assert first.startswith("72c98ed4bb4a")

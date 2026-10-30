@@ -1112,3 +1112,11 @@ bloque máximo llega a 65,5% (bloque 9). No es una anomalía: el balón está en
 90 minutos de un partido, y los primeros 5 minutos son un tramo especialmente vivo. Las variantes con
 modelo aprendido puntúan más en el slice (0,5026 sobre el motor anterior) pero fallan la compuerta de
 precisión de `D` (0,787 < 0,80, por desbordar los bordes de la parada) y quedan fuera.
+
+**Adenda (revisión de #54).** La regla decía que un frame sin cuantil de velocidad propio (menos de 8
+jugadores seguidos) nunca es `D`, pero el código comprobaba la media de la ventana de ±1 s, no el
+frame. Corregido para que cumpla la regla escrita: cambian 452 frames, el `D` del partido pasa de
+40,3% a 40,0%, y el slice (0,5368) y el banco (0,4351 / 0,3595) no cambian. La regla calcula ahora
+solo la señal que usa, no las 29 columnas del modelo, y la máscara de jugadores se calcula siempre
+sobre los medios tiempos del partido. `engine.delivered_dead` usa `dead_ball_v2.dead_union`: una
+sola definición del `D` entregado. Repro: `72c98ed4bb4a…`.

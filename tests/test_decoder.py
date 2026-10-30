@@ -265,6 +265,8 @@ def test_on_the_match_the_baseline_is_the_delivered_engine_and_no_variant_touche
     dead = dead_ball.dead_mask(ev, engine.halves(), "out")
     before = engine.chain(f, engine.D31, ev.restarts, dead)[2]
     assert (decoder.METHODS[decoder.BASELINE](f, ev) == before).all()
+    # Equal on BAR-ATH; by design they differ when a contested rival control falls inside a
+    # restart window or opens a half after a restart (DECISIONS 35), which this match never has.
     assert (decoder.METHODS["uncontested"](f, ev) == delivered).all()
     for method in decoder.METHODS.values():
         labels = method(f, ev)

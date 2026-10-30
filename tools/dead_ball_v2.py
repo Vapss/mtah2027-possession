@@ -281,6 +281,20 @@ def player_speeds(players_xy_m: np.ndarray, params: Params = DEFAULT) -> np.ndar
     return speed
 
 
+def speed_quantiles(
+    players_xy_m: np.ndarray, params: Params = DEFAULT
+) -> tuple[np.ndarray, np.ndarray]:
+    """Per-frame p50 and p90 of the players' speeds; NaN with fewer than `min_players` known."""
+    speed = player_speeds(np.asarray(players_xy_m, dtype=float), params)
+    n = len(speed)
+    enough = np.isfinite(speed).sum(axis=1) >= params.min_players
+    p50, p90 = np.full(n, np.nan), np.full(n, np.nan)
+    if enough.any():
+        p50[enough] = np.nanpercentile(speed[enough], 50, axis=1)
+        p90[enough] = np.nanpercentile(speed[enough], 90, axis=1)
+    return p50, p90
+
+
 def frame_signals(
     players_xy_m: np.ndarray, pitch_m: Sequence[float], params: Params = DEFAULT
 ) -> dict[str, np.ndarray]:
@@ -288,12 +302,7 @@ def frame_signals(
     p = np.asarray(players_xy_m, dtype=float)
     length, width = float(pitch_m[0]), float(pitch_m[1])
     n = len(p)
-    speed = player_speeds(p, params)
-    enough = np.isfinite(speed).sum(axis=1) >= params.min_players
-    p50, p90 = np.full(n, np.nan), np.full(n, np.nan)
-    if enough.any():
-        p50[enough] = np.nanpercentile(speed[enough], 50, axis=1)
-        p90[enough] = np.nanpercentile(speed[enough], 90, axis=1)
+    p50, p90 = speed_quantiles(p, params)
 
     x, y = p[..., 0], p[..., 1]
     seen = np.isfinite(x) & np.isfinite(y)
@@ -327,7 +336,10 @@ def features(
 
     Call it on one contiguous run (a half): a window must not reach across the half-time hole.
     """
-    signals = frame_signals(players_xy_m, pitch_m, params)
+    return _windowed(frame_signals(players_xy_m, pitch_m, params))
+
+
+def _windowed(signals: dict[str, np.ndarray]) -> np.ndarray:
     columns = []
     for group, windows in ((SPEED_SIGNALS, SPEED_WINDOWS), (SETUP_SIGNALS, SETUP_WINDOWS)):
         for signal in group:
@@ -421,15 +433,19 @@ def kinematic_mask(
         raise ValueError(f"unknown method {method!r}")
     n = len(players_xy_m)
     dead = np.zeros(n, dtype=bool)
-    p90_column = feature_names().index("speed_p90[-1,1]")
     for start, stop in runs:
         start, stop = max(0, start), min(n, stop)
-        x = features(players_xy_m[start:stop], pitch_m, params)
-        known = np.isfinite(x[:, p90_column])
+        segment = players_xy_m[start:stop]
         if method == "rule":
-            raw = known & (np.nan_to_num(x[:, p90_column], nan=np.inf) < params.rule_mps)
+            # The rule needs one signal: compute only it, not the model's 29 windowed columns.
+            _p50, p90 = speed_quantiles(segment, params)
+            known = np.isfinite(p90)  # the frame's OWN quantile, as the docstring promises
+            window = window_mean(p90, -FPS, FPS)
+            raw = known & (np.nan_to_num(window, nan=np.inf) < params.rule_mps)
         else:
-            raw = known & (probability(x, model) > params.threshold)
+            signals = frame_signals(segment, pitch_m, params)
+            known = np.isfinite(signals["speed_p90"])
+            raw = known & (probability(_windowed(signals), model) > params.threshold)
         dead[start:stop] = decode(raw, params)
     return dead
 
@@ -485,12 +501,14 @@ def chain(
     ev: dead_ball.Evidence,
     kinematic: np.ndarray,
     variant: str,
-    params: engine.Params = engine.DEFAULT,
+    params: engine.Params = engine.D31,
 ) -> np.ndarray:
-    """The delivered chain with this variant's `D`: H/A/D/X per frame for the whole match.
+    """The lane's chain with this variant's `D`: H/A/D/X per frame for the whole match.
 
-    Control, the tagged restarts exactly as delivered (DECISIONS 30-32), plus -- for
-    `model+first-control` -- the first-control restart of the stoppages the tags do not close.
+    The engine the lane measured against (DECISIONS 29-32: no duel rule, `engine.D31` decoding),
+    the tagged restarts, plus -- for `model+first-control` -- the first-control restart of the
+    stoppages the tags do not close. It is NOT the delivered chain, which since DECISIONS 34-36 is
+    `engine.run()` (duel rule; `D` from `engine.delivered_dead`).
     """
     runs = engine.halves()
     dead = dead_union(variant, ev, kinematic, runs)
@@ -508,10 +526,11 @@ def chain(
 def match_kinematic(method: str = "model", params: Params = DEFAULT) -> np.ndarray:
     """The players' stoppages over the delivered match (tactical tracking, both halves)."""
     from tools import atd
+    from tools.ball_gaps import half_runs
 
     tracking = atd.load("tactical")
     players = tracking.players_array[:, :, :2] * engine.PITCH_M
-    return kinematic_mask(players, engine.PITCH_M, engine.halves(), method, params)
+    return kinematic_mask(players, engine.PITCH_M, half_runs(), method, params)
 
 
 def kinematic_for(variant: str, params: Params = DEFAULT) -> np.ndarray:
@@ -802,7 +821,14 @@ def main(argv: list[str] | None = None) -> int:
         if args.bench:
             kin = {"rule": match_kinematic("rule"), "model": match_kinematic("model")}
             f, ev, gt, cut = bench.load()
-            methods = {"engine": bench.METHODS["engine"], **bench_methods(kin)}
+
+            # The baseline the lane measured against: the D31 engine with the tagged D only, not
+            # the delivered chain (which already contains the `rule` D and the duel rule).
+            def _engine_d31(f: engine.Features, ev: dead_ball.Evidence) -> np.ndarray:
+                tagged = dead_ball.dead_mask(ev, engine.halves(), "out")
+                return engine.chain(f, engine.D31, ev.restarts, tagged)[2]
+
+            methods = {"engine": _engine_d31, **bench_methods(kin)}
             for name, method in methods.items():
                 print(name, json.dumps(bench.summary(bench.bench(method, f, ev, gt, cut))))
             return 0

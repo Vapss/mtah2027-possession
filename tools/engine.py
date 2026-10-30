@@ -235,7 +235,8 @@ def chain(
 
 @lru_cache(maxsize=1)
 def _players_stoppages() -> np.ndarray:
-    """The players' stoppages (DECISIONS 36), once per process: they depend on the players only."""
+    """BAR-ATH's players' stoppages (DECISIONS 36), once per process: they depend on the players
+    only, and are computed over the match's own halves whatever `halves()` returns at call time."""
     from tools import dead_ball_v2
 
     mask = dead_ball_v2.match_kinematic("rule")
@@ -249,10 +250,18 @@ def delivered_dead(evidence, kinematic: bool = True) -> np.ndarray:
 
     The one definition `run`, the bench and the sweep all use, so they measure what is delivered.
     """
-    from tools import dead_ball
+    from tools import dead_ball, dead_ball_v2
 
     mask = dead_ball.dead_mask(evidence, halves(), "out")
-    return mask | _players_stoppages() if kinematic else mask
+    if not kinematic:
+        return mask
+    players = _players_stoppages()
+    if len(players) != len(mask):
+        raise ValueError(
+            f"the players' stoppages are BAR-ATH's ({len(players)} frames); this evidence has "
+            f"{len(mask)}: pass kinematic=False for another match"
+        )
+    return dead_ball_v2.dead_union("rule", evidence, players, halves())
 
 
 def run(

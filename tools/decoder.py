@@ -625,7 +625,8 @@ def diagnose_block(index: int, variant: str = FOLLOW_UP_BASELINE) -> dict:
         ),
         "st_cover": float(single.mean()),
         "st_for_team": _share(owner[single] == team),
-        # Split by what the delivered chain says, to see whether the tagging arbitrates the duel:
+        # Split by what the D31 engine says (the lane's baseline; since DECISIONS 34 the delivered
+        # chain is V2 itself), to see whether the tagging arbitrates the duel:
         # where both chains say `team` and where only V2 does.
         "st_split": {
             side: (_share(single[mask]), _share(owner[single & mask] == team))
@@ -665,7 +666,8 @@ def report_block(d: dict) -> str:
         )
     lines += [
         "",
-        f"La cadena entregada etiqueta {_p(d['delivered_other_share'])} de esa posesión con el "
+        f"El motor D31 (sin regla del duelo) etiqueta {_p(d['delivered_other_share'])} de esa "
+        f"posesión con el "
         f"otro equipo (número de cambios: {d['delivered_switches']}). Smart Tagging: cubre "
         f"{_p(d['st_cover'])} de la posesión y, de eso, vota `{d['team']}` en "
         f"{_p(d['st_for_team'])}.",
