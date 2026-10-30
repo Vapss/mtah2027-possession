@@ -930,3 +930,21 @@ premisa de la corrección 2 resultó **falsa**, así que se revierte aunque la r
 
 Cadena entregada final: **`spellF1` 0,4585**, 12,3% de `D`, acuerdo con el Smart Tagging 73,1%,
 reproducible con SHA-256 `4e0ed39b52ed…`.
+
+---
+
+## 32. La reanudación solo se fuerza si el tracking no vio ya el juego reanudado (pre-registro)
+
+La segunda revisión de #52 señaló que el frame de reanudación es una **estimación** (inicio del
+`SET PIECES` + 5 s, o + 3,5 s en un saque de centro), y que forzar la posesión ahí puede deshacer lo
+que el tracking **observó**: un saque rápido a +2 s y un robo con control a +4 s quedan revertidos al
+equipo que sacó.
+
+**Decidido, antes de medir:** la reanudación se fuerza solo si en su ventana `[inicio del tag, frame
+de reanudación)` no hay ningún frame de control. Si lo hay, el juego ya se reanudó y el tracking manda:
+una observación vale más que una estimación. Si dos reanudaciones caen en el mismo frame con equipos
+distintos, ninguna se fuerza; es una etiqueta ambigua y no se resuelve por el orden del XML.
+
+**Regla de selección:** se adopta salvo que pierda posesiones en el pareado frente a la cadena de la
+decisión 31 (`wins_a > wins_b`) o rompa un bloque. Y, como enseñó la decisión 31, se comprueba la
+premisa: cuántas reanudaciones del partido tienen ya un control dentro de su ventana.
