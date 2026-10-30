@@ -1,6 +1,6 @@
 # Auditoría del margen: qué componente pierde el `spellF1`
 
-Generado por `python tools/headroom.py --write docs/analysis/headroom.md` desde el commit `c98e8bb6`. No se edita a mano.
+Generado por `python tools/headroom.py --write docs/analysis/headroom.md` desde el commit `ca84d1c7`. No se edita a mano.
 **Diagnóstico con la GT pública: no elige ninguna regla, constante ni variante**
 (decisión 40). Cada fila cambia un componente de la cadena entregada por la verdad y
 puntúa en el slice y en el banco de trasplante.
@@ -18,7 +18,7 @@ puntúa en el slice y en el banco de trasplante.
 Contado sobre las etiquetas que ve el `spellF1` oficial: las `X` rellenadas como hace
 `fill_abstentions` (hacia delante, y hacia atrás al inicio de la ventana).
 
-Frames vivos para nosotros y para la verdad: 5846; con el equipo equivocado: 723 (12,4%). La ventana empieza con 9,2 s sin estado (`X`), que el scorer rellena con la primera etiqueta: 64 de esos frames quedan con el equipo equivocado.
+Frames vivos para nosotros y para la verdad: 5846; con el equipo equivocado: 723 (12,4%). Dejamos 230 frames de la ventana en `X`; empieza con 9,2 s sin estado, que el scorer rellena con la primera etiqueta: 64 de esos frames quedan con el equipo equivocado.
 
 | distancia al cambio verdadero más cercano | frames con el equipo equivocado |
 |---|---:|
