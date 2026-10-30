@@ -911,3 +911,22 @@ decodificador en lugar de inyectarse como un frame de control, que con `dwell > 
 el barrido de la decisión 29 pasa a medir la cadena entregada, no solo el motor desnudo, y su regla de
 selección se aplica tal como está escrita (test de signos p ≤ 0,031, más ganadas que perdidas, y sin
 empeorar el acuerdo con el Smart Tagging).
+
+**Resultado y una desviación declarada del pre-registro.** La regla de arriba solo preveía revertir
+por el pareado o por los bloques, y daba por buena la premisa de cada corrección. Al medir, la
+premisa de la corrección 2 resultó **falsa**, así que se revierte aunque la regla no lo pidiera:
+
+- **Corrección 2, revertida.** Al exigir 1 s fuera del campo, el `D` predicho en el slice cae de 622
+  a 545 frames y los aciertos de 564 a 487: **los 77 frames eliminados eran `D` real**. El 55% de las
+  salidas del balón dura menos de un segundo (mediana 22 frames): la cámara táctica ve el balón fuera
+  solo un instante antes de perderlo. Eso no es ruido en la línea, es la forma normal de una salida
+  en este dato. El riesgo que señaló la revisión (un parpadeo de verdad, 35 s antes de una falta sin
+  salida) sigue siendo posible y queda como límite conocido.
+- **Corrección 1, mantenida.** En la cadena entregada es neutra: Δ 0,0 con 0 posesiones
+  discordantes (los 20 frames de control fuera del campo del slice caen dentro de paradas ya
+  marcadas `D`). Se mantiene porque es el reglamento. En el motor desnudo, sin reanudaciones, sí baja
+  el número (0,4390 → 0,4195), porque nadie devuelve el balón tras una salida; ese motor no es lo que
+  se entrega.
+
+Cadena entregada final: **`spellF1` 0,4585**, 12,3% de `D`, acuerdo con el Smart Tagging 73,1%,
+reproducible con SHA-256 `4e0ed39b52ed…`.

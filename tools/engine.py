@@ -70,12 +70,20 @@ class Features:
     away_m: np.ndarray
     present: np.ndarray
     speed_mps: np.ndarray  # NaN where the previous frame has no ball
+    in_pitch: np.ndarray  # the ball observed inside the pitch rectangle
 
 
 def features(tracking: atd.Tracking, teams: emision.TeamSlots) -> Features:
     """Distances in metres from the tracking; nothing here depends on a threshold."""
+    if tracking.n_slots != len(teams.codes):
+        raise ValueError(
+            f"tracking has {tracking.n_slots} player slots but metadata maps {len(teams.codes)}"
+        )
     players = tracking.players_array[:, :, :2] * PITCH_M
     ball, present = tracking.ball()
+    # The export normalises the pitch to [0, 1]; the dead-ball stream uses the same rectangle.
+    x, y = ball[:, 0], ball[:, 1]
+    in_pitch = present & (x >= 0) & (x <= 1) & (y >= 0) & (y <= 1)
     ball_m = ball[:, :2] * PITCH_M
     distance = np.linalg.norm(players - ball_m[:, None, :], axis=2)
     distance[~np.isfinite(distance)] = np.inf  # an absent player is never the nearest
@@ -84,38 +92,48 @@ def features(tracking: atd.Tracking, teams: emision.TeamSlots) -> Features:
     away_m = distance[:, ~home].min(axis=1)
     home_m[~present] = np.nan
     away_m[~present] = np.nan
-    return Features(home_m, away_m, present, emision._ball_speed(ball_m, present))
+    return Features(home_m, away_m, present, emision._ball_speed(ball_m, present), in_pitch)
 
 
 def control(f: Features, params: Params = DEFAULT) -> np.ndarray:
     """`0` home control, `1` away control, `NONE` otherwise, frame by frame.
 
     An unknown speed (the first frame after a gap) is not evidence of a slow ball, and a tie between
-    the two nearest players is a contest, not a control: both fail closed.
+    the two nearest players is a contest, not a control: both fail closed. A ball outside the pitch
+    is not in play, so nobody controls it there (DECISIONS 31); the restart gives it back.
     """
     nearest = np.fmin(f.home_m, f.away_m)
     slow = np.nan_to_num(f.speed_mps, nan=np.inf) <= params.speed_mps
-    close = f.present & (nearest <= params.radius_m) & slow
+    close = f.in_pitch & (nearest <= params.radius_m) & slow
     team = np.full(len(f.present), NONE, dtype=np.int8)
     team[close & (f.home_m < f.away_m)] = 0
     team[close & (f.away_m < f.home_m)] = 1
     return team
 
 
-def decode(ctrl: np.ndarray, runs: list[tuple[int, int]], dwell: int = 1) -> np.ndarray:
+def decode(
+    ctrl: np.ndarray,
+    runs: list[tuple[int, int]],
+    dwell: int = 1,
+    forced: dict[int, int] | None = None,
+) -> np.ndarray:
     """Carry the last controlling team inside each `[start, stop)` run; `NONE` outside them.
 
     The first control of a run sets the state at once; after that, a change needs `dwell`
-    consecutive control frames of the other team and is dated to the first of them.
+    consecutive control frames of the other team and is dated to the first of them. A frame in
+    `forced` (a restart, DECISIONS 30) hands the ball to its team at once, whatever `dwell` is.
     """
     if dwell < 1:
         raise ValueError(f"dwell must be at least 1 frame, got {dwell}")
+    forced = forced or {}
     state = np.full(len(ctrl), NONE, dtype=np.int8)
     for start, stop in runs:
         current, rival, streak, since = NONE, NONE, 0, start
         for i in range(start, stop):
             seen = int(ctrl[i])
-            if seen in (NONE, current):
+            if i in forced:
+                current, rival, streak = forced[i], NONE, 0
+            elif seen in (NONE, current):
                 rival, streak = NONE, 0  # a gap in the rival's control, or our own, resets it
             elif current == NONE:
                 current = seen
@@ -139,34 +157,37 @@ def labels(state: np.ndarray) -> np.ndarray:
 
 
 def halves() -> list[tuple[int, int]]:
-    return [(start, stop + 1) for _half, start, stop in games.half_video_blocks(games.GAME)]
+    """The two playing halves, half-open: the one definition, in tools/ball_gaps.py."""
+    from tools.ball_gaps import half_runs
+
+    return half_runs()
 
 
-def restart_controls(instances: list[dict]) -> list[tuple[int, int]]:
-    """`(frame, team)` for every tagged restart whose `Team` is known: the restart is a control.
+def restart_controls(instances: list[dict]) -> dict[int, int]:
+    """`{frame: team}` for every tagged restart whose `Team` is known: the restart is a control.
 
-    The frame is the dead-ball stream's restart frame (`dead_ball.restarts`), so the stoppage it
-    closes and the control it opens meet on the same frame.
+    Read from the dead-ball stream's own restarts (`dead_ball.restarts`), so the stoppage a restart
+    closes and the possession it opens meet on the same frame, from one parser.
     """
     from tools import dead_ball
-    from tools import smart_tagging as st
 
-    found = []
-    for instance in instances:
-        if (instance.get("code") or "").strip().upper() != "SET PIECES":
-            continue
-        team = st.TEAMS.get(str((instance.get("tags") or {}).get("Team") or "").strip().casefold())
-        if team is not None:
-            found.append((dead_ball.restarts([instance])[0].frame, team))
-    return sorted(found)
+    return {r.frame: r.team for r in dead_ball.restarts(instances) if r.team is not None}
 
 
-def with_restarts(ctrl: np.ndarray, controls: list[tuple[int, int]], runs) -> np.ndarray:
-    """A copy of `ctrl` with each restart frame inside a run set to its restarting team."""
-    out = ctrl.copy()
-    for frame, team in controls:
-        if any(start <= frame < stop for start, stop in runs):
-            out[frame] = team
+def chain_labels(
+    f: Features,
+    params: Params,
+    forced: dict[int, int] | None,
+    dead: np.ndarray | None,
+) -> np.ndarray:
+    """The delivered chain on precomputed inputs: control, decode with restarts, then `D`.
+
+    Shared by `run` and the sensitivity sweep, so the sweep measures what is delivered.
+    """
+    state = decode(control(f, params), halves(), params.dwell, forced)
+    out = labels(state)
+    if dead is not None:
+        out[np.asarray(dead, dtype=bool)] = "D"
     return out
 
 
@@ -181,14 +202,12 @@ def run(
     from tools import smart_tagging as st
 
     f = features(atd.load("tactical"), emision.team_slots())
+    forced = restart_controls(st.load()) if restarts else None
+    mask = dead_ball.dead_mask(dead_ball.load_evidence(), halves(), "out") if dead else None
+    table = pd.DataFrame({"frame": np.arange(len(f.present))})
+    table["label"] = chain_labels(f, params, forced, mask)
     ctrl = control(f, params)
-    if restarts:
-        ctrl = with_restarts(ctrl, restart_controls(st.load()), halves())
-    state = decode(ctrl, halves(), params.dwell)
-    table = pd.DataFrame({"frame": np.arange(len(state)), "label": labels(state)})
-    if dead:
-        mask = dead_ball.dead_mask(dead_ball.load_evidence(), halves(), "out")
-        table = dead_ball.apply_dead(table, mask)
+    state = decode(ctrl, halves(), params.dwell, forced)
     inside = np.zeros(len(state), dtype=bool)
     for start, stop in halves():
         inside[start:stop] = True
@@ -211,7 +230,14 @@ def write_artifact(table: pd.DataFrame, out: Path) -> None:
     artifact.to_csv(out, index=False, lineterminator="\n")
 
 
-def build(workdir: Path, out: Path, params: Params = DEFAULT) -> Path:
+def build(
+    workdir: Path,
+    out: Path,
+    params: Params = DEFAULT,
+    *,
+    dead: bool = True,
+    restarts: bool = True,
+) -> Path:
     """The delivered chain for this engine: artifact -> assemble -> validator (tools/repro.py)."""
     from tools import backup
     from tools.f0a import _run
@@ -219,7 +245,7 @@ def build(workdir: Path, out: Path, params: Params = DEFAULT) -> Path:
     workdir = backup.wipe(workdir)
     out = out.resolve()
     artifact = workdir / "artifacts" / "engine.csv"
-    table, _summary = run(params)
+    table, _summary = run(params, dead=dead, restarts=restarts)
     write_artifact(table, artifact)
     _run(
         [
@@ -252,7 +278,7 @@ def main(argv: list[str] | None = None) -> int:
     chain = {"dead": not args.bare, "restarts": not (args.bare or args.no_restarts)}
     try:
         if args.build:
-            out = build(args.build, args.submission, params)
+            out = build(args.build, args.submission, params, **chain)
             print(f"wrote {out}")
             return 0
         table, summary = run(params, **chain)

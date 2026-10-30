@@ -267,3 +267,29 @@ def test_delivered_match_aggregates(delivered: Evidence) -> None:
     assert len(delivered.restarts) == 59
     assert result["stoppages_by_source"] == {"kick-off": 2, "out": 28, "tag": 29}
     assert result["dead_share_in_halves"] == pytest.approx(0.1230, abs=5e-4)
+
+
+def test_a_restart_carries_the_team_that_takes_it() -> None:
+    instances = [
+        {
+            "code": "SET PIECES",
+            "tags": {"Team": " barcelona ", "Type": "Corner Kick"},
+            "start_frame": 100,
+            "end_frame": 300,
+        },
+        {
+            "code": "SET PIECES",
+            "tags": {"Team": "N/A", "Type": "Throw-in"},
+            "start_frame": 500,
+            "end_frame": 600,
+        },
+    ]
+    assert [r.team for r in dead_ball.restarts(instances)] == [0, None]
+
+
+def test_a_short_out_still_opens_a_tagged_stoppage() -> None:
+    """DECISIONS 31: the camera often sees a ball leave the pitch for under a second."""
+    ev = evidence([restart_at(2000)], out=[(1500, 1505)])
+    assert [(s.start, s.source) for s in dead_ball.stoppages(ev, [(0, N)], "out")] == [
+        (1500, "out")
+    ]

@@ -21,7 +21,7 @@ import pandas as pd
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from tools import atd, emision, engine  # noqa: E402
+from tools import atd, dead_ball, emision, engine  # noqa: E402
 from tools import blocks as bl  # noqa: E402
 from tools import smart_tagging as st  # noqa: E402
 from tools.compare_submissions import compare_codes  # noqa: E402
@@ -40,10 +40,15 @@ def sweep() -> list[dict]:
     gt = pm.label_codes(pd.read_csv(GROUND_TRUTH).label)
     runs = engine.halves()
     cut = bl.blocks(bl.halves())
-    votes = st.possession_votes(st.load())
+    instances = st.load()
+    votes = st.possession_votes(instances)
+    # The delivered chain (DECISIONS 30, 31): restarts force possession and stoppages are D. Both
+    # are computed once; only the engine's thresholds move across the grid.
+    forced = engine.restart_controls(instances)
+    dead = dead_ball.dead_mask(dead_ball.load_evidence(), runs, "out")
 
     def decoded(params: engine.Params) -> np.ndarray:
-        return engine.labels(engine.decode(engine.control(f, params), runs, params.dwell))
+        return engine.chain_labels(f, params, forced, dead)
 
     default = engine.DEFAULT
     base = pm.label_codes(list(decoded(default)))
@@ -63,6 +68,7 @@ def sweep() -> list[dict]:
                 "macro_f1": float(scored["macro_f1"]),
                 "wins": int(paired["wins_b"]),
                 "losses": int(paired["wins_a"]),
+                "p": float(paired["exact_two_sided_p"]),
                 "rate": structure[-1].rate,
                 "st_agree": structure[-1].st_agree,
                 "st_low": float(np.mean([structure[b - 1].st_agree for b in LOW_BALL_BLOCKS])),
@@ -83,10 +89,11 @@ def report(rows: list[dict], command: str, commit: str | None) -> str:
     origin = f" desde el commit `{commit}`" if commit else ""
     default = rows[0]
     lines = [
-        "# Motor (#6): mapa de sensibilidad pre-registrado",
+        "# Motor (#6): mapa de sensibilidad pre-registrado, sobre la cadena entregada",
         "",
         f"Generado por `{command}`{origin}. No se edita a mano. Rejilla, métricas y regla de",
-        "selección: decisión 29, commiteada antes de correr esto. La fila **en negrita** es el",
+        "selección: decisión 29, commiteada antes de correr esto; cada fila es la cadena entregada",
+        "(motor + reanudaciones + `D`, decisiones 30 y 31) con esos umbrales. En **negrita**, el",
         "default, elegido por física. `gana/pierde` = posesiones del slice público cuyo estado de",
         "acierto a IoU 0,5 cambia frente al default (test de signos; hacen falta ≥ 6 en el mismo",
         "sentido). `ST` = acuerdo con el Smart Tagging, la única señal independiente del tracking;",
@@ -114,7 +121,13 @@ def report(rows: list[dict], command: str, commit: str | None) -> str:
         lines.append("| " + " | ".join(cells) + " |")
 
     others = rows[1:]
-    beats = [r for r in others if r["wins"] - r["losses"] >= 6 and r["wins"] >= 6]
+    # DECISIONS 29, as written: the sign test at p <= 0,031 (six of six discordant possessions),
+    # more wins than losses, and no worse Smart Tagging agreement than the default.
+    beats = [
+        r
+        for r in others
+        if r["p"] <= 0.0313 and r["wins"] > r["losses"] and r["st_agree"] >= default["st_agree"]
+    ]
     spell = [r["spell_f1"] for r in others]
     lines += [
         "",
@@ -122,8 +135,8 @@ def report(rows: list[dict], command: str, commit: str | None) -> str:
         "",
         f"- `spellF1` de las otras 26 configuraciones: {_dec(min(spell))} .. {_dec(max(spell))} "
         f"(default {_dec(default['spell_f1'])}).",
-        f"- Configuraciones que ganan al default con ≥ 6 posesiones discordantes en el mismo "
-        f"sentido: **{len(beats)}**.",
+        f"- Configuraciones que ganan al default según la regla (test de signos p ≤ 0,031, más "
+        f"ganadas que perdidas, sin empeorar el acuerdo con el Smart Tagging): **{len(beats)}**.",
         f"- Acuerdo con el Smart Tagging: {_pct(min(r['st_agree'] for r in others))} .. "
         f"{_pct(max(r['st_agree'] for r in others))} (default {_pct(default['st_agree'])}).",
     ]

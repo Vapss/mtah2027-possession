@@ -89,6 +89,9 @@ class Restart:
     frame: int
     tag_start: int
     kind: str
+    team: int | None = (
+        None  # who restarts: 0 home, 1 away, None when the tag says N/A (DECISIONS 30)
+    )
 
 
 @dataclass(frozen=True)
@@ -115,7 +118,10 @@ def restarts(instances: list[dict], params: Params = DEFAULT) -> tuple[Restart, 
         kind = str((instance.get("tags") or {}).get("Type") or "").strip()
         offset = params.kick_off_restart_s if kind.startswith("Kick Off") else params.restart_s
         start = int(instance["start_frame"])
-        found.append(Restart(start + params.frames(offset), start, kind))
+        tag = str((instance.get("tags") or {}).get("Team") or "").strip().casefold()
+        found.append(
+            Restart(start + params.frames(offset), start, kind, smart_tagging.TEAMS.get(tag))
+        )
     return tuple(sorted(found, key=lambda restart: (restart.frame, restart.tag_start)))
 
 
@@ -198,7 +204,11 @@ def stoppages(
     n = len(evidence.out)
     found: list[Stoppage] = []
     episodes = out_episodes(evidence.out, params.frames(params.merge_s))
+    # Every out episode can open a tagged stoppage, however short: the tactical camera often sees
+    # a ball that leaves the pitch for under a second (55% of episodes), and on the public slice the
+    # short ones were all real dead ball (DECISIONS 31). The untagged variant keeps its minimum.
     firsts = np.array([first for first, _stop, _n in episodes], dtype=np.int64)
+    minimum = params.frames(params.untagged_min_out_s)
     restart_frames = np.array([r.frame for r in evidence.restarts], dtype=np.int64)
 
     for half_start, half_stop in halves:
@@ -230,7 +240,6 @@ def stoppages(
         if level < VARIANTS.index("out+still+untagged"):
             continue
         reach = params.frames(params.lookback_s)
-        minimum = params.frames(params.untagged_min_out_s)
         for first, stop, n_out in episodes:
             if not half_start <= first < half_stop or n_out < minimum:
                 continue
@@ -268,8 +277,10 @@ def apply_dead(labels: pd.DataFrame, dead: np.ndarray) -> pd.DataFrame:
 
 
 def halves() -> list[tuple[int, int]]:
-    """The two half-time video blocks, half-open."""
-    return [(start, stop + 1) for _half, start, stop in games.half_video_blocks(games.GAME)]
+    """The two half-time video blocks, half-open: the one definition, in tools/ball_gaps.py."""
+    from tools.ball_gaps import half_runs
+
+    return half_runs()
 
 
 def load_evidence(params: Params = DEFAULT) -> Evidence:
