@@ -1120,3 +1120,62 @@ frame. Corregido para que cumpla la regla escrita: cambian 452 frames, el `D` de
 solo la señal que usa, no las 29 columnas del modelo, y la máscara de jugadores se calcula siempre
 sobre los medios tiempos del partido. `engine.delivered_dead` usa `dead_ball_v2.dead_union`: una
 sola definición del `D` entregado. Repro: `72c98ed4bb4a…`.
+
+---
+
+## 37. El corpus externo no arbitra reglas que cambian la escala de la posesión, en ningún sentido
+
+**Una asimetría que se corrige por escrito.** El corpus de DFL se usó para revertir V6 (decisión 34),
+pero en ese mismo corpus la regla del duelo también queda por debajo de la regla de control sin duelo
+(0,2394 frente a 0,2631 degradado, 0 de 7 partidos), y el duelo se adoptó. Las dos comparaciones son
+del mismo tipo: V6 redata los cambios de posesión y el duelo reduce cuántos hay; ambas dependen de la
+definición de posesión de la verdad, y la de DFL es otra (4,58 posesiones/min y 41–52% de `D`, frente
+a 3,4 y 19,6% en nuestro partido; su compuerta de dominio falló). Un corpus que cuenta más cambios
+penaliza por construcción cualquier regla que los reduzca.
+
+**Decidido.** El corpus externo **no arbitra** reglas que cambian la escala temporal o el número de
+cambios de posesión, en ningún sentido. Sirve para lo que sí demostró: la pérdida relativa por balón
+perdido y para fijar constantes físicas que no dependen de la definición de posesión (como las de W1,
+que viene de su estado vivo/muerto por frame).
+
+**Qué cambia en la entrega: nada, y por qué.**
+
+- **El duelo se mantiene**: lo sostienen el slice, el banco, el Smart Tagging y que acerca las
+  posesiones/min a la referencia física (3,64 → 3,29; referencia 3,4).
+- **V6 sigue fuera, por otro motivo que ya bastaba**: su única ganancia en el slice eran las dos
+  posesiones que ganaba `mid`, una regla derivada de mirar las latencias de ese mismo slice, y el banco
+  reutiliza esas 17 posesiones. Sin un juez independiente, una regla contaminada por el slice no entra.
+
+---
+
+## 38. El balón del vídeo no entra: el sesgo de selección de los huecos, medido
+
+**Contexto.** El carril de vídeo (`docs/proposals/lane-ball-video.md`, `tools/video_ball.py`) intentó
+recuperar el balón del vídeo táctico donde el tracking lo pierde: un detector local proyectado al
+campo con la homografía y fundido en las features del motor. Pre-registro antes de medir; números
+reproducidos por el carril y revisados por el coordinador.
+
+**Resultado: negativo.**
+
+- **Detector genérico (YOLO11x, COCO).** Como posición del balón no es defendible: precisión ≤ 0,75 a
+  menos de 2 m del balón del tracking. En los **huecos reales** del slice, la mejor variante baja el
+  `spellF1` de 0,4585 a 0,4372 (falla su compuerta). Pero en el banco, rellenando los huecos
+  trasplantados, la cota superior parecía enorme: 0,4288 de media frente a 0,3516. **Esa diferencia es
+  el sesgo de selección, ahora medido**: los huecos reales están donde detectar es difícil (balón en el
+  aire, oclusiones), y el banco los pone donde el balón se veía.
+- **Detector afinado con etiquetas del propio tracking** (YOLO11s, sin el bloque 1 ni un minuto a cada
+  lado). Precisión 0,913 en los bloques donde se fijó el umbral, **0,651 en la otra mitad**: no
+  generaliza entre mitades. No-go por la compuerta pre-registrada (≥ 0,90), y no se procesó el partido.
+
+**Decidido.** El vídeo no entra en la cadena. Se conserva como evidencia: el módulo y sus pruebas, con
+el motor `D31` contra el que se midió (los pesos afinados, 19 MB, no se commitean). El coste habría sido
+además serio para la reproducción: ~1 h de GPU o ~18,5 h de CPU para el partido.
+
+**Lo que enseña al resto.** El banco sobreestima todo lo que actúa en los huecos: el vídeo y la
+imputación (decisión 34) mejoraban en el banco y empeoraban o eran contradichos en huecos reales. Para
+cualquier método de huecos, el banco es necesario pero no suficiente; hace falta una señal sobre huecos
+reales (el slice tiene 391 frames vivos sin balón; el Smart Tagging, ~98% en ellos).
+
+**Fin de la ronda 1.** Cinco carriles: dos positivos integrados (duelo, balón muerto por los jugadores),
+tres negativos o fuera de la entrega con su motivo escrito (imputación, vídeo, escalas temporales del
+decodificador), y dos herramientas nuevas de evaluación (banco, corpus externo).
