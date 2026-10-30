@@ -198,7 +198,9 @@ estricta), pero rellenando los huecos *reales* del slice las tres variantes pier
 (Δ −0,0585 / −0,0213 / −0,0670, todas bajo la compuerta Δ ≥ −0,02), porque los huecos del ATD
 están donde el balón es difícil de ver y ahí el detector encuentra otra cosa
 (`lane-ball-video.md` §3, rama `research-ball-video-lane`). Detector afinado con etiquetas del
-ATD: **[pendiente ronda 2]**.
+ATD (YOLO11s, sin el bloque 1): precisión 0,913 en los bloques donde se fijó el umbral y **0,651 en la
+otra mitad**, bajo la compuerta pre-registrada de 0,90; no generaliza entre mitades y no se procesó el
+partido (D38).
 
 **Broadcast.** No está sincronizado con el táctico (su propia línea de tiempo, con cortes y
 repeticiones) y su homografía solo es utilizable en el 65,8% de los frames (DATA.md). La fusión solo
@@ -255,8 +257,8 @@ decidió no tomar ninguna decisión de fusión con evidencia del slice y dejar e
 - **La fecha de los cambios.** La mejor regla de fecha empareja 6 de 20 transiciones del slice a
   ±1 s; los errores grandes son cambios equivocados, no mal fechados (`lane-decode.md` §10).
 
-Con más tiempo: el detector de balón afinado con etiquetas del ATD (ronda 2) y, si recupera balón
-en huecos reales, reevaluar la imputación con verdad física (D34); `rule+first-control`, la
+Con más tiempo: un detector de balón que generalice entre mitades (el afinado no lo hizo, D38) y,
+si recupera balón en huecos reales, reevaluar la imputación con verdad física (D34); `rule+first-control`, la
 candidata natural para dar el balón tras una parada sin tag (`lane-dead-v2.md` §10); una quietud
 tras gol con tope de 40 s y el modelo de `D` con otra compuerta, cada uno con su propio
 pre-registro (`lane-d.md` §10, `lane-dead-v2.md` §10).
