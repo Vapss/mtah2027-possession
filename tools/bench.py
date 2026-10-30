@@ -20,6 +20,11 @@ in/out-of-pitch observation. Players, Smart Tagging and ground truth stay as the
 runs on the degraded match and is scored with the official metric on the public labels. One donor,
 one `spellF1`; the bench reports their spread and their mean, and the mean over the low-ball donors.
 
+The ball cannot be given back where block 1 itself lost it, so a degraded window keeps the ball only
+where both block 1 and the donor saw it: its coverage is lower than the donor's (a 56,9% donor
+leaves about 50%). Every row therefore reports the coverage the method actually ran with, and the
+low-ball split uses that (DECISIONS 33).
+
 What it is not
 --------------
 A transplanted gap is not a real one: real gaps cluster where the ball is hard to see (in the air,
@@ -127,17 +132,30 @@ def load() -> tuple[engine.Features, dead_ball.Evidence, np.ndarray, list[bl.Blo
     return f, ev, gt, bl.blocks(bl.halves())
 
 
+_CODES = {"H": pm.H, "A": pm.A, "D": pm.D, "X": pm.X}
+
+
+def spell_f1(gt: np.ndarray, labels: np.ndarray, runs: list[tuple[int, int]]) -> float:
+    """The official spellF1 (`spell_f1_mean` of `evaluate`), computed alone and vectorised."""
+    codes = np.full(len(labels), pm.X, dtype=np.int64)
+    for letter, code in _CODES.items():
+        codes[labels == letter] = code
+    return float(pm.spell_scores(gt, pm.fill_abstentions(codes, runs), runs)["mean_f1"])
+
+
 def bench(method: Method, f, ev, gt, cut) -> list[dict]:
-    """One row per donor: its ball share and the method's public spellF1 under its mask."""
+    """One row per donor: the ball share the method ran with, and its public spellF1."""
     window = (cut[0].start, cut[0].stop)
+    runs = pm.valid_runs(gt)
+    if runs != [window]:
+        raise ValueError(f"block 1 {window} is not the graded public window {runs}")
     size = window[1] - window[0]
+    seen = f.present[window[0] : window[1]]
     rows = [
         {
             "donor": "1★ (sin trasplante)",
-            "ball": float(f.present[window[0] : window[1]].mean()),
-            "spell_f1": float(
-                pm.evaluate(gt, pm.label_codes(list(method(f, ev))))["spell_f1_mean"]
-            ),
+            "ball": float(seen.mean()),
+            "spell_f1": spell_f1(gt, np.asarray(method(f, ev)), runs),
         }
     ]
     for block in cut[1:]:
@@ -145,14 +163,15 @@ def bench(method: Method, f, ev, gt, cut) -> list[dict]:
             continue  # a shorter block cannot cover the whole window
         donor = f.present[block.start : block.start + size]
         f2, ev2 = degrade(f, ev, window, donor)
-        codes = pm.label_codes(list(method(f2, ev2)))
         rows.append(
             {
                 "donor": str(block.index),
-                "ball": float(donor.mean()),
-                "spell_f1": float(pm.evaluate(gt, codes)["spell_f1_mean"]),
+                "ball": float((seen & donor).mean()),  # what the method actually ran with
+                "spell_f1": spell_f1(gt, np.asarray(method(f2, ev2)), runs),
             }
         )
+    if len(rows) == 1:
+        raise ValueError(f"no block covers a full {size}-frame window: the bench has no donor")
     return rows
 
 
@@ -170,7 +189,7 @@ def summary(rows: list[dict]) -> dict:
 
 
 def _dec(value: float) -> str:
-    return "—" if np.isnan(value) else f"{value:.4f}".replace(".", ",")
+    return bl._dec(value, 4)
 
 
 def report(results: dict[str, list[dict]], command: str, commit: str | None) -> str:
@@ -196,10 +215,11 @@ def report(results: dict[str, list[dict]], command: str, commit: str | None) -> 
         "|---|" + "---:|" * len(names),
     ]
     stats = {n: summary(results[n]) for n in names}
+    n_low = stats[names[0]]["n_low"]
     for key, label in [
         ("clean", "sin trasplante"),
-        ("mean", "media de donantes"),
-        ("low_mean", f"media de donantes con < {int(100 * LOW_BALL)}% de balón"),
+        ("mean", f"media de donantes (n={len(first) - 1})"),
+        ("low_mean", f"media de donantes con < {int(100 * LOW_BALL)}% de balón (n={n_low})"),
         ("min", "peor donante"),
     ]:
         lines.append(f"| {label} | " + " | ".join(_dec(stats[n][key]) for n in names) + " |")

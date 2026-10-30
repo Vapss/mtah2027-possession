@@ -955,3 +955,31 @@ premisa se comprueba en el partido: **10 de las 27 reanudaciones con equipo cono
 control observado en su ventana**, y en 2 de esas 10 el primer control es del rival: son justo los
 casos que antes se revertían al equipo que sacaba. Se fuerzan 17 de 27. Cadena entregada: SHA-256
 `1cdab582ee6b…`.
+
+---
+
+## 33. Banco de trasplante de huecos: se usa para el balón perdido, no para la escala temporal
+
+**Decidido.** `tools/bench.py` puntúa un método en la ventana pública con el patrón de balón ausente
+de cada uno de los otros 19 bloques completos de 5 minutos, contra el ground truth real. Es la
+métrica principal para todo lo que depende de los huecos de balón (imputación, balón muerto sin
+balón visible, detección propia del balón), que hasta ahora se decidía por principio (decisión 24).
+
+- **Cobertura efectiva.** El balón no se puede devolver donde el bloque 1 ya lo perdió, así que la
+  ventana degradada conserva el balón solo donde lo vieron el bloque 1 y el donante. Cada fila
+  reporta esa cobertura efectiva, no la del donante.
+- **`LOW_BALL = 50%`** de cobertura efectiva separa el régimen que el slice público no puede mostrar
+  (el partido tiene 56,9% de balón; los bloques 7, 9, 11, 15, 18, 19 y 20 quedan por debajo). La
+  tabla dice cuántos donantes promedia cada fila.
+
+**Calibración** contra los números oficiales del partido completo (que nadie aquí puede ver como
+etiquetas): para los baselines `smooth` reconstruidos, el banco da 0,0345 / 0,1854 / 0,2150 con
+ventanas 0 / 25 / 50, frente a 0,0486 / 0,1996 / 0,2433 oficiales. Predice la caída por balón
+perdido, algo pesimista. **No** predice `smooth125` (banco 0,2910, oficial 0,2242): ese pierde en el
+partido porque su ventana de 5 s fusiona posesiones más cortas que las del bloque 1, y el banco
+conserva la estructura de posesiones del bloque 1. Por eso, para un método con escala temporal
+propia el guardarraíl sigue siendo el informe de bloques (decisión 26).
+
+**Motor (decisión 32):** 0,4585 limpio, 0,3516 de media (n = 19) y 0,2782 en los 6 donantes con
+menos de la mitad del balón. Es la estimación más honesta disponible de su rendimiento en el
+partido completo.
