@@ -125,4 +125,119 @@ legítimo, y se fijan ahora:
 
 ## 2. Resultados
 
-(Se rellenan después de este commit, con números de `python tools/external.py`.)
+Todas las tablas completas (por partido, limpio y degradado, `spellF1` y `macroF1`, partidos ganados)
+están en `docs/analysis/external.md`, generado por
+`python tools/external.py --score --write docs/analysis/external.md` desde el commit del
+pre-registro (`ba5a142`). Aquí van los resúmenes y su lectura.
+
+### 2.1 P1, dominio: **fuera de dominio para parámetros con escala temporal**
+
+| | IDSSE (7 partidos) | BAR-ATH público |
+|---|---:|---:|
+| posesiones/min | 3,78–5,30, media **4,58** | 3,40 |
+| mediana de posesión | 3,0–4,7 s (media de medianas **3,77**, agrupada 3,68, n = 3.061) | 7,6 s |
+| posesiones < 1 s | 9,0–16,8% | 5,9% |
+| `%D` | **40,7–51,7%** | 19,6% |
+| paradas/min | 0,94–1,19 | 0,80 |
+| balón fuera del campo en frames `D` / vivos | 59,0% / 0,47% | — |
+
+La puerta falla por las dos condiciones (4,58 > 4,4; 3,77 < 3,8 s, esta por poco). Las posesiones DFL
+son más cortas y más frecuentes, con más posesiones de menos de un segundo: la definición de la DFL
+parece cambiar de equipo con toques que la nuestra no cuenta (despejes, rebotes, duelos), aunque con
+este corpus no se puede distinguir eso de un fútbol simplemente más cortado. Y su `D` es más del
+doble: cubre toda parada arbitral, desde el pitido hasta la reanudación, con el balón quieto donde
+salió (59% de los frames `D` lo tienen fuera del campo). Por tanto, según la regla pre-registrada:
+**este corpus no puede fijar ventanas, `dwell` ni duraciones mínimas**, y como se ve abajo, tampoco
+sirve para medir reglas de `D`.
+
+### 2.2 Puntuaciones
+
+`spellF1` medio de los 7 partidos (el degradado ve el balón en un 60,5% de los frames de las mitades;
+nuestras dos mitades donantes, 59,3% y 59,3%):
+
+| método | público | banco: media | banco: < 50% balón | externo limpio | externo degradado |
+|---|---:|---:|---:|---:|---:|
+| `engine` (entregado) | 0,4585 | 0,3516 | 0,2782 | 0,3767 | 0,2631 |
+| `engine-bare` | 0,4195 | 0,2959 | 0,2047 | 0,3767 | 0,2631 |
+| `smooth50` | 0,3256 | 0,2150 | 0,1657 | 0,3081 | 0,2226 |
+| `engine-out` | (2.3) | (2.3) | (2.3) | **0,4767** | **0,3454** |
+
+`macroF1` medio, limpio / degradado: `engine-bare` 0,4106 / 0,3664, `engine-out` 0,7029 / 0,6151,
+`smooth50` 0,3923 / 0,4772. Posesiones/min predichas, limpio / degradado (ground truth 4,58):
+`engine-bare` 3,50 / 2,34, `engine-out` 4,19 / 2,91, `smooth50` 3,96 / 4,20.
+
+Partidos ganados en `spellF1`: `engine-out` > `engine-bare` > `smooth50` en **7/7** partidos, limpio
+y degradado. **Control de integridad**: `engine` da exactamente `engine-bare` en los 14 casos (sin
+reanudaciones su máscara `D` es vacía y no hay control forzado), como se predijo.
+
+### 2.3 Post hoc (NO pre-registrado): `engine-out` en nuestro banco
+
+Para poder leer P2 sobre `engine-out`, la misma regla corrida en nuestro partido con las
+reanudaciones del Smart Tagging quitadas (exactamente lo que ve en el corpus). Sin un solo parámetro
+nuevo, pero no estaba en el pre-registro: se lee como pista, no como resultado.
+
+| método | público | banco: media | banco: < 50% balón | peor donante |
+|---|---:|---:|---:|---:|
+| `engine-out` sin reanudaciones | 0,4381 | 0,3018 | 0,2003 | 0,1167 |
+| `engine-bare` | 0,4195 | 0,2959 | 0,2047 | 0,1167 |
+
+En nuestro partido la regla casi no hace nada (+0,019 público, ruido; +0,006 banco; −0,004 con poco
+balón). En el corpus vale +0,10 limpio y +0,08 degradado. Una regla de `D` ganará mucho más en
+IDSSE que en BAR-ATH, porque allí el `D` es el doble y el balón se queda fuera durante la parada.
+
+### 2.4 P2, orden: **concuerda en lo que no depende del Smart Tagging, y en nada más**
+
+- `engine-bare` > `smooth50`: el mismo orden en público, banco (media y poco balón), externo limpio y
+  degradado, y **7/7** partidos en los dos escenarios externos. Concuerda.
+- `engine` > `engine-bare` (banco +0,056): el corpus no lo puede ver, empatan 0/7, porque toda la
+  diferencia viene de las reanudaciones etiquetadas. Por la regla pre-registrada, **no concuerda** en
+  ese par; lo esperado, no un fallo del corpus, pero sí un límite: lo mejor de nuestra cadena es
+  invisible aquí.
+- `engine-out` > `engine-bare`: el mismo signo en las medias, pero de un tamaño que no se parece en
+  nada (2.3), y el signo se invierte en los donantes con poco balón de nuestro banco. Mide el dominio,
+  no el método.
+
+### 2.5 P3, calibración de la degradación: **reproduce la pérdida del banco**
+
+| | limpio → degradado | caída |
+|---|---|---:|
+| `smooth50`, corpus | 0,3081 → 0,2226 | −28% |
+| `smooth50`, banco (público → media) | 0,3256 → 0,2150 | −34% |
+| `smooth50`, oficial (público → partido completo) | 0,3256 → 0,2433 | −25% |
+| `engine-bare`, corpus | 0,3767 → 0,2631 | −30% |
+| `engine-bare`, banco | 0,4195 → 0,2959 | −29% |
+
+La degradación transplantada cuesta en el corpus lo mismo, en relativo, que en nuestro banco, y el
+`smooth50` degradado (0,2226) cae entre el banco (0,2150) y el oficial (0,2433). El trasplante se
+comporta igual sobre otros partidos: es una buena señal para el banco, porque ya no depende solo de
+las 17 posesiones del bloque 1.
+
+## 3. Recomendación
+
+1. **Usar el corpus degradado** (`external.score(method, external.load_all(), degraded=True)`) como
+   segunda opinión, con 7 partidos y ~3.000 posesiones, para decisiones sobre **el equipo y el
+   arrastre bajo balón perdido**: reglas de control, de arrastre en huecos, imputación de balón,
+   evidencia de formación. Leer los partidos ganados por pares, no solo la media; un cambio que no gane
+   en ≥ 5/7 no está demostrado.
+2. **No usarlo para fijar parámetros con escala temporal** (P1 falla) **ni para medir reglas de `D`**
+   (2.3: su `D` es otra cosa). Si un método mejora por su `D` en el corpus, eso no dice nada de BAR-ATH.
+3. **No usarlo para nada que necesite el Smart Tagging** (reanudaciones): ahí el corpus es ciego, y
+   la cadena entregada se reduce a `engine-bare`.
+4. El limpio sirve de techo: cuánto pierde un método por el balón que no vemos (−28/−30% aquí).
+
+## 4. Limitaciones
+
+- La definición de posesión y de `D` de la DFL no es la de Metrica (2.1); ninguna de las dos está
+  documentada en detalle, y el corpus no es el ground truth de la competición.
+- Los huecos trasplantados no caen donde el balón es difícil de ver (aire, área llena), igual que en el
+  banco; y los jugadores no se degradan (1.4).
+- Las reanudaciones no existen. Los eventos DFL (saques, faltas, córners) podrían hacer de Smart
+  Tagging, pero tienen otra semántica (instantes exactos, no ventanas de 35 s); no se intentó.
+- `macroF1` degradado de `smooth50` sube sobre el limpio (0,3923 → 0,4772): con un 41–52% de `D` en el
+  ground truth, el `D` que `smooth50` escribe en los huecos acierta por volumen. Otro efecto del
+  dominio; el `macroF1` del corpus no se debe leer para `D`.
+- 7 partidos, 5 de ellos de Fortuna Düsseldorf en casa (2. Bundesliga), más Köln–Bayern y
+  Bochum–Leverkusen: pocos estilos de juego, y los 7 «partidos ganados» no son 7 muestras
+  independientes de estilo.
+- Las sumas de hash son las del espejo de Hugging Face, no las de figshare (1.1).
+- Metrica sample data descartado como ground truth (1.1).

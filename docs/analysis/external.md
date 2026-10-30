@@ -1,0 +1,106 @@
+# Corpus externo: IDSSE (DFL, 7 partidos)
+
+Generado por `python tools/external.py --score --write docs/analysis/external.md` desde el commit `ba5a142a`. No se edita a mano. Ground truth: `D` donde
+`BallStatus` = 0, si no el equipo de `BallPossession`. Puntuado con
+`possession_metrics.evaluate`. Protocolo y lectura: `docs/proposals/lane-external.md`.
+
+## Estructura del ground truth (dominio)
+
+| partido | min | posesiones | /min | media s | mediana s | < 1 s | < 3 s | %D | paradas/min | mediana parada s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| J03WMX | 97,3 | 511 | 5,25 | 6,7 | 3,0 | 16,8% | 49,7% | 41,5% | 1,06 | 15,5 |
+| J03WN1 | 94,4 | 500 | 5,30 | 5,5 | 3,1 | 15,2% | 47,6% | 51,7% | 1,13 | 23,8 |
+| J03WOH | 91,5 | 402 | 4,39 | 7,2 | 3,9 | 11,4% | 39,1% | 47,6% | 1,12 | 19,1 |
+| J03WOY | 95,0 | 456 | 4,80 | 6,7 | 3,6 | 9,0% | 43,2% | 46,5% | 1,19 | 19,2 |
+| J03WPY | 97,5 | 421 | 4,32 | 7,7 | 3,8 | 13,5% | 41,6% | 44,3% | 1,00 | 22,8 |
+| J03WQQ | 94,9 | 401 | 4,23 | 8,4 | 4,7 | 9,2% | 38,7% | 40,7% | 1,04 | 19,6 |
+| J03WR9 | 97,9 | 370 | 3,78 | 9,2 | 4,2 | 11,1% | 38,4% | 41,9% | 0,94 | 20,0 |
+| BAR-ATH público (bloque 1) | 5,0 | 17 | 3,40 | 14,2 | 7,6 | 5,9% | 17,6% | 19,6% | 0,80 | 16,4 |
+
+## spellF1 — limpio (tracking DFL completo)
+
+| partido | balón | `engine-bare` | `engine-out` | `smooth50` | `engine` |
+|---|---:|---:|---:|---:|---:|
+| J03WMX | 100,0% | 0,3745 | 0,4753 | 0,3072 | 0,3745 |
+| J03WN1 | 100,0% | 0,3324 | 0,4437 | 0,2838 | 0,3324 |
+| J03WOH | 100,0% | 0,3945 | 0,4916 | 0,3011 | 0,3945 |
+| J03WOY | 100,0% | 0,3557 | 0,4918 | 0,2715 | 0,3557 |
+| J03WPY | 100,0% | 0,3764 | 0,4901 | 0,3171 | 0,3764 |
+| J03WQQ | 100,0% | 0,4146 | 0,4580 | 0,3608 | 0,4146 |
+| J03WR9 | 100,0% | 0,3884 | 0,4861 | 0,3152 | 0,3884 |
+| mean | 100,0% | 0,3767 | 0,4767 | 0,3081 | 0,3767 |
+
+## spellF1 — degradado (balón de BAR-ATH por mitad: 59,3%, 59,3%)
+
+| partido | balón | `engine-bare` | `engine-out` | `smooth50` | `engine` |
+|---|---:|---:|---:|---:|---:|
+| J03WMX | 60,4% | 0,2622 | 0,3528 | 0,2316 | 0,2622 |
+| J03WN1 | 60,2% | 0,2268 | 0,3241 | 0,2170 | 0,2268 |
+| J03WOH | 60,5% | 0,2870 | 0,3669 | 0,2199 | 0,2870 |
+| J03WOY | 60,4% | 0,2422 | 0,3429 | 0,2172 | 0,2422 |
+| J03WPY | 60,8% | 0,2677 | 0,3492 | 0,2265 | 0,2677 |
+| J03WQQ | 60,4% | 0,3063 | 0,3532 | 0,2467 | 0,3063 |
+| J03WR9 | 61,1% | 0,2494 | 0,3287 | 0,1994 | 0,2494 |
+| mean | 60,5% | 0,2631 | 0,3454 | 0,2226 | 0,2631 |
+
+## macroF1 — limpio
+
+| partido | balón | `engine-bare` | `engine-out` | `smooth50` | `engine` |
+|---|---:|---:|---:|---:|---:|
+| J03WMX | 100,0% | 0,4309 | 0,7714 | 0,4150 | 0,4309 |
+| J03WN1 | 100,0% | 0,3658 | 0,6832 | 0,3488 | 0,3658 |
+| J03WOH | 100,0% | 0,4003 | 0,6847 | 0,3849 | 0,4003 |
+| J03WOY | 100,0% | 0,3985 | 0,7038 | 0,3759 | 0,3985 |
+| J03WPY | 100,0% | 0,4076 | 0,7195 | 0,3954 | 0,4076 |
+| J03WQQ | 100,0% | 0,4416 | 0,6318 | 0,4162 | 0,4416 |
+| J03WR9 | 100,0% | 0,4296 | 0,7260 | 0,4095 | 0,4296 |
+| mean | 100,0% | 0,4106 | 0,7029 | 0,3923 | 0,4106 |
+
+## macroF1 — degradado
+
+| partido | balón | `engine-bare` | `engine-out` | `smooth50` | `engine` |
+|---|---:|---:|---:|---:|---:|
+| J03WMX | 60,4% | 0,3882 | 0,6925 | 0,5247 | 0,3882 |
+| J03WN1 | 60,2% | 0,3295 | 0,5961 | 0,4292 | 0,3295 |
+| J03WOH | 60,5% | 0,3590 | 0,5926 | 0,4724 | 0,3590 |
+| J03WOY | 60,4% | 0,3625 | 0,6029 | 0,5051 | 0,3625 |
+| J03WPY | 60,8% | 0,3503 | 0,6145 | 0,4469 | 0,3503 |
+| J03WQQ | 60,4% | 0,4084 | 0,5649 | 0,4991 | 0,4084 |
+| J03WR9 | 61,1% | 0,3671 | 0,6424 | 0,4629 | 0,3671 |
+| mean | 60,5% | 0,3664 | 0,6151 | 0,4772 | 0,3664 |
+
+## Posesiones por minuto y %D predichos (media de partidos)
+
+| método | /min limpio | /min degradado | %D limpio | %D degradado |
+|---|---:|---:|---:|---:|
+| `engine-bare` | 3,50 | 2,34 | 0,0% | 0,0% |
+| `engine-out` | 4,19 | 2,91 | 23,0% | 22,3% |
+| `smooth50` | 3,96 | 4,20 | 0,0% | 31,3% |
+| `engine` | 3,50 | 2,34 | 0,0% | 0,0% |
+| ground truth | 4,58 | 4,58 | | |
+
+## Partidos ganados (spellF1), limpio
+
+| gana a → | `engine-bare` | `engine-out` | `smooth50` | `engine` |
+|---|---:|---:|---:|---:|
+| `engine-bare` | — | 0/7 | 7/7 | 0/7 |
+| `engine-out` | 7/7 | — | 7/7 | 7/7 |
+| `smooth50` | 0/7 | 0/7 | — | 0/7 |
+| `engine` | 0/7 | 0/7 | 7/7 | — |
+
+## Partidos ganados (spellF1), degradado
+
+| gana a → | `engine-bare` | `engine-out` | `smooth50` | `engine` |
+|---|---:|---:|---:|---:|
+| `engine-bare` | — | 0/7 | 7/7 | 0/7 |
+| `engine-out` | 7/7 | — | 7/7 | 7/7 |
+| `smooth50` | 0/7 | 0/7 | — | 0/7 |
+| `engine` | 0/7 | 0/7 | 7/7 | — |
+
+## Comparación con nuestros instrumentos
+
+| método | público (bloque 1) | banco: media | banco: < 50% balón | externo limpio | externo degradado |
+|---|---:|---:|---:|---:|---:|
+| `engine-bare` | 0,4195 | 0,2959 | 0,2047 | 0,3767 | 0,2631 |
+| `smooth50` | 0,3256 | 0,2150 | 0,1657 | 0,3081 | 0,2226 |
+| `engine` | 0,4585 | 0,3516 | 0,2782 | 0,3767 | 0,2631 |
