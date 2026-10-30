@@ -1293,3 +1293,35 @@ mantiene** (`72c98ed4bb4a…`). Lo que queda es el instrumento.
 - **Lo que abre la ronda 6:** con el balón limpio de Metrica, la cadena **no detecta un tercio de los
   cambios en juego** (81 de 251 en g1, 71 de 216 en g2, ningún cambio de la cadena a ±5 s) y añade
   casi otros tantos. Es una cuestión de *si*, no de *cuándo*, y este juez puede arbitrarla.
+
+## 43. Ronda 6: *si* cambia la posesión no cambia la entrega; se cierra la fase de investigación
+
+Carril m-whether (`docs/proposals/lane-m-whether.md`; anatomía `c9c4990` sin variantes, pre-registro
+`971c386` antes de medir, resultados `c5ceb0f`). **Negativo: la cadena entregada se mantiene**
+(`72c98ed4bb4a…`).
+
+- **La anatomía corrige la ronda 5.** Emparejando cada cambio verdadero contra cada cambio de la
+  cadena, los 66 "sobrantes" de g1 eran 41 cambios forzados por reanudaciones, 11 junto a un cambio
+  de balón parado y 14 sin ningún cambio verdadero a ±5 s: la cadena tiene 84 perdidos y 17
+  sobrantes. De los perdidos, 36 son
+  toques rápidos, 28 reflejos de posesiones cortas no vistas y 14 vetos del duelo; **la mitad son
+  posesiones verdaderas de menos de 2 s**, balones sueltos que el `RECOVERY` de Metrica cuenta y la
+  definición del reto ("mientras el balón está suelto, sigue con el último equipo") no.
+- **Con nuestro balón, el error cambia de lado.** Un balón degradado con ruido de posición
+  (σ = 0,85 m, fijado sin etiquetas para reproducir la distancia balón lento → jugador de BAR-ATH)
+  convierte los perdidos en sobrantes (17 → 48–69). Una regla que recupera cambios con un balón
+  limpio los inventa con uno como el nuestro.
+- **Cuatro reglas, ninguna pasa.** `persist` y `settle` no ganan en g2 con los dos balones y mueven
+  42 y 16 frames del partido; `relay` (y `relay+settle`) gana en DFL (6 de 7) pero en BAR-ATH sube la
+  escala a 4,11 posesiones/min, baja el Smart Tagging 4,2 puntos, pierde 2 posesiones del slice
+  (Δ −0,0526) y baja el banco. DFL y la verdad de eventos dan la posesión a quien toca; el reto, a
+  quien controla (decisión 37).
+
+**Se cierra la fase de investigación.** Seis rondas y quince alternativas pre-registradas no
+mejoran la cadena entregada en todos los jueces a la vez. La auditoría del margen (decisiones 40-41)
+dice dónde queda margen —*cuándo* cambia el equipo cerca de un toque— y las rondas 5 y 6 dicen
+por qué no se alcanza con nuestros datos: lo limita la precisión de nuestro balón en el toque, no
+la regla, y el vídeo ya no entra (decisión 38). Lo que queda hasta la entrega es documentarla,
+congelarla (#26) y reproducirla. Una ronda nueva solo se abre con un juez o un dato nuevo, por
+ejemplo una verdad de Metrica con la definición del reto (un `RECOVERY` abre posesión solo si su
+equipo vuelve a jugar el balón antes que el rival).
