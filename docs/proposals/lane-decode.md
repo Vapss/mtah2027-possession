@@ -348,3 +348,41 @@ se midió.
   no mal fechados, y una regla de fecha no los arregla.
 - **Exploración declarada.** La regla de V1 y el descarte de la "recepción" salieron de mirar
   latencias del slice antes del pre-registro (sección 2a).
+
+---
+
+## 11. Seguimiento: V6 `mid+uncontested` frente a V2 (pre-registro)
+
+*Escrito y commiteado antes de medir V6 en ningún instrumento. Las secciones 1–10 no cambian.*
+
+**Contexto.** El coordinador reprodujo la sección 8 y acepta V2 `uncontested` como candidata de
+integración. V3 y V5 quedan aplazadas al corpus de validación externo (su riesgo es una escala de
+tiempo que el banco no juzga). Lo único medible ahora sin escala de tiempo es la combinación que la
+sección 9 dejó sin medir: V1 + V2.
+
+**V6 `mid+uncontested`.** Decodifica con V2 (un cambio necesita un control sin disputa) y fecha cada
+cambio natural con V1 (punto medio del traspaso, con el tope de 2 s). Es V5 sin `touch`: mismas
+funciones, mismas constantes (1,5 m, 50 frames), ninguna nueva. El último control del equipo
+anterior que usa V1 sale del control sin modificar, como en V5.
+
+**Cautela declarada.** La regla de V1 salió de mirar las latencias del slice público antes del
+primer pre-registro (sección 2a): el punto medio fue la regla que mejor fechaba esas 10
+transiciones. Cualquier ganancia de V6 sobre V2 en el slice se lee con esa cautela; por eso la
+regla de abajo pide además que el banco con poco balón no baje.
+
+**Compuertas**, las de la sección 6, pero medidas **frente a V2** (no frente al motor):
+
+- **G1 slice:** Δ pareado de `spellF1` (V6 − V2) ≥ 0; `wins` de V6 ≥ `wins` de V2 a IoU 0,5; y
+  ningún pliegue del jackknife con signo contrario al Δ completo.
+- **G2 banco:** Δ de la media de donantes ≥ 0 y Δ de la media de donantes con poco balón ≥ −0,01.
+- **G3 bloques:** posesiones/min del partido en 2,72 .. 4,08; ningún bloque sin posesiones; ningún
+  bloque con menos de la mitad de las posesiones/min de V2 en ese bloque; acuerdo con el Smart
+  Tagging del partido no más de 1,0 punto por debajo del de V2.
+
+**Regla.** V6 sustituye a V2 solo si pasa G1, G2 y G3 frente a V2 **y** el Δ de la media del banco
+con poco balón es ≥ 0 (más estricto que G2). Si no, se queda V2. Se reporta qué falla y por cuánto.
+
+**Diagnóstico aparte (no es una variante ni una regla).** La sección 10 señaló el bloque 11: con V2
+una sola posesión cubre el 91,4% del bloque. Se reporta, solo con agregados, cuánto tiempo falta el
+balón dentro de esa posesión y si los duelos que V2 ignora ahí (los cambios de la cadena entregada
+que V2 no hace) ocurren dentro o al lado de huecos largos de balón. No sale ninguna regla de esto.
