@@ -490,10 +490,71 @@ def report(measured: dict[str, dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def report_possessions() -> str:
+    """Post-hoc, not pre-registered (proposal, section 9): each true possession of the slice."""
+    from tools import bench
+
+    pm = bench.pm
+    f, ev, gt, _cut = bench.load()
+    runs = pm.valid_runs(gt)
+    spells = pm.possession_spells(gt, runs)
+    codes = {name: pm.label_codes(list(METHODS[name](f, ev))) for name in METHODS}
+    iou = {
+        name: best_iou(spells, pm.possession_spells(pm.fill_abstentions(c, runs), runs))
+        for name, c in codes.items()
+    }
+    offset = {name: start_offsets(gt, codes[name]) for name in (BASELINE, "touch", DIAGNOSTIC)}
+    lines = [
+        "Por posesión verdadera del slice: mejor IoU del mismo equipo y desfase del inicio de esa "
+        "posesión predicha (s, positivo = tarde). Diagnóstico posterior, no pre-registrado.",
+        "",
+        "| # | equipo | dura (s) | IoU none | first | touch | touch<=10 "
+        "| inicio none | touch | touch<=10 |",
+        "|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for i, (start, stop, team) in enumerate(spells):
+        cells = " | ".join(_f(iou[n][i], 3) for n in METHODS)
+        starts = " | ".join(_f(offset[n][i], 2) for n in offset)
+        lines.append(
+            f"| {i + 1} | {pm.LABELS[team]} | {_f((stop - start) / FPS, 1)} | {cells} | {starts} |"
+        )
+    # Where the delivered chain starts late: what it says on the late frames, and what the tracking
+    # shows there (control frames of each team, and touches of the new team that are not controls).
+    chain = delivered(f, ev)
+    filled = pm.fill_abstentions(codes[BASELINE], runs)
+    switch = engine.uncontested(chain.ctrl, f, engine.DEFAULT.radius_m)
+    near = touch(f)
+    side = {pm.H: 0, pm.A: 1}
+    lines += [
+        "",
+        "Posesiones que la cadena entregada empieza tarde: frames `[inicio verdadero, inicio "
+        "predicho)`.",
+        "",
+        "| # | tarde (s) | `D` | otro equipo | mismo equipo | balón visto | control anterior "
+        "sin disputa | control anterior disputado | control nuevo | toque nuevo sin control |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for i, ((start, _stop, team), late) in enumerate(zip(spells, offset[BASELINE])):
+        if late is None or late <= 0:
+            continue
+        window = slice(start, start + int(round(late * FPS)))
+        seg, new = filled[window], side[team]
+        lines.append(
+            f"| {i + 1} | {_f(late, 2)} | {_p(np.mean(seg == pm.D))} "
+            f"| {_p(np.mean((seg != pm.D) & (seg != team)))} | {_p(np.mean(seg == team))} "
+            f"| {_p(f.present[window].mean())} | {int((switch[window] == 1 - new).sum())} "
+            f"| {int(((chain.ctrl[window] == 1 - new) & (switch[window] != 1 - new)).sum())} "
+            f"| {int((chain.ctrl[window] == new).sum())} "
+            f"| {int(((near[window] == new) & (chain.ctrl[window] != new)).sum())} |"
+        )
+    return "\n".join(lines) + "\n"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Lane dating: when a change of possession happens")
     parser.add_argument("--explore", action="store_true", help="hand-overs, no ground truth")
     parser.add_argument("--report", action="store_true", help="every measurement of the proposal")
+    parser.add_argument("--possessions", action="store_true", help="post-hoc, per true possession")
     parser.add_argument("--variant", choices=sorted(METHODS), help="label the match with one")
     parser.add_argument("--labels", type=Path, help="write the variant's frame,label CSV here")
     args = parser.parse_args(argv)
@@ -507,6 +568,8 @@ def main(argv: list[str] | None = None) -> int:
             sys.stdout.write(explore(f, dead_ball.load_evidence()))
         if args.report:
             sys.stdout.write(report(measure(list(METHODS))))
+        if args.possessions:
+            sys.stdout.write(report_possessions())
         if args.variant:
             from tools import atd, emision
 
