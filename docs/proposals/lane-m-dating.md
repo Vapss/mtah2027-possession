@@ -541,3 +541,34 @@ y Δ 0 en el slice: no cambia nada que el `spellF1` vea.
 - **Deuda aceptada.** `LOW_BALL_BLOCKS` y los formateadores (`_dec`, `_abs`, `_pct`) se repiten
   entre los módulos de las rondas 2–5; el traspaso (`handovers`) es el de `tools/dating.py`,
   reescrito aquí para no importar un módulo de otro carril.
+
+## 11. Revisión de código (PR #59)
+
+Correcciones posteriores a la medición, con sus pruebas; todo se re-midió con los cinco comandos de
+la sección 7. **El veredicto no cambia y el hallazgo que abre la ronda 6 tampoco** (cambios en juego
+sin pareja: 81 de 251 en g1 y 71 de 216 en g2, idénticos).
+
+- **Las mitades, separadas.** `build` las unía sin hueco y todo lo que mira frames vecinos cruzaba el
+  descanso (la velocidad de los jugadores saltaba ~90 m entre el último frame de una mitad y el
+  primero de la otra). Ahora `separate_halves` deja `HALF_GAP` = 250 frames vacíos entre ellas, como
+  `external.build`, y mueve los eventos con su mitad. Efecto: +250 frames por juego en la sección 3
+  y el balón visto de g2 degradado 36,0% → 35,9%; ningún otro número de las secciones 3–5 cambia.
+- **La ventana de `reception`** es ahora la pre-registrada, `(max(l, c − 5 s), c]` (incluía un frame
+  más, el de `c − 5 s`). Se mueve solo `reception`: DFL mediana con signo −0,66 → −0,64 s (\|·\| 1,24,
+  igual), BAR-ATH 2.949 → 2.823 frames y acuerdo ST 76,7% → 76,8%; slice (−0,0105, 1–0) y banco,
+  iguales. Sigue fallando las mismas tres compuertas.
+- **Dos hallazgos de la revisión que no lo eran.** Los saques de puerta registrados como `BALL LOST`
+  (`GOAL KICK-INTERCEPTION`) **ya eran reanudaciones** (el subtipo partido por "-" da `GOAL KICK`);
+  `_kind` lo dice ahora explícitamente. Los saques `-RETAKEN` **se mantienen** como reanudaciones: tras
+  cada uno siguió el juego (un pase, un balón perdido) antes de repetirse 17–58 s después; saltarlos,
+  como proponía la revisión, quitaba dos tiros libres reales de g2.
+- **El reloj de DFL (D2)** se fija con la distancia del jugador que actúa al balón, la misma magnitud
+  que usa la regla de control: el juez de DFL puede inclinarse hacia la fecha de la cadena entregada.
+  Era la única compuerta que fallaba `first`; no cambia la entrega, porque `first` mueve 280 frames
+  del partido con Δ 0 en el slice, y `reception` y `relaxed` fallan además el slice y el banco.
+- `keep_mask` delega en `external.keep_mask` (con sus comprobaciones); sin fichero de información de
+  DFL o sin pares emparejados, un error claro en lugar de un `IndexError`; tipos en `game`.
+
+Deuda aceptada: `--measure` decodifica la cadena de referencia una vez por variante, y la receta del
+`D` entregado se repite en `metrica_dead`, `degraded_chain` y `dfl_inputs` (coste y duplicación;
+módulos de investigación).
