@@ -297,3 +297,112 @@ Variantes (las mismas reglas de filtro y fusión de la sección 2, solo cambia e
    selección de la sección 2 (G1-G3).
 3. Determinismo: dos ejecuciones sobre una muestra con `CUBLAS_WORKSPACE_CONFIG=:4096:8`,
    algoritmos deterministas y semillas fijas; tiempo en CPU como alternativa.
+
+## 5. Resultado de la adenda (detector afinado): no-go
+
+```bash
+<venv-video>/python tools/video_ball.py prepare --out runs/video_ball/ft_ds --span 26185 78685 --count 6000
+<venv-video>/python tools/video_ball.py prepare --out runs/video_ball/ft_ds --span 78685 90652 --count 500 --split val
+<venv-video>/python tools/video_ball.py train --data runs/video_ball/ft_ds --project runs/video_ball/ft_train
+.venv/Scripts/python tools/video_ball.py sample --span 78685 90652 --out runs/video_ball/sample_thr.npz
+.venv/Scripts/python tools/video_ball.py sample --span 110808 190198 --out runs/video_ball/sample_h2.npz
+<venv-video>/python tools/video_ball.py detect --weights runs/video_ball/ft_train/ft/weights/last.pt \
+    --cls 0 --batch 16 --frames runs/video_ball/sample_thr.npz --out runs/video_ball/thr_det_ft.npz
+.venv/Scripts/python tools/video_ball.py feasibility --frames runs/video_ball/sample_thr.npz \
+    --detections runs/video_ball/thr_det_ft.npz --thresholds 0.1 0.15 ... 0.9      # rejilla de 0,05
+(lo mismo con sample_h2 / h2_det_ft y --thresholds 0.1 0.2 0.35 0.5 --control-thresholds 0.2 0.35)
+```
+
+**Datos y entrenamiento.** 6.000 recortes positivos y 6.000 negativos de los bloques 3-9, más 500 + 500
+de los bloques 10-11 como validación interna del entrenador (no elige pesos: se usa `last.pt`).
+20 épocas en 0,89 h (RTX 4070 Laptop). La validación interna (IoU sobre cajas de 24 px alrededor de
+etiquetas ruidosas) es poco informativa: P 0,478, R 0,180, mAP50 0,177 en la última época; el
+criterio pre-registrado es la distancia al ATD en frames completos. (Durante la 1.ª época un proceso
+residual de la etapa 2 compitió por la GPU; solo afectó a la velocidad, no al orden de los datos.)
+
+### 5a. Umbral de operación (bloques 10-11, 1.ª mitad, fuera del entrenamiento)
+
+| conf ≥ | encontrado | recall@1 m | recall@2 m | precisión@2 m | error mediano (m) | hueco |
+|---:|---:|---:|---:|---:|---:|---:|
+| 0,10 | 0,458 | 0,312 | 0,370 | 0,808 | 0,49 | 0,332 |
+| 0,15 | 0,330 | 0,259 | 0,286 | 0,869 | 0,35 | 0,201 |
+| **0,20** | 0,260 | 0,221 | 0,237 | **0,913** | 0,26 | 0,121 |
+| 0,25 | 0,224 | 0,196 | 0,210 | 0,938 | 0,24 | 0,087 |
+| 0,30 | 0,170 | 0,148 | 0,161 | 0,944 | 0,21 | 0,058 |
+| **0,35** | 0,119 | 0,110 | 0,116 | **0,971** | 0,19 | 0,044 |
+| 0,50 | 0,062 | 0,062 | 0,062 | 1,000 | 0,15 | 0,013 |
+
+Umbrales por la regla pre-registrada: **F1 = 0,20** (≥ 0,90) y **F2 = 0,35** (≥ 0,95). Dentro de la 1.ª
+mitad el detector es otro animal que el COCO: error mediano 0,26 m, casi sin falsos positivos lejanos
+(1,1% a más de 5 m con `conf ≥ 0,3`), pero muy poco confiado (recall a 2 m 0,24 con 0,20).
+
+### 5b. Go / no-go (2.ª mitad, nunca vista)
+
+| conf ≥ | encontrado | recall@1 m | recall@2 m | precisión@2 m | error mediano (m) | hueco |
+|---:|---:|---:|---:|---:|---:|---:|
+| 0,10 | 0,336 | 0,168 | 0,227 | 0,677 | 1,00 | 0,286 |
+| **0,20** | 0,095 | 0,048 | 0,061 | **0,651** | 0,99 | 0,073 |
+| 0,35 | 0,028 | 0,013 | 0,015 | 0,518 | 1,77 | 0,022 |
+| 0,50 | 0,008 | 0,002 | 0,002 | 0,250 | 13,4 | 0,004 |
+
+Control (balón solo del vídeo), 2.ª mitad, `conf ≥ 0,20`: controles del vídeo en el 1,3% de los frames
+con balón (ATD 19,2%), ninguno del otro equipo que el ATD; en hueco, controles en el 0,4% de los
+frames, que coinciden con el estado del motor en 4 de 9.
+
+**NO-GO**: precisión a 2 m de **0,651 < 0,90** al umbral de operación. El detector no generaliza de
+una mitad a la otra (los equipos cambian de campo y de dirección de ataque; la luz y el encuadre
+cambian): en la 2.ª mitad encuentra cajas en un tercio de frames (0,095 frente a 0,260) y el error mediano sube de 0,26 a 0,99 m. Por la
+regla de la adenda se para aquí: ni block 1, ni prueba pública, ni partido completo con este
+detector.
+
+### 5c. Velocidad y determinismo (para cualquier entrega futura con vídeo)
+
+- **GPU, ajustes deterministas** (`CUBLAS_WORKSPACE_CONFIG=:4096:8`, `cudnn.benchmark=False`,
+  `use_deterministic_algorithms(True)`, ya activos en `Detector`): dos ejecuciones del detector
+  afinado sobre 500 frames (120.000..120.499) dan tablas **idénticas byte a byte** (1.122 cajas).
+  Sin esos ajustes, el COCO yolo11x difería en 2 de 1.443 confianzas por 0,001-0,002 (sección 3).
+- **CPU (fp32) frente a GPU (fp16)**: no idénticos. En 40 frames, 90 cajas frente a 89; mejor caja
+  por frame a 0,30 px de mediana (máx. 0,61) y confianza a ≤ 0,008; con umbral 0,35 una caja cruza
+  la frontera (3 frente a 4). Reproducir byte a byte exige fijar dispositivo, precisión, versiones
+  (`requirements-video.txt`) y ffmpeg.
+- **Velocidad** (1920 px): yolo11s afinado ~43 fps de detección en GPU (11,4 s / 500 frames), ~1 h
+  para las dos mitades con decodificación secuencial (67 fps medida en block 1); en CPU 2,4 fps,
+  ~18,5 h. yolo11x COCO: 10,7 fps, ~4,5 h.
+- **Tamaño**: los pesos afinados ocupan 19 MB (> 5 MB, el límite del repositorio) y derivan del vídeo
+  licenciado: no se comprometen; viven en `runs/` y los recortes de entrenamiento se borraron.
+
+## 6. Recomendación y limitaciones
+
+**Recomendación: no integrar.** El motor entregado (V0) sigue igual. Ninguna variante pasa su regla
+pre-registrada:
+
+| intento | qué falla | número |
+|---|---|---|
+| COCO yolo11x, V1-V3 | G2: prueba pareada pública en huecos reales | V1 −0,0585, V2 −0,0213, V3 −0,0670 (`n_discordant` 0; +2 a +6 espurias) |
+| afinado con etiquetas del ATD, F1-F2 | go/no-go: precisión a 2 m en la 2.ª mitad | 0,651 < 0,90 |
+
+**El hallazgo útil es el sesgo de selección, cuantificado.** El banco de trasplante con relleno de
+vídeo (B-opt) promete mucho —media 0,4288 y poco balón 0,4208 frente a 0,3516 y 0,2782— porque
+rellena huecos donde la pelota se veía. En los huecos reales del slice público el mismo relleno solo
+añade posesiones espurias. Cualquier línea futura de imputación de balón debe medirse en huecos
+reales (o con el patrón conjunto B-joint), nunca solo con el banco de trasplante.
+
+**Qué haría falta para reabrirla** (no hecho, fuera de presupuesto): un detector que generalice
+entre mitades —entrenar con las dos mitades (validando por bloques alternos, siempre lejos de
+block 1), aumentos de luz y volteo vertical por el cambio de campo, o un modelo con contexto temporal
+(varios frames apilados) para la pelota en el aire—, y medir primero la cuota de controles correctos
+en huecos reales, que es el techo real de la ganancia.
+
+**Limitaciones.**
+
+- Solo 17 posesiones públicas: los Δ públicos son dirección, no prueba; aquí todos los cambios son
+  posesiones espurias añadidas, sin ninguna discordante, y por eso la dirección es clara.
+- B-joint y el informe por bloques **no se midieron** (la etapa 2 se detuvo por decisión del
+  coordinador al quedar establecido el negativo por G2); el acuerdo con el Smart Tagging en los
+  bloques 7, 9, 11 y 18 no se midió.
+- Las etiquetas del ATD son ruidosas en píxeles (8,9 px de mediana, más con la pelota en el aire) y
+  el ATD solo trae `z` en 9.909 de 113.488 frames con balón: no se pudo filtrar la pelota alta.
+- Los diagnósticos de la sección 1 usan el ATD como referencia; un ATD equivocado cuenta como error
+  del vídeo. La alineación al frame sí está comprobada (sección 1).
+- La comprobación de búsqueda exacta por hash (sección 1) se hizo con un script de exploración no
+  versionado; la de desfase contra el ATD sí está en `feasibility`.

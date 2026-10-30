@@ -102,8 +102,15 @@ class Detector:
     """A COCO detector restricted to `sports ball`. Imports torch only when constructed."""
 
     def __init__(self, config: DetectorConfig = DEFAULT_DETECTOR, device: str = "cuda:0") -> None:
+        import os
+
+        # Deterministic kernels where torch has them (the run-to-run check is in the proposal).
+        os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+        import torch
         from ultralytics import YOLO
 
+        torch.backends.cudnn.benchmark = False
+        torch.use_deterministic_algorithms(True, warn_only=True)
         self.config = config
         self.device = device
         self.model = YOLO(config.weights)
@@ -732,6 +739,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--imgsz", type=int, default=DetectorConfig.imgsz)
     p.add_argument("--batch", type=int, default=8)
     p.add_argument("--cls", type=int, default=SPORTS_BALL)
+    p.add_argument("--device", default="cuda:0", help="cuda:0, or cpu for the determinism check")
     p = sub.add_parser("train", help="fine-tune the single-class detector (video env)")
     p.add_argument("--data", type=Path, required=True, help="the dataset folder from `prepare`")
     p.add_argument("--project", type=Path, required=True)
@@ -744,6 +752,13 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("evaluate", help="variants on the public slice and the transplant bench")
     p.add_argument("--detections", type=Path, required=True, help="video balls for the variants")
     p.add_argument("--variants", nargs="+", default=list(VARIANTS), choices=sorted(VARIANTS))
+    p.add_argument(
+        "--custom",
+        nargs="+",
+        default=[],
+        metavar="NAME=CONF",
+        help="extra control-only variants (section 4: F1, F2 at thresholds set on blocks 10-11)",
+    )
     p.add_argument("--design", choices=("opt", "joint"), default="opt")
     p.add_argument("--labels-dir", type=Path, help="write each variant's frame,label CSV here")
     p.add_argument("--json", type=Path, help="write the bench rows here")
@@ -764,8 +779,14 @@ def main(argv: list[str] | None = None) -> int:
             frames = np.arange(*args.range)
         else:
             frames = np.unique(np.concatenate(list(_load_npz(args.frames).values())))
-        config = DetectorConfig(weights=args.weights, imgsz=args.imgsz, cls=args.cls)
-        detections, timing = detect_frames(games.video_path(), frames, Detector(config), args.batch)
+        if args.device == "cpu":
+            config = DetectorConfig(
+                weights=args.weights, imgsz=args.imgsz, cls=args.cls, half=False
+            )
+        else:
+            config = DetectorConfig(weights=args.weights, imgsz=args.imgsz, cls=args.cls)
+        detector = Detector(config, device=args.device)
+        detections, timing = detect_frames(games.video_path(), frames, detector, args.batch)
         args.out.parent.mkdir(parents=True, exist_ok=True)
         np.savez(args.out, **detections)
         print(json.dumps({"config": config.__dict__, **timing}))
@@ -880,8 +901,11 @@ def _evaluate(args: argparse.Namespace) -> int:
     ev = dead_ball.load_evidence()
     _f, _ev, gt, cut = bench.load()
     out: dict[str, dict] = {}
-    for name in args.variants:
-        variant = VARIANTS[name]
+    chosen = {name: VARIANTS[name] for name in args.variants}
+    for spec in args.custom:
+        name, conf = spec.split("=")
+        chosen[name] = Variant(name, float(conf))
+    for name, variant in chosen.items():
         lab, filled = labels_with_ball(
             variant, tracking.players_array, teams, ball, ev, det, matrices
         )
