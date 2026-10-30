@@ -183,3 +183,184 @@ Diagnóstico: con el balón visto de BAR-ATH por mitad encima (`external.keep_ma
    actuar sobre la parte que sí reproduce: **la cola tardía**.
 3. Lo que hay en la cola se explora en g1 (sección 5 del pre-registro), sin mirar g2, que queda
    como partido reservado para el veredicto.
+
+---
+
+*Lo que sigue es el pre-registro (commit 2), escrito antes de medir ninguna variante en g2, en DFL,
+en BAR-ATH, en el slice ni en el banco. Las secciones 1–4 no cambian.*
+
+## 5. Exploración en g1 (declarada; g2 no se mira)
+
+Todo lo de esta sección se midió en Metrica g1 y **solo ahí**: es donde se fijan las constantes. Se
+reproduce con `python tools/change_dating.py --explore`; salida sin editar:
+
+Exploración en Metrica g1 (g2 no se mira): la cola tardía de la cadena entregada.
+
+Frames `[verdad, cadena)` de los cambios emparejados con retraso > 1 s: por qué no hubo control del nuevo equipo.
+
+| sin balón | fuera | lejos | rival más cerca | rápido | duelo | frames |
+|---:|---:|---:|---:|---:|---:|---:|
+| 0,0% | 0,0% | 61,6% | 2,2% | 19,9% | 16,3% | 1543 |
+
+| cambios | n | rival a ≤ 1,5 m en el frame verdadero |
+|---|---:|---:|
+| tarde > 1 s | 32 | 50,0% |
+| ≤ 0,5 s | 118 | 10,2% |
+
+Anclas probadas (retraso de los emparejados, s; temprano = antes de −0,5 s):
+
+| ancla | emparejados | mediana | mediana \|·\| | media \|·\| | p10 / p25 / p75 / p90 | temprano | > 1 s tarde |
+|---|---:|---:|---:|---:|---|---:|---:|
+| cadena entregada | 170 | +0,04 | 0,06 | 0,60 | +0,04 / +0,04 / +0,64 / +1,73 | 3,5% | 18,8% |
+| toque, tras el último control del anterior (`touch` de lane-dating) | 171 | -0,12 | 0,32 | 0,80 | -2,24 / -1,10 / +0,00 / +0,08 | 41,5% | 2,3% |
+| toque, tras el último toque del anterior | 171 | +0,00 | 0,12 | 0,61 | -1,56 / -0,46 / +0,00 / +0,40 | 24,6% | 6,4% |
+| toque sin disputa, tras el último toque | 171 | +0,00 | 0,28 | 0,67 | -1,56 / -0,44 / +0,04 / +1,00 | 24,6% | 9,4% |
+| toque sin disputa, tras el último control | 171 | -0,04 | 0,48 | 0,84 | -2,20 / -1,06 / +0,00 / +0,40 | 40,4% | 5,3% |
+| control ≤ 5,0 m/s, tras el último control | 170 | +0,04 | 0,04 | 0,47 | +0,04 / +0,04 / +0,12 / +1,36 | 4,1% | 12,9% |
+| control ≤ 5,0 m/s, tras el último toque | 170 | +0,04 | 0,04 | 0,52 | +0,04 / +0,04 / +0,16 / +1,61 | 3,5% | 15,9% |
+| control sin disputa ≤ 5,0 m/s, tras el último control | 170 | +0,04 | 0,06 | 0,60 | +0,04 / +0,04 / +0,64 / +1,73 | 3,5% | 18,8% |
+| control ≤ 7,5 m/s, tras el último control | 172 | +0,04 | 0,04 | 0,40 | +0,04 / +0,04 / +0,12 / +0,73 | 8,1% | 7,6% |
+| control ≤ 7,5 m/s, tras el último toque | 172 | +0,04 | 0,04 | 0,45 | +0,04 / +0,04 / +0,12 / +1,28 | 5,8% | 11,6% |
+| control sin disputa ≤ 7,5 m/s, tras el último control | 172 | +0,04 | 0,04 | 0,52 | +0,04 / +0,04 / +0,33 / +1,32 | 7,0% | 13,4% |
+| control ≤ 10,0 m/s, tras el último control | 171 | +0,04 | 0,04 | 0,38 | -0,80 / +0,04 / +0,08 / +0,16 | 13,5% | 4,1% |
+| control ≤ 10,0 m/s, tras el último toque | 171 | +0,04 | 0,04 | 0,40 | -0,04 / +0,04 / +0,12 / +0,48 | 8,8% | 8,2% |
+| control sin disputa ≤ 10,0 m/s, tras el último control | 171 | +0,04 | 0,04 | 0,50 | -0,64 / +0,04 / +0,12 / +1,00 | 12,3% | 9,9% |
+| control ≤ 15,0 m/s, tras el último control | 171 | +0,04 | 0,08 | 0,64 | -1,92 / -0,60 / +0,04 / +0,12 | 26,9% | 2,3% |
+| control ≤ 15,0 m/s, tras el último toque | 171 | +0,04 | 0,04 | 0,53 | -1,44 / +0,00 / +0,08 / +0,44 | 15,8% | 7,0% |
+| control sin disputa ≤ 15,0 m/s, tras el último control | 171 | +0,04 | 0,12 | 0,73 | -1,80 / -0,54 / +0,08 / +0,64 | 25,7% | 7,6% |
+| recepción: aproximación mínima en los últimos 1 s | 170 | +0,00 | 0,00 | 0,50 | +0,00 / +0,00 / +0,26 / +1,56 | 3,5% | 18,2% |
+| recepción: aproximación mínima en los últimos 2 s | 170 | +0,00 | 0,00 | 0,42 | +0,00 / +0,00 / +0,11 / +1,25 | 3,5% | 13,5% |
+| recepción: aproximación mínima en los últimos 5 s | 171 | +0,00 | 0,00 | 0,38 | +0,00 / +0,00 / +0,08 / +1,00 | 4,1% | 9,9% |
+
+**Lo que dice.**
+
+- **La cola tardía es un toque del nuevo equipo que la cadena no acepta como control**: en el frame
+  verdadero el nuevo equipo está en el balón (el balón de muestra está a 0 m del pie), pero el
+  toque es **disputado** (rival a ≤ 1,5 m en el 50% de los cambios tardíos frente al 10% de los que
+  ya están a tiempo) o **rápido**; luego el balón se va (en el 62% de los frames tardíos nadie del
+  nuevo equipo está a ≤ 1,5 m) y la cadena fecha el cambio en el siguiente control lento y sin
+  disputa, el de un compañero.
+- **Todo ancla de "toque" sin límite de velocidad adelanta demasiado**: entre el 25% y el 41% de los
+  cambios quedan más de 0,5 s **antes** de la verdad, incluso con el balón idealizado de Metrica.
+  Es la causa probable de que `touch` perdiera en BAR-ATH (lane-dating), ahora vista desde fuera.
+- **La familia "control" acorta la cola sin ese daño**: el primer control del nuevo equipo con o
+  sin disputa (`first`, la V-a de lane-dating) baja la cola > 1 s de 18,8% a 12,9% con 4,1% de
+  tempranos (3,5% la cadena); subir el límite de velocidad cambia cola por tempranos (7,5 m/s:
+  7,6% / 8,1%; 10 m/s: 4,1% / 13,5%; 15 m/s: 2,3% / 26,9%).
+- **La aproximación mínima del nuevo equipo** (recepción) en los últimos 5 s del traspaso baja la
+  media de |retraso| de 0,60 a 0,38 s con 4,1% de tempranos. **Cautela:** en Metrica el balón está
+  a 0 m exactos en los toques, así que el mínimo cae justo en el evento; con un tracking real el
+  mínimo es ruidoso. DFL (tracking óptico real, sección 6.2) es el control de esto.
+
+**Cómo se fijaron las constantes (declarado: la regla se formuló mirando esta tabla, en g1).** Entre
+los valores probados se toma el de menor media de |retraso| en g1 cuya parte de tempranos no supere
+la de la cadena entregada en más de 5 puntos (3,5% → ≤ 8,5%): **7,5 m/s** para `relaxed` (10 m/s
+da 13,5%) y **5 s** para la ventana de `reception` (frente a 1 y 2 s). El alcance es el 1,5 m del
+motor en todas. g2 entero es el juez.
+
+## 6. Pre-registro
+
+### 6.1 Variantes (tres, ni una más)
+
+Todas son la cadena entregada con otra **fecha**: mismo control, misma regla del duelo, mismas
+reanudaciones forzadas, mismo `D`. Solo se mueven cambios **naturales** (no forzados), cada uno a un
+ancla dentro de su traspaso `(l, c]`, con `l` el último frame del tramo del equipo anterior en que
+controló el balón (con o sin disputa), en que una reanudación se lo dio o en que el balón estaba
+muerto — la definición de lane-dating, sección 2 —. El número, el orden y los equipos de los cambios
+son los de la cadena (lo fija un test), así que la escala temporal no se mueve (decisión 37).
+
+| | nombre | ancla | constantes nuevas |
+|---|---|---|---|
+| V1 | `first` | primer control (`engine.control`: 1,5 m, 5 m/s) del nuevo equipo en `(l, c]`, con o sin disputa | ninguna |
+| V2 | `reception` | la aproximación mínima del nuevo equipo al balón en `(max(l, c − 5 s), c]`, entre los frames con el balón en el campo y su jugador más cercano a ≤ 1,5 m y estrictamente más cerca que el del anterior; el más temprano si empatan | `LOOKBACK_S` = 5 s (g1) |
+| V3 | `relaxed` | primer control del nuevo equipo en `(l, c]` con el límite de velocidad a 7,5 m/s, con o sin disputa | `RELAXED_MPS` = 7,5 m/s (g1) |
+| ref | `engine` | ninguna: la cadena entregada, byte a byte (`72c98ed4bb4a…`, fijado por un test) | — |
+
+En todas el ancla nunca es posterior al cambio (el control del cambio cumple la condición de cada
+una), así que solo se adelanta.
+
+**Conocimiento previo, declarado.** V1 es exactamente la V-a `first` de lane-dating (misma
+definición de traspaso, mismo ancla), y sus números en BAR-ATH ya se conocen: slice Δ 0,0000 (0–0),
+banco igual (0,4351 / 0,3595), Smart Tagging 77,1% → 77,0%, 3,62 posesiones/min. Por eso pasará,
+casi seguro, las compuertas de BAR-ATH, del slice y del banco, y su veredicto depende de Metrica
+reservado y de DFL. V2 y V3 no se han medido nunca fuera de g1.
+
+**Sin variante de "si".** El brief permite una que cambie si hay cambio; no se registra. La única
+señal externa de "si" sería la verdad de eventos, cuya posesión es "quién actuó el último", y
+juzgar con ella una regla que cambia el número de cambios es justo lo que la decisión 37 prohíbe.
+El tercio de cambios sin pareja (sección 4) queda como pista para otro carril, con la banda del
+informe por bloques.
+
+### 6.2 Mediciones, en este orden (`python tools/change_dating.py --measure`)
+
+1. **Metrica**, retraso de los cambios en juego (sección 2.3), por variante: **g2 entero, g2 mitad 1,
+   g2 mitad 2** (reservado); g1 informativo.
+2. **DFL, eventos crudos** (secundario), los 7 partidos, reglas D1–D4 del código
+   (`tools/change_dating.py`, sección "DFL events"): afirman `Play`, `ShotAtGoal`,
+   `OtherBallAction`, `BallClaiming` y las reanudaciones (el saque de centro, por el `Play` de quien
+   lo saca); el reloj por los `CalculatedFrame` de los tiros; un desplazamiento por partido elegido
+   **solo** por la distancia del equipo que actúa al balón (sin el motor); en juego si no es
+   reanudación y el `BallStatus` de DFL está vivo desde el evento anterior. La cadena en DFL usa las
+   reanudaciones de los eventos y el `D` entregado (`out` ∪ W1), como en Metrica. Instrumento y
+   referencia, medidos antes de las variantes (`python tools/change_dating.py --dfl`), salida sin
+   editar:
+
+DFL, eventos crudos: instrumento y cadena entregada (solo la referencia).
+
+| partido | desplazamiento (frames) | eventos afirmativos | equipo que actúa: mediana m / ≤ 1,5 m | cambios en juego | /min | reanudaciones |
+|---|---:|---:|---:|---:|---:|---:|
+| J03WMX | -17 | 1219 | 1,35 / 52,1% | 281 | 2,89 | 100 |
+| J03WN1 | -42 | 919 | 1,41 / 51,8% | 283 | 3,00 | 101 |
+| J03WOH | +34 | 969 | 1,44 / 51,2% | 242 | 2,65 | 97 |
+| J03WOY | +34 | 1052 | 1,48 / 50,3% | 283 | 2,98 | 106 |
+| J03WPY | +0 | 1088 | 1,54 / 49,2% | 245 | 2,51 | 91 |
+| J03WQQ | +10 | 1147 | 1,40 / 51,1% | 257 | 2,71 | 96 |
+| J03WR9 | -19 | 1055 | 1,38 / 52,2% | 220 | 2,25 | 89 |
+
+Cadena entregada frente a los cambios de los eventos:
+
+| tramo | cambios verdad | cambios cadena | emparejados | perdidos | sobrantes | mediana s | mediana \|·\| s | media \|·\| s | p10 / p25 / p50 / p75 / p90 s | ≤ 0,5 s | ≤ 1 s | > 1 s tarde |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|
+| J03WMX | 281 | 289 | 168 | 113 | 121 | -0,28 | 0,94 | 1,33 | -2,69 / -1,15 / -0,28 / +0,76 / +1,96 | 26,8% | 53,0% | 19,6% |
+| J03WN1 | 283 | 309 | 169 | 114 | 140 | -0,52 | 1,00 | 1,30 | -2,30 / -1,44 / -0,52 / +0,56 / +1,60 | 23,7% | 50,3% | 14,8% |
+| J03WOH | 242 | 261 | 137 | 105 | 124 | -0,64 | 1,28 | 1,55 | -3,26 / -1,80 / -0,64 / +0,36 / +1,89 | 23,4% | 42,3% | 17,5% |
+| J03WOY | 283 | 276 | 170 | 113 | 106 | -0,60 | 1,08 | 1,42 | -2,68 / -1,47 / -0,60 / +0,50 / +1,56 | 21,2% | 47,1% | 16,5% |
+| J03WPY | 245 | 247 | 140 | 105 | 107 | -0,14 | 1,38 | 1,64 | -2,49 / -1,41 / -0,14 / +1,28 / +2,45 | 11,4% | 37,9% | 28,6% |
+| J03WQQ | 257 | 270 | 158 | 99 | 112 | -0,06 | 1,26 | 1,51 | -2,73 / -1,48 / -0,06 / +1,08 / +2,01 | 19,0% | 39,2% | 27,2% |
+| J03WR9 | 220 | 248 | 125 | 95 | 123 | +0,36 | 1,56 | 1,77 | -2,32 / -1,44 / +0,36 / +1,72 / +3,10 | 15,2% | 34,4% | 36,0% |
+| todos | | | 1067 | | | -0,28 | 1,16 | 1,49 | -2,72 / -1,48 / -0,28 / +0,88 / +2,02 | 20,4% | 44,0% | 22,3% |
+
+   **DFL es un juez grueso, declarado antes de medir.** Tras el desplazamiento, el jugador más
+   cercano del equipo que actúa solo está a ≤ 1,5 m del balón en ~51% de los eventos (Metrica: 95%):
+   los `EventTime` de DFL se anotan en vivo, con retraso variable (en los tiros, de −2,5 a +18 s
+   frente a su tiempo calculado). El retraso mediano |·| de la referencia es 1,16 s, frente a
+   0,06–0,16 s en Metrica. Sirve para detectar una variante que empeore claramente con un tracking
+   real, no para ordenar diferencias finas: por eso su compuerta es "no peor", no "mejor".
+3. **BAR-ATH sin GT:** acuerdo con el Smart Tagging (partido y bloques 7/9/11/18), posesiones/min,
+   bloque mín–máx, bloques sin posesión, `%D` máximo por bloque, frames movidos.
+4. **Slice público**, pareado con `compare_submissions.compare_codes` frente a `engine`: `spellF1`,
+   `macroF1`, Δ, `wins` a IoU 0,5 (emparejamiento oficial uno a uno), jackknife.
+5. **Banco de trasplante:** media de los donantes, media con < 50% de balón, peor donante.
+
+### 6.3 Compuertas (todas obligatorias, frente a `engine`)
+
+| | compuerta |
+|---|---|
+| M | **Metrica reservado:** en g2, g2 mitad 1 y g2 mitad 2, la mediana de \|retraso\| **estrictamente menor** **y** la mediana con signo **estrictamente más cerca de 0**. Un empate falla. |
+| E | **DFL eventos** (los 7 juntos): mediana de \|retraso\| no mayor **y** \|mediana con signo\| no mayor. |
+| B | **BAR-ATH sin GT:** Smart Tagging del partido no más de 1,0 punto por debajo; ningún bloque con > 70% de `D`; posesiones/min del partido en 3,4 ± 0,5 (2,9 .. 3,9); ningún bloque sin posesiones. |
+| P | **Slice público:** Δ pareado ≥ 0; `wins_a` ≤ `wins_b`; ninguna posesión perdida a IoU 0,5 (`wins_a` = 0). |
+| C | **Banco:** media de donantes y media con poco balón, ambas no más bajas. |
+
+### 6.4 Regla de selección
+
+**Orden previo, escrito antes de medir: V1 `first` > V2 `reception` > V3 `relaxed`.** V1 no añade
+ninguna constante y conserva la noción de control del motor; V2 añade una (la ventana) y una noción
+nueva (la aproximación mínima), sensible al ruido del balón en los toques; V3 cambia una constante
+física del motor, el límite de velocidad, para la fecha, y en g1 ya cambia cola tardía por
+tempranos. Se elige **la primera de ese orden que pase las cinco compuertas**; las diferencias de
+`spellF1` entre variantes que pasan no reordenan nada. Si ninguna pasa, el resultado es
+**negativo y se mantiene la cadena entregada**, con qué compuerta falla y por cuánto.
+
+Todo sale de `python tools/change_dating.py --measure` y se pega sin editar en la sección 7, que
+se añade en el commit 3 sin tocar lo anterior.
