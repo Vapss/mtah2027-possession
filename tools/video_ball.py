@@ -38,6 +38,7 @@ import time
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -45,6 +46,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 import games  # noqa: E402
+
+if TYPE_CHECKING:
+    from tools import atd, blocks, dead_ball, emision, engine
 
 FPS = int(games.GAMES[games.GAME]["fps"])
 PITCH_M = np.asarray(games.GAMES[games.GAME]["pitch"], dtype=float)
@@ -188,6 +192,9 @@ def detect_frames(
 CROP = 640
 LABEL_BOX_PX = 24  # contains the ball for ~80% of ATD projections (8.9 px median offset, p75 16)
 NEGATIVE_CLEAR_PX = 48
+# A tracking ball that projects off the image, or within this of its edge, is not a training
+# positive: the crop would hold no ball, or only part of the label box.
+EDGE_PX = 16
 
 
 def project_ball(matrices: np.ndarray, ball: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -200,19 +207,27 @@ def project_ball(matrices: np.ndarray, ball: np.ndarray) -> tuple[np.ndarray, np
     ) / den
 
 
+def on_image(u: np.ndarray, v: np.ndarray, margin: float = EDGE_PX) -> np.ndarray:
+    """Pixel positions inside the image and at least `margin` px from its edge."""
+    u, v = np.asarray(u, dtype=float), np.asarray(v, dtype=float)
+    with np.errstate(invalid="ignore"):
+        return (u >= margin) & (u <= WIDTH - margin) & (v >= margin) & (v <= HEIGHT - margin)
+
+
 def crop_boxes(
     u: float, v: float, rng: np.random.Generator
 ) -> tuple[tuple[int, int], tuple[float, float, float, float], tuple[int, int] | None]:
     """A positive crop origin with the ball's label box in crop pixels `(cx, cy, w, h)`, and a
     negative crop origin whose crop stays `NEGATIVE_CLEAR_PX` clear of the box (None if none fits
     in 50 draws). The ball lands anywhere in the positive crop, never within 16 px of its edge."""
+    if not on_image(u, v):
+        raise ValueError(f"ball at ({u:.1f}, {v:.1f}) px is not {EDGE_PX} px inside the image")
     half = LABEL_BOX_PX / 2
     x0 = int(np.clip(round(u - rng.uniform(16, CROP - 16)), 0, WIDTH - CROP))
     y0 = int(np.clip(round(v - rng.uniform(16, CROP - 16)), 0, HEIGHT - CROP))
-    cx, cy = u - x0, v - y0
-    left, top = max(cx - half, 0.0), max(cy - half, 0.0)
-    right, bottom = min(cx + half, float(CROP)), min(cy + half, float(CROP))
-    box = ((left + right) / 2, (top + bottom) / 2, right - left, bottom - top)
+    # With the ball EDGE_PX inside the image the clip keeps it 16 px inside the crop as well, so
+    # the whole label box fits and needs no clipping of its own.
+    box = (u - x0, v - y0, float(LABEL_BOX_PX), float(LABEL_BOX_PX))
     negative = None
     for _ in range(50):
         nx = int(rng.integers(0, WIDTH - CROP + 1))
@@ -225,9 +240,16 @@ def crop_boxes(
 
 
 def training_frames(present: np.ndarray, start: int, stop: int, count: int) -> np.ndarray:
-    """`count` frames with the tracking's ball, equispaced among those in `[start, stop)`."""
+    """Up to `count` distinct frames with the tracking's ball, equispaced among those in
+    `[start, stop)`; all of them when there are fewer. A repeated frame is a duplicate crop."""
+    if count < 1:
+        raise ValueError(f"count must be positive, got {count}")
     frames = start + np.flatnonzero(present[start:stop])
-    return frames[np.round(np.linspace(0, len(frames) - 1, count)).astype(np.int64)]
+    if len(frames) == 0:
+        raise ValueError(f"no frame with the tracking's ball in [{start}, {stop})")
+    if count >= len(frames):
+        return frames
+    return frames[np.unique(np.round(np.linspace(0, len(frames) - 1, count)).astype(np.int64))]
 
 
 def prepare(
@@ -241,11 +263,18 @@ def prepare(
 ) -> dict:
     """Write positive and negative crops (JPEG 95) with YOLO labels under `out/images|labels/split`.
 
-    Reads the span `frames.min()..frames.max()` sequentially and keeps the selected frames. The
+    Reads the span `frames.min()..frames.max()` sequentially and keeps the selected frames. A frame
+    whose ball does not project `EDGE_PX` inside the image is dropped before anything is read. The
     crops are derived licensed data: `runs/` only, never opened by an image tool, deleted after.
     """
     import cv2
 
+    frames, u, v = np.asarray(frames), np.asarray(u, dtype=float), np.asarray(v, dtype=float)
+    keep = on_image(u, v)
+    off_image = int((~keep).sum())
+    frames, u, v = frames[keep], u[keep], v[keep]
+    if len(frames) == 0:
+        raise ValueError("no training frame has its ball inside the image")
     rng = np.random.default_rng(seed)
     images, labels = out / "images" / split, out / "labels" / split
     images.mkdir(parents=True, exist_ok=True)
@@ -277,7 +306,7 @@ def prepare(
             )
             (labels / f"{name}_n.txt").write_text("", encoding="ascii")
             n_neg += 1
-    return {"split": split, "positives": n_pos, "negatives": n_neg}
+    return {"split": split, "positives": n_pos, "negatives": n_neg, "off_image": off_image}
 
 
 # -- pixels to pitch (numpy only) ----------------------------------------------------------------
@@ -304,9 +333,12 @@ def best_per_frame(
     """Index into the detection table of each frame's most confident box, `-1` where none."""
     best = np.full(n_frames, -1, dtype=np.int64)
     keep = np.flatnonzero(conf >= min_conf)
-    # Ascending confidence, so the last write per frame is the best; ties go to the earlier row.
-    order = keep[np.lexsort((-np.arange(len(keep)), conf[keep]))]
-    best[frame[order]] = order
+    # By frame, then confidence descending, then row: the first row of each frame is its best box
+    # and a tie goes to the earlier row. No assignment through repeated indices, whose winner
+    # NumPy does not specify.
+    order = keep[np.lexsort((keep, -conf[keep], frame[keep]))]
+    frames, first = np.unique(frame[order], return_index=True)
+    best[frames] = order[first]
     return best
 
 
@@ -438,9 +470,9 @@ def out_inside(ball: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 def labels_with_ball(
     variant: Variant,
     players: np.ndarray,
-    teams,
+    teams: emision.TeamSlots,
     ball: np.ndarray,
-    ev,
+    ev: dead_ball.Evidence,
     det: dict[str, np.ndarray] | None,
     matrices: np.ndarray,
     allow: np.ndarray | None = None,
@@ -470,13 +502,13 @@ def bench_video(
     variant: Variant,
     design: str,
     players: np.ndarray,
-    teams,
+    teams: emision.TeamSlots,
     ball: np.ndarray,
-    ev,
+    ev: dead_ball.Evidence,
     det: dict[str, np.ndarray] | None,
     matrices: np.ndarray,
     gt: np.ndarray,
-    cut,
+    cut: Sequence[blocks.Block],
     donor_video: np.ndarray | None = None,
 ) -> list[dict]:
     """`tools/bench.py`'s transplant with the video allowed to refill the transplanted gaps.
@@ -484,31 +516,26 @@ def bench_video(
     `opt`: the video of block 1 fills wherever it passes the filter (an upper bound: block 1's
     frames are the easy ones). `joint`: only where the donor itself had an accepted video ball on
     that frame of its real gap, so the video's coverage has the real gaps' amount and length.
-    The filter's temporal support sees the degraded tracking, never the deleted ball.
+    The filter's temporal support sees the degraded tracking, never the deleted ball. A variant
+    without video (V0) never reads `donor_video`, so it runs under either design without one.
     """
-    import possession_metrics as pm
+    from tools import bench
 
     if design not in ("opt", "joint"):
         raise ValueError(f"unknown bench design {design!r}")
     window = (cut[0].start, cut[0].stop)
     size = window[1] - window[0]
+    runs = bench.pm.valid_runs(gt)
 
-    def score(b: np.ndarray, e, allow: np.ndarray | None) -> tuple[float, int]:
+    def score(b: np.ndarray, e: dead_ball.Evidence, allow: np.ndarray | None) -> tuple[float, int]:
         lab, filled = labels_with_ball(variant, players, teams, b, e, det, matrices, allow)
-        return float(pm.evaluate(gt, pm.label_codes(list(lab)))["spell_f1_mean"]), int(
-            filled[window[0] : window[1]].sum()
-        )
+        # The bench's own scorer, so a row here and a row there are the same number.
+        return bench.spell_f1(gt, np.asarray(lab), runs), int(filled[window[0] : window[1]].sum())
 
-    present = ~np.isnan(ball[:, 0])
+    present = ~np.isnan(ball[:, 0]) & ~np.isnan(ball[:, 1])
+    seen = present[window[0] : window[1]]
     spell, n_filled = score(ball, ev, None)
-    rows = [
-        {
-            "donor": "1★",
-            "ball": float(present[window[0] : window[1]].mean()),
-            "spell_f1": spell,
-            "filled": n_filled,
-        }
-    ]
+    rows = [{"donor": "1★", "ball": float(seen.mean()), "spell_f1": spell, "filled": n_filled}]
     for block in cut[1:]:
         if block.stop - block.start < size:
             continue
@@ -519,7 +546,7 @@ def bench_video(
         degraded[~keep, :2] = np.nan
         ev2 = dataclasses.replace(ev, out=ev.out & keep, inside=ev.inside & keep)
         allow = None
-        if design == "joint":
+        if design == "joint" and variant.min_conf is not None:
             if donor_video is None:
                 raise ValueError("the joint design needs the donor's accepted video balls")
             allow = np.ones(len(ball), dtype=bool)
@@ -528,7 +555,9 @@ def bench_video(
         rows.append(
             {
                 "donor": str(block.index),
-                "ball": float(donor.mean()),
+                # The coverage the chain actually ran with, as `bench.bench` records it
+                # (DECISIONS 33): block 1 cannot get back a ball it never had.
+                "ball": float((seen & donor).mean()),
                 "spell_f1": spell,
                 "filled": n_filled,
             }
@@ -546,8 +575,9 @@ def sample_frames(
     length: int = 10,
     seed: int = SEED,
 ) -> dict[str, np.ndarray]:
-    """Two frame sets inside the halves: runs of `length` frames with the tracking's ball on every
-    frame, and runs with it on none. Clusters keep the seeks cheap; 200 x 10 = 2000 frames each."""
+    """Two frame sets inside the halves: disjoint runs of `length` frames with the tracking's ball
+    on every frame, and runs with it on none. Clusters keep the seeks cheap; 200 x 10 = 2000
+    distinct frames each. Raises ValueError when fewer than `n_clusters` disjoint runs fit."""
     rng = np.random.default_rng(seed)
     inside = np.zeros(len(present), dtype=bool)
     for start, stop in runs:
@@ -558,7 +588,17 @@ def sample_frames(
         # A start is valid when the whole run of `length` frames qualifies.
         window = np.convolve(ok.astype(int), np.ones(length, dtype=int), "valid") == length
         starts = np.flatnonzero(window)
-        chosen = np.sort(rng.choice(starts, size=n_clusters, replace=False))
+        # Two runs of valid starts are always more than `length` apart (the frame that ends the
+        # last window of one is in no window of the next), so starts `length` apart inside each
+        # run give disjoint clusters -- as many as fit, so a shortfall means it is impossible.
+        breaks = np.flatnonzero(np.diff(starts) != 1) + 1
+        grid = np.concatenate([run[::length] for run in np.split(starts, breaks)])
+        if len(grid) < n_clusters:
+            raise ValueError(
+                f"{name}: only {len(grid)} disjoint runs of {length} frames fit, "
+                f"{n_clusters} requested"
+            )
+        chosen = np.sort(rng.choice(grid, size=n_clusters, replace=False))
         out[name] = (chosen[:, None] + np.arange(length)[None, :]).ravel()
     return out
 
@@ -650,7 +690,13 @@ def diagnose(
     }
 
 
-def video_only_features(tracking, teams, det, matrices, flt: Filter):
+def video_only_features(
+    tracking: atd.Tracking,
+    teams: emision.TeamSlots,
+    det: dict[str, np.ndarray],
+    matrices: np.ndarray,
+    flt: Filter,
+) -> engine.Features:
     """Engine features with the ball taken from the video alone (the tracking's ball dropped).
 
     Support comes from other video balls only, never from the tracking, so the comparison with
@@ -666,7 +712,15 @@ def video_only_features(tracking, teams, det, matrices, flt: Filter):
 
 
 def control_agreement(
-    det, matrices, tracking, teams, sets, ctrl_atd, state, live, thresholds
+    det: dict[str, np.ndarray],
+    matrices: np.ndarray,
+    tracking: atd.Tracking,
+    teams: emision.TeamSlots,
+    sets: dict[str, np.ndarray],
+    ctrl_atd: np.ndarray,
+    state: np.ndarray,
+    live: np.ndarray,
+    thresholds: Sequence[float],
 ) -> list[dict]:
     """The engine's control computed from the video ball, against the tracking's.
 
@@ -732,8 +786,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--span", type=int, nargs=2, required=True, metavar=("START", "STOP"))
     p.add_argument("--split", default="train")
     p = sub.add_parser("detect", help="run the detector on frames (video environment)")
-    p.add_argument("--frames", type=Path, help="npz of frame-index arrays")
-    p.add_argument("--range", type=int, nargs=2, metavar=("START", "STOP"), help="half-open")
+    which = p.add_mutually_exclusive_group(required=True)
+    which.add_argument("--frames", type=Path, help="npz of frame-index arrays")
+    which.add_argument("--range", type=int, nargs=2, metavar=("START", "STOP"), help="half-open")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--weights", default=DetectorConfig.weights)
     p.add_argument("--imgsz", type=int, default=DetectorConfig.imgsz)
@@ -800,7 +855,9 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("training frames overlap the excluded public window")
         u, v = project_ball(load_matrices()[frames], ball[frames])
         stats = prepare(games.video_path(), args.out, args.split, frames, u, v)
-        print(json.dumps(stats))
+        # `positives` is what was written: the request capped at the span's frames with ball,
+        # less those projecting off the image.
+        print(json.dumps({"requested": args.count, "selected": len(frames), **stats}))
         return 0
     if args.command == "feasibility":
         from tools import dead_ball, emision, engine

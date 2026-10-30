@@ -406,3 +406,40 @@ en huecos reales, que es el techo real de la ganancia.
   del vídeo. La alineación al frame sí está comprobada (sección 1).
 - La comprobación de búsqueda exacta por hash (sección 1) se hizo con un script de exploración no
   versionado; la de desfase contra el ATD sí está en `feasibility`.
+
+## 7. Revisión de código
+
+Revisión posterior al cierre de `tools/video_ball.py`. El módulo es solo evidencia de un resultado
+negativo y no está en la cadena entregada; cada corrección de comportamiento lleva su test sintético
+(sin torch ni ultralytics) en `tests/test_video_ball.py`, y V0 sigue igualando el banco del motor D31.
+
+- `bench_video`: con `--design joint` V0 ya no exige `donor_video` (no lo lee nunca); el `ball` de
+  cada donante es la cobertura efectiva `(seen & donor).mean()` de `tools/bench.py` (decisión 33), y
+  la puntuación usa `bench.spell_f1`, el mismo número que el banco. En este partido los dos criterios
+  dejan los mismos 6 donantes de 19 bajo `LOW_BALL`: ningún `low_mean` / `n_low` publicado cambia.
+- `prepare` / `crop_boxes`: se descartan antes de recortar los frames cuyo balón proyectado cae fuera
+  de la imagen o a menos de 16 px del borde (`on_image`, `EDGE_PX`); `crop_boxes` se niega con
+  `ValueError`, así que no se escribe ningún recorte sin balón ni etiqueta de ancho nulo o negativo.
+  **Salvedad:** el 0,234% de los frames con balón del ATD proyectan fuera de la imagen y el 0,480% a
+  menos de 16 px del borde. Es demasiado poco para explicar la caída de precisión entre mitades
+  (0,913 → 0,651): el negativo se mantiene.
+- `sample_frames` saca racimos disjuntos (rejilla de paso `length` dentro de cada tramo de inicios
+  válidos, que es el empaquetado máximo) y lanza `ValueError` si no caben. Con los argumentos por
+  defecto, el muestreador anterior repetía 16 de los 2.000 frames `with_ball` y 50 de los 2.000 `gap`
+  (los pesaba doble en las cuotas de la sección 1). Es demasiado poco para mover ninguna conclusión.
+- `best_per_frame` elige la mejor caja por frame de forma explícita (orden por frame, confianza
+  descendente y fila; `np.unique`), sin depender de la asignación con índices repetidos.
+- `training_frames` devuelve frames distintos, como mucho los que hay, y lanza `ValueError` en un
+  tramo sin balón; `prepare` informa de `requested`, `selected`, `positives` y `off_image`.
+- `detect`: `--frames` / `--range` pasan a ser un grupo obligatorio y mutuamente excluyente.
+  Las funciones públicas (`control_agreement`, `video_only_features`, `labels_with_ball`,
+  `bench_video`) llevan anotaciones de tipo.
+
+**Deuda aceptada.**
+
+- `bench_video` reconstruye las features del partido entero (y el filtro del vídeo) para cada
+  donante, aunque solo cambia la ventana de block 1. Es una herramienta de evidencia que se ejecuta
+  pocas veces, y no vale la pena optimizarla.
+- La proyección (`project_ball`) y el criterio fuera del campo (`out_inside`) duplican helpers de
+  `starter/` y de `dead_ball`. Se mantienen: `starter/` es de solo lectura y `dead_ball` es un módulo
+  entregado que este carril no debe tocar.

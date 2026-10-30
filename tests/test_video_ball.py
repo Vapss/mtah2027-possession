@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import dataclasses
+
 import numpy as np
+import pytest
 from _bundle import requires_bundle
 
 from tools import video_ball as vb
+from tools.blocks import Block
 
 # A pitch-to-image homography: x scaled to 1000 px, y to 500 px, shifted by (100, 50).
 H = np.array([[1000.0, 0.0, 100.0], [0.0, 500.0, 50.0], [0.0, 0.0, 1.0]])
@@ -33,6 +37,19 @@ def test_best_per_frame_keeps_the_most_confident_box_above_the_threshold() -> No
     conf = np.array([0.2, 0.6, 0.6, 0.6, 0.1])
     best = vb.best_per_frame(frame, conf, 5, min_conf=0.15)
     assert best.tolist() == [1, -1, 2, -1, -1]  # a tie goes to the earlier row; 0.1 is dropped
+
+
+def test_best_per_frame_matches_a_plain_loop_on_shuffled_repeated_frames() -> None:
+    rng = np.random.default_rng(1)
+    frame = rng.integers(0, 30, size=400)
+    conf = rng.integers(0, 6, size=400) / 5  # few distinct values: many ties
+    best = vb.best_per_frame(frame, conf, 40, min_conf=0.3)
+    expected = np.full(40, -1)
+    for row in range(len(frame)):
+        f = frame[row]
+        if conf[row] >= 0.3 and (expected[f] < 0 or conf[row] > conf[expected[f]]):
+            expected[f] = row
+    assert best.tolist() == expected.tolist()
 
 
 def test_candidates_drop_low_confidence_and_far_off_pitch_balls() -> None:
@@ -98,23 +115,58 @@ def test_sample_frames_draws_runs_that_qualify_entirely_and_is_seeded() -> None:
     assert ((a["gap"] >= 50) & (a["gap"] < 950)).all()
 
 
+def test_sample_frames_draws_disjoint_runs_and_refuses_more_than_fit() -> None:
+    present = np.zeros(1000, dtype=bool)
+    present[100:600] = True  # 50 runs of 10 with ball; 5 + 35 without, inside [50, 950)
+    full = vb.sample_frames(present, [(50, 950)], n_clusters=40, length=10)
+    assert len(np.unique(full["gap"])) == len(full["gap"]) == 400  # every gap run, none twice
+    assert np.array_equal(np.sort(full["gap"]), np.r_[50:100, 600:950])
+    tight = vb.sample_frames(present, [(0, 1000)], n_clusters=50, length=10)  # 50 and 10 + 40
+    assert np.array_equal(np.sort(tight["with_ball"]), np.arange(100, 600))
+    assert np.array_equal(np.sort(tight["gap"]), np.r_[0:100, 600:1000])
+    with pytest.raises(ValueError, match="gap: only 40 disjoint runs"):
+        vb.sample_frames(present, [(50, 950)], n_clusters=41, length=10)
+
+
 def test_positive_crop_contains_the_label_box_and_negative_crop_stays_clear() -> None:
     rng = np.random.default_rng(0)
-    for u, v in [(5.0, 5.0), (960.0, 540.0), (1915.0, 1075.0)]:
+    edge = float(vb.EDGE_PX)
+    for u, v in [(edge, edge), (960.0, 540.0), (vb.WIDTH - edge, vb.HEIGHT - edge)] * 20:
         (x0, y0), (cx, cy, w, h), negative = vb.crop_boxes(u, v, rng)
         assert 0 <= x0 <= vb.WIDTH - vb.CROP and 0 <= y0 <= vb.HEIGHT - vb.CROP
-        assert np.isclose(x0 + cx, u, atol=vb.LABEL_BOX_PX / 2) and 0 < w <= vb.LABEL_BOX_PX
-        assert cx - w / 2 >= 0 and cx + w / 2 <= vb.CROP and h > 0
+        assert (x0 + cx, y0 + cy) == (u, v) and w == h == vb.LABEL_BOX_PX
+        assert cx - w / 2 >= 0 and cx + w / 2 <= vb.CROP
+        assert cy - h / 2 >= 0 and cy + h / 2 <= vb.CROP
         if negative is not None:
             nx, ny = negative
             inside = nx <= u <= nx + vb.CROP and ny <= v <= ny + vb.CROP
             assert not inside
 
 
+def test_a_ball_off_the_image_or_at_its_edge_is_never_a_training_crop() -> None:
+    u = np.array([960.0, -40.0, 5.0, vb.WIDTH - 5.0, 960.0, np.nan])
+    v = np.array([540.0, 540.0, 540.0, 540.0, vb.HEIGHT + 3.0, 540.0])
+    assert vb.on_image(u, v).tolist() == [True, False, False, False, False, False]
+    for k in range(1, len(u)):
+        with pytest.raises(ValueError, match="inside the image"):
+            vb.crop_boxes(float(u[k]), float(v[k]), np.random.default_rng(0))
+
+
 def test_training_frames_are_equispaced_among_frames_with_ball() -> None:
     present = np.zeros(100, dtype=bool)
     present[[10, 20, 30, 40, 50, 90]] = True
     assert vb.training_frames(present, 0, 60, 3).tolist() == [10, 30, 50]
+
+
+def test_training_frames_never_repeat_a_frame_and_refuse_an_empty_span() -> None:
+    present = np.zeros(100, dtype=bool)
+    present[[10, 20, 30]] = True
+    assert vb.training_frames(present, 0, 100, 10).tolist() == [10, 20, 30]  # capped, not repeated
+    assert len(np.unique(vb.training_frames(present, 0, 100, 2))) == 2
+    with pytest.raises(ValueError, match="no frame"):
+        vb.training_frames(present, 40, 100, 5)
+    with pytest.raises(ValueError, match="no frame"):
+        vb.training_frames(present, 50, 50, 5)
 
 
 def test_out_inside_reads_the_ball_like_the_dead_ball_stream() -> None:
@@ -144,6 +196,74 @@ def test_operating_threshold_is_the_smallest_reaching_the_precision_target() -> 
     assert vb.operating_threshold(rows, 0.90) == 0.3
     assert vb.operating_threshold(rows, 0.95) == 0.5
     assert vb.operating_threshold(rows, 0.99) is None
+
+
+@dataclasses.dataclass(frozen=True)
+class _Evidence:
+    out: np.ndarray
+    inside: np.ndarray
+
+
+def _bench_inputs() -> tuple[np.ndarray, _Evidence, np.ndarray, list[Block]]:
+    """Block 1 = frames 0-9 (graded, ball on 2-9), donors at 10-19 (ball on 10-15) and 20-29."""
+    from tools import bench
+
+    n = 30
+    ball = np.full((n, 3), np.nan)
+    ball[2:10, :2] = 0.5
+    ball[10:16, :2] = 0.5
+    ev = _Evidence(np.zeros(n, dtype=bool), np.zeros(n, dtype=bool))
+    gt = np.full(n, bench.pm.X)
+    gt[:10] = bench.pm.H
+    cut = [Block(1, 1, 0, 10), Block(2, 1, 10, 20), Block(3, 1, 20, 30)]
+    return ball, ev, gt, cut
+
+
+def _stub_chain(monkeypatch: pytest.MonkeyPatch, allows: list) -> None:
+    """Replace the delivered chain (it needs the match) by one that labels every frame H."""
+
+    def chain(variant, players, teams, ball, ev, det, matrices, allow=None):
+        allows.append(allow)
+        return np.array(["H"] * len(ball)), np.zeros(len(ball), dtype=bool)
+
+    monkeypatch.setattr(vb, "labels_with_ball", chain)
+
+
+def test_the_video_bench_records_the_coverage_the_chain_ran_with(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ball, ev, gt, cut = _bench_inputs()
+    _stub_chain(monkeypatch, [])
+    rows = vb.bench_video(vb.VARIANTS["V0"], "opt", None, None, ball, ev, None, None, gt, cut)
+    # Donor 2 has the ball on 60% of its frames, but block 1 keeps it only where both saw it,
+    # frames 2-5: 40%, `bench.bench`'s definition, on the other side of LOW_BALL = 0.5.
+    assert [r["ball"] for r in rows] == [0.8, 0.4, 0.0]
+    assert [r["spell_f1"] for r in rows] == [1.0, 1.0, 1.0]
+
+
+def test_the_joint_bench_runs_v0_without_donor_video_and_requires_it_otherwise(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ball, ev, gt, cut = _bench_inputs()
+    allows: list = []
+    _stub_chain(monkeypatch, allows)
+    rows = vb.bench_video(vb.VARIANTS["V0"], "joint", None, None, ball, ev, None, None, gt, cut)
+    assert len(rows) == 3 and all(allow is None for allow in allows)
+    with pytest.raises(ValueError, match="donor's accepted video balls"):
+        vb.bench_video(vb.VARIANTS["V1"], "joint", None, None, ball, ev, {}, None, gt, cut)
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["detect", "--out", "x.npz"],
+        ["detect", "--out", "x.npz", "--frames", "f.npz", "--range", "0", "10"],
+    ],
+)
+def test_detect_needs_exactly_one_of_frames_or_range(argv: list[str]) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        vb.main(argv)
+    assert exit_info.value.code == 2
 
 
 @requires_bundle
