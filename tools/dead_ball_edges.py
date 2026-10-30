@@ -11,8 +11,8 @@ The delivered `D` (DECISIONS 30-36) unites the tagged stoppages -- ball out to t
 restart, dated at the tag start + 5 s (+ 3,5 s for a kick-off) -- with W1, the players' stoppages.
 The union ends where the LATER of the two ends. On the match, without any label
 (`--explore`, docs/proposals/lane-d-edges.md section 2), a W1 run is still going at the estimated
-restart of 42% of the tagged stoppages and runs on a median 2 s past it (p90 11 s): about 100 s of
-the match where the tag says play resumed and `D` goes on because the players are still slow.
+restart of 44% of the tagged stoppages and runs on a median 1,6 s past it (p90 11,8 s): the frames
+of the match where the tag says play resumed and `D` goes on because the players are still slow.
 On DFL a W1 run also outlasts a third of the true restarts, briefly (median 0,6 s). The ball was in
 play from the restart on whatever the players' speed says: the same principle `dead_ball.stoppages`
 already applies to a stoppage's START (it never begins before the previous restart).
@@ -51,6 +51,7 @@ import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -59,6 +60,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from tools import dead_ball, dead_ball_v2, dead_ball_v3, engine  # noqa: E402
+
+if TYPE_CHECKING:
+    from tools import external
 
 FPS = engine.FPS
 
@@ -99,22 +103,29 @@ def kicked(f: engine.Features, params: Params = DEFAULT) -> np.ndarray:
     return np.asarray(f.in_pitch, dtype=bool) & fast
 
 
-def kick_restarts(
+def kick_dating(
     restarts: Sequence[dead_ball.Restart],
     kick: np.ndarray,
     runs: Sequence[tuple[int, int]],
     params: Params = DEFAULT,
-) -> tuple[dead_ball.Restart, ...]:
-    """Each restart dated at the first kick of its window; the estimate where none is seen.
+) -> list[tuple[dead_ball.Restart, int]]:
+    """`(restart, dated frame)` for every restart, in tag order: what `kick_restarts` applies.
 
     The window is `[tag_start, tag_start + reach x (frame - tag_start))`, kept inside the half that
-    holds the estimate and after the previous restart's (re-dated) frame, so one kick never dates
-    two restarts. Team, kind and tag start are unchanged.
+    holds the estimate and after the previous restart's dated frame, so one kick never dates two
+    restarts. Tags that share an estimate are dated once, together, so they stay on one frame and
+    `engine.restart_controls` still sees them as one (possibly ambiguous) restart. A dated frame is
+    never before the previous one: a tag that finds no kick and whose estimate lies before its
+    neighbour's dated frame is put on that frame, keeping the tags in their order.
     """
     kick = np.asarray(kick, dtype=bool)
-    out: list[dead_ball.Restart] = []
+    out: list[tuple[dead_ball.Restart, int]] = []
     previous = -1
+    dated: dict[int, int] = {}
     for r in sorted(restarts, key=lambda r: (r.frame, r.tag_start)):
+        if r.frame in dated:
+            out.append((r, dated[r.frame]))
+            continue
         half = [(a, b) for a, b in runs if a <= r.frame < b]
         frame = r.frame
         if half:
@@ -124,9 +135,26 @@ def kick_restarts(
             found = np.flatnonzero(kick[lo:hi]) if hi > lo else np.array([], dtype=np.int64)
             if found.size:
                 frame = lo + int(found[0])
-        out.append(dataclasses.replace(r, frame=frame))
+        frame = max(frame, previous)
+        dated[r.frame] = frame
+        out.append((r, frame))
         previous = frame
-    return tuple(sorted(out, key=lambda r: (r.frame, r.tag_start)))
+    return out
+
+
+def kick_restarts(
+    restarts: Sequence[dead_ball.Restart],
+    kick: np.ndarray,
+    runs: Sequence[tuple[int, int]],
+    params: Params = DEFAULT,
+) -> tuple[dead_ball.Restart, ...]:
+    """Each restart dated at the first kick of its window (`kick_dating`); the estimate where none
+    is seen. Team, kind and tag start are unchanged."""
+    moved = [
+        dataclasses.replace(r, frame=frame)
+        for r, frame in kick_dating(restarts, kick, runs, params)
+    ]
+    return tuple(sorted(moved, key=lambda r: (r.frame, r.tag_start)))
 
 
 def cut_at_restarts(kinematic: np.ndarray, restart_frames: Sequence[int]) -> np.ndarray:
@@ -176,14 +204,7 @@ def chain(
             )
         kin = cut_at_restarts(kin, [r.frame for r in ev.restarts])
     dead = dead_ball.dead_mask(ev, runs, "out") | kin
-    ctrl = engine.control(f, params)
-    switch = engine.uncontested(ctrl, f, params.radius_m) if params.duel else None
-    accepted = switch if switch is not None else ctrl
-    forced = engine.restart_controls(ev.restarts, accepted)
-    state = engine.decode(ctrl, runs, params.dwell, forced, switch)
-    out = engine.labels(state)
-    out[dead] = "D"
-    return out
+    return engine.chain(f, params, ev.restarts, dead)[2]
 
 
 def kinematic_for(variant: str) -> np.ndarray:
@@ -219,7 +240,9 @@ def dfl_tags(
     ball is outside the pitch on its last dead frame -- a ball out of play, what our tags cover.
     The estimate sits `errors_s[i % len]` seconds off the true restart (positive is late) and the
     tag starts `restart_s` before it, as `dead_ball.restarts` dates ours; the team is the one the
-    truth names on the first live frame. The estimate is kept inside the half.
+    truth names on the first live frame. The estimate is kept inside the half and after the
+    stoppage's first frame; the tag start may still fall before the stoppage, in live play, as ours
+    can when a stoppage is shorter than the 5 s offset (41 of 464 tags).
     """
     truth = np.asarray(truth)
     out = np.asarray(out, dtype=bool)
@@ -231,14 +254,18 @@ def dfl_tags(
             if start == a or stop >= b or not out[stop - 1]:
                 continue
             error = errors_s[len(found) % len(errors_s)]
-            frame = min(max(stop + int(round(error * FPS)), a + 1), b - 1)
+            # A restart never comes before the ball went out: an early error on a stoppage shorter
+            # than it lands on the stoppage's second frame (review of PR #57: 1 of 464 tags).
+            frame = min(max(stop + int(round(error * FPS)), start + 1, a + 1), b - 1)
             team = {"H": 0, "A": 1}.get(str(truth[stop]))
             tag_start = max(a, frame - int(round(restart_s * FPS)))
             found.append(dead_ball.Restart(frame, tag_start, "Throw-in", team))
     return tuple(sorted(found, key=lambda r: (r.frame, r.tag_start)))
 
 
-def dfl_inputs(match_id: str, errors_s: Sequence[float] = DFL_ERRORS_S):
+def dfl_inputs(
+    match_id: str, errors_s: Sequence[float] = DFL_ERRORS_S
+) -> tuple[external.Match, dict[bool, np.ndarray]]:
     """`(match with synthetic tags, {onset?: players' D})` for one DFL match."""
     from tools import external
 
@@ -345,9 +372,17 @@ def explore() -> dict:
     for x in through:
         rest = np.flatnonzero(~w1[x:])
         past.append((int(rest[0]) if rest.size else len(w1) - x) / FPS)
-    dated = kick_restarts(ev.restarts, kicked(f), runs)
+    # What `cut` actually removes: each W1 frame once (two estimates in one run cut it once), and
+    # apart, the part of it not already inside a tagged stoppage.
+    removed = w1 & ~cut_at_restarts(w1, estimates)
+    tagged = dead_ball.dead_mask(ev, runs, "out")
+    # Pair each restart with its own dated frame (`kick_restarts` re-sorts by the new frame).
     shift = np.array(
-        [(d.frame - r.frame) / FPS for r, d in zip(ev.restarts, dated) if d.frame != r.frame]
+        [
+            (frame - r.frame) / FPS
+            for r, frame in kick_dating(ev.restarts, kicked(f), runs)
+            if frame != r.frame
+        ]
     )
     inside = np.zeros(len(w1), dtype=bool)
     for a, b in runs:
@@ -357,17 +392,25 @@ def explore() -> dict:
         kin = kinematic_for(variant)
         labels = chain(f, ev, kin, variant)
         shares[variant] = float((labels == "D")[inside].mean())
-    pct = (10, 25, 50, 75, 90)
     return {
         "tagged_restarts": len(estimates),
         "w1_holds_the_estimate": len(through),
-        "w1_past_the_estimate_s_p10_25_50_75_90": [float(np.percentile(past, p)) for p in pct],
-        "w1_frames_past_the_estimates": int(round(sum(past) * FPS)),
+        "w1_past_the_estimate_s_p10_25_50_75_90": _percentiles(past),
+        "w1_frames_cut": int(removed.sum()),
+        "w1_frames_cut_outside_tagged_d": int((removed & ~tagged).sum()),
         "restarts_moved_by_kick": int(len(shift)),
-        "kick_minus_estimate_s_p10_25_50_75_90": [float(np.percentile(shift, p)) for p in pct],
+        "kick_minus_estimate_s_p10_25_50_75_90": _percentiles(shift),
         "kick_earlier_than_estimate": int((shift < 0).sum()),
         "dead_share_in_halves": shares,
     }
+
+
+def _percentiles(values: Sequence[float] | np.ndarray) -> list[float]:
+    """p10/25/50/75/90, zeros when there is nothing to summarise."""
+    values = np.asarray(values, dtype=float)
+    if not values.size:
+        return [0.0] * 5
+    return [float(np.percentile(values, p)) for p in (10, 25, 50, 75, 90)]
 
 
 def _json_default(value):

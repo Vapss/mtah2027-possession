@@ -1,7 +1,7 @@
 # Carril d-edges — dónde TERMINA una parada
 
 Estado: **medido — resultado negativo** (sección 9). Las secciones 1–6 se escribieron y commitearon
-(`6324ea2`) antes de correr ninguna variante contra ninguna etiqueta (DFL, slice, banco); las 7–10
+(`7d19f6d`) antes de correr ninguna variante contra ninguna etiqueta (DFL, slice, banco); las 7–10
 se añadieron después, en un commit aparte, sin tocar las 1–6 salvo esta línea de estado.
 
 Código: `tools/dead_ball_edges.py`; pruebas: `tests/test_dead_ball_edges.py`. Este documento no
@@ -147,7 +147,7 @@ con las decisiones 32/35) y cambian solo lo que dice su nombre. Referencia: **`e
 
 ---
 
-*Lo que sigue se escribió después de medir. Las secciones 1–6 son las del commit `6324ea2` sin
+*Lo que sigue se escribió después de medir. Las secciones 1–6 son las del commit `7d19f6d` sin
 cambios, salvo la línea de estado.*
 
 ## 7. Cómo se reproducen los números
@@ -341,3 +341,34 @@ Lo que queda como resultado:
 - **Las tres posesiones del slice que motivaron el carril** (#6, #14, #17 de `lane-dating.md`) no se
   miraron una a una, para no leer el slice fuera del pre-registro; la precisión de `D` de `cut` dice
   que el corte va en esa dirección.
+
+## 11. Revisión de código (PR #57)
+
+Correcciones posteriores a la medición, cada una con su prueba sintética; **ninguna cambia la
+recomendación**:
+
+- **Tags sintéticos de DFL antes de la parada.** Con un error de −2 s en una parada más corta, la
+  estimación caía antes de que el balón saliera (1 de 464 tags). Ahora la estimación nunca es anterior
+  al segundo frame de la parada; el inicio del tag sí puede caer en juego, como en los nuestros
+  cuando la parada dura menos que el desfase de 5 s (41 de 464). DFL re-medido: **las victorias no
+  cambian** (`cut` 3/7 y 2/7, `cut+onset` 4/7 y 6/7, `kick` y `kick+onset` 7/7 y 7/7); solo se mueven
+  segundos decimales de los bordes (`cut+onset` \|inicio\| mediano 0,72 → 0,74 s; `engine` con error
+  −2 s, \|fin\| 1,36 → 1,40 s).
+- **`kick_restarts`.** Tags con la misma estimación se fechan juntos (siguen en un frame, así que
+  `restart_controls` los sigue viendo como una reanudación, ambigua si nombran equipos distintos), y
+  un frame fechado nunca queda antes del anterior. En el partido no hay tags con el mismo frame y hay
+  un solo par de ventanas solapadas: las cuatro salidas tienen el mismo SHA-256 que en la sección 7.
+- **`--explore`.** Emparejaba reanudaciones con sus fechas tras reordenarlas, contaba dos veces un tramo
+  W1 con dos estimaciones y fallaba sin datos. Corregido (`kick_dating`, la máscara real de `cut`,
+  percentiles vacíos a cero): los números de la sección 2.1 no cambian; `cut` quita 2.518 frames,
+  2.511 de ellos fuera del `D` etiquetado.
+- **`chain`** usa `engine.chain` en lugar de copiar su preámbulo; `engine` sigue siendo la cadena
+  entregada byte a byte (la prueba con el bundle lo fija).
+- **El commit del pre-registro** es `7d19f6d`: el mismo contenido que el `6324ea2` original
+  (`git diff` vacío en los tres archivos), re-aplicado sobre `dev`; su fecha de autor es la original
+  (21:27), la de commit es la del re-aplicado.
+
+Deuda aceptada: `dfl()` reconstruye cada partido por cada error del ciclo y re-ejecuta las cadenas
+limpias (coste, no resultado; módulo de investigación). La detección de `kick` por un solo frame de
+velocidad, sin persistencia, es parte de la regla pre-registrada: cambiarla sería una variante nueva,
+y `kick` ya pierde en el partido.

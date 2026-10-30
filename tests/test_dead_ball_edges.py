@@ -82,6 +82,32 @@ def test_one_kick_never_dates_two_restarts_and_the_window_stays_in_its_half() ->
     assert dead_ball_edges.kick_restarts([late], kick2, [(0, 2000), (2000, N)])[0].frame == 1990
 
 
+def test_tags_sharing_an_estimate_are_dated_together() -> None:
+    # Two tags on one frame naming different teams: `restart_controls` drops the pair as ambiguous
+    # only while they stay on one frame, so the second must not move on to the next pass.
+    home = dead_ball.Restart(1125, 1000, "Free Kick", 0)
+    away = dead_ball.Restart(1125, 1000, "Free Kick", 1)
+    kick = np.zeros(N, dtype=bool)
+    kick[[1140, 1180]] = True
+    dated = dead_ball_edges.kick_restarts([home, away], kick, HALF)
+    assert [d.frame for d in dated] == [1140, 1140]
+    assert engine.restart_controls(dated) == {}
+
+
+def test_a_dated_restart_never_lands_before_the_previous_one() -> None:
+    first = dead_ball.Restart(1125, 1000, "Throw-in", 0)
+    second = dead_ball.Restart(1150, 1140, "Throw-in", 1)  # its window holds no kick
+    kick = np.zeros(N, dtype=bool)
+    kick[1200] = True  # dates the first restart after the second's estimate
+    pairs = dead_ball_edges.kick_dating([second, first], kick, HALF)
+    assert [(r.team, frame) for r, frame in pairs] == [(0, 1200), (1, 1200)]
+
+
+def test_percentiles_of_nothing_are_zeros() -> None:
+    assert dead_ball_edges._percentiles([]) == [0.0] * 5
+    assert dead_ball_edges._percentiles([1.0, 1.0]) == [1.0] * 5
+
+
 # -- the cut -----------------------------------------------------------------------------------
 
 
@@ -178,6 +204,18 @@ def test_dfl_tags_cover_ball_out_stoppages_with_the_cycled_error() -> None:
         (2300 + 2 * FPS, 2300 + 2 * FPS - 125, 1),
     ]
     assert all(not t.kind.startswith("Kick Off") for t in tags)
+
+
+def test_a_synthetic_restart_never_comes_before_the_ball_went_out() -> None:
+    n = 1000
+    truth = np.full(n, "H", dtype=object)
+    truth[500:530] = "D"  # a 1,2 s ball out: a -2 s error would land in live play
+    truth[530:] = "A"
+    out = np.zeros(n, dtype=bool)
+    out[500:530] = True
+    (tag,) = dead_ball_edges.dfl_tags(truth, out, [(0, n)], errors_s=(-2.0,))
+    assert tag.frame == 501
+    assert tag.tag_start == 501 - 125  # the tag start may still fall in live play, as ours can
 
 
 # -- the delivered match -----------------------------------------------------------------------

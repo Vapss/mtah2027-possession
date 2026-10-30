@@ -1230,7 +1230,8 @@ cadena entregada se mantiene (`72c98ed4bb4a…`).
   cuentan: allí el balón está congelado mientras está muerto y salta en la reanudación.
 - **El onset U1 tampoco entra combinado:** `cut+onset` empeora el error de inicio en DFL (0,44 → 0,72 s).
 
-**Lo que dice la auditoría que siguió (diagnóstico con la GT pública, no elige nada).** Cambiar un
+**Lo que dice la auditoría que siguió (diagnóstico con la GT pública, no elige nada;
+`python tools/headroom.py --write docs/analysis/headroom.md` regenera cada número).** Cambiar un
 componente cada vez por la verdad, en el slice limpio y en el banco: `D` perfecto lleva el slice de
 0,5368 a 0,6162 (banco 0,5128); el **equipo** correcto en nuestros frames vivos, a 0,8889 (banco
 0,8729). El margen está en *qué equipo* tiene los frames vivos, no en `D`: el 15,2% de esos frames lleva
