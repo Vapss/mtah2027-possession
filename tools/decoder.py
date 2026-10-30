@@ -446,7 +446,7 @@ def _f(value: float | None, digits: int = 4) -> str:
 
 
 def _p(value: float) -> str:
-    return f"{100 * value:.1f}%".replace(".", ",")
+    return "—" if np.isnan(value) else f"{100 * value:.1f}%".replace(".", ",")
 
 
 def report(measured: dict[str, dict]) -> str:
@@ -627,8 +627,18 @@ def diagnose_block(index: int, variant: str = FOLLOW_UP_BASELINE) -> dict:
             _switches(np.where(delivered == other, 1, 0), [(0, len(delivered))])
         ),
         "st_cover": float(single.mean()),
-        "st_for_team": float((owner[single] == team).mean()) if single.any() else float("nan"),
+        "st_for_team": _share(owner[single] == team),
+        # Split by what the delivered chain says, to see whether the tagging arbitrates the duel:
+        # where both chains say `team` and where only V2 does.
+        "st_split": {
+            side: (_share(single[mask]), _share(owner[single & mask] == team))
+            for side, mask in (("same", delivered != other), ("other", delivered == other))
+        },
     }
+
+
+def _share(mask: np.ndarray) -> float:
+    return float(mask.mean()) if mask.size else float("nan")
 
 
 def report_block(d: dict) -> str:
@@ -659,10 +669,17 @@ def report_block(d: dict) -> str:
     lines += [
         "",
         f"La cadena entregada etiqueta {_p(d['delivered_other_share'])} de esa posesión con el "
-        f"otro equipo, en {d['delivered_switches']} cambios. Smart Tagging: cubre "
+        f"otro equipo (número de cambios: {d['delivered_switches']}). Smart Tagging: cubre "
         f"{_p(d['st_cover'])} de la posesión y, de eso, vota `{d['team']}` en "
         f"{_p(d['st_for_team'])}.",
+        "",
+        "| tramo de la posesión | cobertura del Smart Tagging | de lo cubierto, vota "
+        f"`{d['team']}` |",
+        "|---|---:|---:|",
     ]
+    for side, label in (("same", "las dos cadenas dicen"), ("other", "solo la variante dice")):
+        cover, agree = d["st_split"][side]
+        lines.append(f"| {label} `{d['team']}` | {_p(cover)} | {_p(agree)} |")
     return "\n".join(lines) + "\n"
 
 
