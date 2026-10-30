@@ -1,6 +1,6 @@
 # Auditoría del margen: qué componente pierde el `spellF1`
 
-Generado por `python tools/headroom.py --write docs/analysis/headroom.md` desde el commit `4ccca6ef`. No se edita a mano.
+Generado por `python tools/headroom.py --write docs/analysis/headroom.md` desde el commit `c98e8bb6`. No se edita a mano.
 **Diagnóstico con la GT pública: no elige ninguna regla, constante ni variante**
 (decisión 40). Cada fila cambia un componente de la cadena entregada por la verdad y
 puntúa en el slice y en el banco de trasplante.
@@ -11,18 +11,21 @@ puntúa en el slice y en el banco de trasplante.
 | oracle D | 0,6162 | 0,5128 | 0,4114 | 0,2933 |
 | oracle D: only remove our false D | 0,5789 | 0,4649 | 0,3765 | 0,2452 |
 | oracle D: only add the D we miss | 0,5730 | 0,4824 | 0,3944 | 0,2897 |
-| oracle team on the live frames | 0,8889 | 0,8729 | 0,8713 | 0,8316 |
+| oracle team on the live frames | 0,8343 | 0,8132 | 0,8093 | 0,7515 |
 
 ## El equipo en los frames vivos (slice limpio)
 
-Frames vivos para nosotros y para la verdad: 5846; con el equipo equivocado: 889 (15,2%), de ellos 230 sin etiqueta (`X`): los primeros 9,2 s de la ventana, antes del primer estado.
+Contado sobre las etiquetas que ve el `spellF1` oficial: las `X` rellenadas como hace
+`fill_abstentions` (hacia delante, y hacia atrás al inicio de la ventana).
+
+Frames vivos para nosotros y para la verdad: 5846; con el equipo equivocado: 723 (12,4%). La ventana empieza con 9,2 s sin estado (`X`), que el scorer rellena con la primera etiqueta: 64 de esos frames quedan con el equipo equivocado.
 
 | distancia al cambio verdadero más cercano | frames con el equipo equivocado |
 |---|---:|
-| 0-1 s | 318 |
-| 1-2 s | 176 |
-| 2-4 s | 196 |
-| 4-8 s | 174 |
+| 0-1 s | 294 |
+| 1-2 s | 151 |
+| 2-4 s | 146 |
+| 4-8 s | 107 |
 | 8-inf s | 25 |
 
 ## Reanudaciones sin equipo
