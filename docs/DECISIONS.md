@@ -1209,3 +1209,32 @@ Tres carriles, cada uno con pre-registro antes de medir. La cadena entregada se 
 paradas** (el inicio tardío de W1 en DFL y las colas de `D` en el slice). Es la ronda 3, con DFL como
 árbitro principal: el estado vivo/muerto por frame no depende de la definición de posesión (decisión
 37).
+
+## 40. Ronda 3: el final de las paradas no cambia la entrega
+
+Carril d-edges (`docs/proposals/lane-d-edges.md`, pre-registro `7d19f6d` antes de medir). Cuatro
+reglas para el **final** de una parada: `cut` (una reanudación etiquetada termina el tramo W1 que la
+contiene), `kick` (lo mismo, con la reanudación fechada por el primer balón ≥ 10 m/s en el campo) y
+cada una con el inicio U1 de dead-v3. DFL era el árbitro principal (decisión 37: el estado vivo/muerto
+por frame no depende de la definición de posesión). **Ninguna pasa las siete compuertas**, así que la
+cadena entregada se mantiene (`72c98ed4bb4a…`).
+
+- **`cut` gana en el partido y no se adopta.** Slice 0,5368 → 0,5474 (+0,0105, 0 discordantes, una
+  posesión a IoU 0,7), precisión de `D` 0,877 → 0,901 sin perder recall, banco 0,4474 / 0,3730. Pero en
+  DFL gana 3 de 7 partidos limpio y 2 de 7 con nuestro balón (pedía ≥ 6), con el mismo error de bordes.
+  En DFL W1 apenas sobrepasa la reanudación (0,6 s de mediana frente a 1,6 s en el partido), así que el
+  corte casi no cambia nada allí; el veredicto depende además de la forma supuesta del error de los
+  tags sintéticos. **No se reabre cambiando esa forma:** sería ajustar el instrumento después de ver
+  que falla.
+- **`kick` pierde en el partido** (slice −0,0211, una posesión; banco más bajo). Sus 7/7 en DFL no
+  cuentan: allí el balón está congelado mientras está muerto y salta en la reanudación.
+- **El onset U1 tampoco entra combinado:** `cut+onset` empeora el error de inicio en DFL (0,44 → 0,72 s).
+
+**Lo que dice la auditoría que siguió (diagnóstico con la GT pública, no elige nada).** Cambiar un
+componente cada vez por la verdad, en el slice limpio y en el banco: `D` perfecto lleva el slice de
+0,5368 a 0,6162 (banco 0,5128); el **equipo** correcto en nuestros frames vivos, a 0,8889 (banco
+0,8729). El margen está en *qué equipo* tiene los frames vivos, no en `D`: el 15,2% de esos frames lleva
+el equipo equivocado, y 690 de los 889 caen a menos de 4 s de un cambio verdadero. Ahí apareció lo que
+abre la ronda 4: **32 de las 59 reanudaciones etiquetadas no traen equipo** (los 26 saques de banda y
+los 6 saques de centro), el motor las ignora, y los primeros 9,2 s del partido salen `X` porque no hay
+estado que arrastrar antes del primer control.
