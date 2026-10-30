@@ -1179,3 +1179,33 @@ reales (el slice tiene 391 frames vivos sin balón; el Smart Tagging, ~98% en el
 **Fin de la ronda 1.** Cinco carriles: dos positivos integrados (duelo, balón muerto por los jugadores),
 tres negativos o fuera de la entrega con su motivo escrito (imputación, vídeo, escalas temporales del
 decodificador), y dos herramientas nuevas de evaluación (banco, corpus externo).
+
+---
+
+## 39. Ronda 2: tres hipótesis, tres negativos, ninguna cambia la entrega
+
+Tres carriles, cada uno con pre-registro antes de medir. La cadena entregada se mantiene
+(`72c98ed4bb4a…`: slice 0,5368, banco 0,4351 / 0,3595). Cada negativo deja escrito su motivo:
+
+- **Fechado de los cambios** (`docs/proposals/lane-dating.md`). Hipótesis: el duelo decide *si* cambia
+  la posesión pero la fecha tarde. Fechar en el primer control del nuevo equipo es casi nulo (mueve 29
+  de 301 cambios); fecharlo en el primer toque, sin el límite de velocidad, **empeora** (slice −0,0526,
+  pierde 2 posesiones, Smart Tagging 77,1% → 74,2%). Diagnóstico posterior, no pre-registrado: los
+  inicios tardíos del slice no están en el traspaso sino en colas de `D` que invaden la posesión nueva,
+  controles del equipo saliente, fragmentación y balones sueltos.
+- **Balón muerto v3** (`docs/proposals/lane-dead-v3.md`). En DFL, las paradas de W1 **empiezan 5,4 s
+  tarde y terminan 0,7 s antes**: la mitad "terminan tarde" de la hipótesis era falsa. Adelantar el
+  inicio (U1, constantes fijadas en DFL) reduce el error de inicio a 0,5 s, gana los 7 partidos de DFL
+  y sube el Smart Tagging a 77,8%, pero pierde en el slice (−0,0105, 0 discordantes) y un poco en el
+  banco: **no se adopta, no queda refutado**. Dar el balón al primer control tras una parada sin tag
+  (U2, U3) no pasa todas las compuertas.
+- **Smart Tagging dentro de huecos largos** (`docs/proposals/lane-st-gaps.md`). Las cuatro variantes
+  son seguras e inútiles: no se activan en el slice y el banco baja. La causa es buena: con W1, la
+  mayoría de los huecos largos ya son `D` (solo 19.770 de 64.643 frames sin balón están vivos), la
+  posesión más larga del bloque 11 pasó de cubrir ~91% del bloque a 34,3%, y en los huecos vivos que
+  quedan el Smart Tagging coincide con el equipo arrastrado 3 a 1.
+
+**Lo que queda abierto, con la única pista en la que coinciden dos carriles:** los **bordes de las
+paradas** (el inicio tardío de W1 en DFL y las colas de `D` en el slice). Es la ronda 3, con DFL como
+árbitro principal: el estado vivo/muerto por frame no depende de la definición de posesión (decisión
+37).
