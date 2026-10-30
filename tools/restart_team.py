@@ -116,16 +116,22 @@ def _half(frame: int, runs: Sequence[tuple[int, int]]) -> tuple[int, int] | None
 
 
 def by_position(
-    restart: dead_ball.Restart, held: np.ndarray, runs: Sequence[tuple[int, int]]
+    restart: dead_ball.Restart,
+    held: np.ndarray,
+    runs: Sequence[tuple[int, int]],
+    anchor: int | None = None,
 ) -> int | None:
-    """P: the one team holding the ball in `[tag_start, frame)`, kept inside the restart's half.
+    """P: the one team holding the ball in `[tag_start, frame)`, kept inside the restart's half
+    and, when `anchor` is known, after the ball went out: before it, the ball was in play and its
+    holder is the previous play's, not the restart's (amendment, proposal section 4).
 
     `None` when nobody holds it in the window, or when both teams do on different frames.
     """
     half = _half(restart.frame, runs)
     if half is None:
         return None
-    lo, hi = max(restart.tag_start, half[0], 0), min(restart.frame, half[1], len(held))
+    lo = max(restart.tag_start, half[0], 0, anchor if anchor is not None else 0)
+    hi = min(restart.frame, half[1], len(held))
     seen = np.unique(held[lo:hi]) if hi > lo else np.array([], dtype=np.int8)
     seen = seen[seen != NONE]
     return int(seen[0]) if len(seen) == 1 else None
@@ -217,7 +223,7 @@ def infer(
     accepted = switch if switch is not None else ctrl
     held = holders(f, rt)
     anchor = anchors(ev, runs)
-    pos = {i: by_position(restarts[i], held, runs) for i in todo}
+    pos = {i: by_position(restarts[i], held, runs, anchor[i]) for i in todo}
 
     # The kick-off of each half, by law the other half's opponents: exactly one per half.
     starts: dict[tuple[int, int], list[int]] = {}
@@ -356,7 +362,8 @@ def dfl_tags(
     d-edges' rule) or when the restart is a throw-in or a kick-off (`dfl_kind`). Throw-ins and
     kick-offs carry no team, as ours do; the others carry the truth's. The estimate sits
     `errors_s[i % len]` seconds off the true restart (cycled over the tags in frame order, kept
-    inside the half) and the tag starts 5 s before it (3,5 s for a kick-off), as
+    inside the half and at least one frame after the stoppage's first dead frame) and the tag
+    starts 5 s before it (3,5 s for a kick-off), as
     `dead_ball.restarts` dates ours. The true team is the one the truth names on the first live
     frame, `None` where it names none.
     """
@@ -364,9 +371,11 @@ def dfl_tags(
     out = np.asarray(out, dtype=bool)
     found: list[tuple[dead_ball.Restart, int | None]] = []
 
-    def tag(true: int, kind: str, a: int, b: int, team: int | None) -> None:
+    def tag(true: int, kind: str, a: int, floor: int, b: int, team: int | None) -> None:
+        # The estimate never lands before the ball went out (`floor`, amendment, proposal
+        # section 5); the tag may still start before it, as a real 5 s tag can.
         error = errors_s[len(found) % len(errors_s)]
-        frame = min(max(true + int(round(error * FPS)), a), b - 1)
+        frame = min(max(true + int(round(error * FPS)), floor), b - 1)
         offset = params.kick_off_restart_s if kind.startswith("Kick Off") else params.restart_s
         tag_start = max(a, frame - params.frames(offset))
         restart = dead_ball.Restart(frame, tag_start, kind, team)
@@ -377,7 +386,7 @@ def dfl_tags(
         live = np.flatnonzero(~dead)
         if not live.size:
             continue
-        tag(a + int(live[0]), KICK_OFF_START, a, b, None)
+        tag(a + int(live[0]), KICK_OFF_START, a, a, b, None)
         for start, stop in dead_ball_v2.runs_of(dead):
             start, stop = a + start, a + stop
             if start == a or stop >= b:
@@ -385,7 +394,8 @@ def dfl_tags(
             kind = dfl_kind(ball[stop], pitch)
             if kind not in TEAMLESS and not out[stop - 1]:
                 continue
-            tag(stop, kind, a + 1, b, None if kind in TEAMLESS else _TEAM.get(str(truth[stop])))
+            team = None if kind in TEAMLESS else _TEAM.get(str(truth[stop]))
+            tag(stop, kind, a, start + 1, b, team)
     found.sort(key=lambda item: (item[0].frame, item[0].tag_start))
     return tuple(r for r, _ in found), tuple(t for _, t in found)
 

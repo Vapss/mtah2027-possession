@@ -383,3 +383,29 @@ def test_the_engine_variant_reproduces_the_delivered_run() -> None:
     table = pd.DataFrame({"frame": np.arange(len(labels)), "label": labels})
     csv = table.to_csv(index=False, lineterminator="\n").encode()
     assert hashlib.sha256(csv).hexdigest().startswith("72c98ed4bb4a")
+
+
+# -- the amendment before measuring (proposal, "Enmienda") ---------------------------------------
+
+
+def test_p_ignores_the_previous_play_before_the_ball_went_out() -> None:
+    held = np.full(N, NONE, dtype=np.int8)
+    held[480:500] = 0  # the tag starts before the ball went out: home was playing it
+    held[520:590] = 1  # away holds it behind the line
+    r = dead_ball.Restart(600, 475, THROW_IN, None)
+    assert restart_team.by_position(r, held, HALF) is None
+    assert restart_team.by_position(r, held, HALF, anchor=505) == 1
+
+
+def test_a_dfl_estimate_never_lands_before_the_ball_went_out() -> None:
+    n, pitch = 1000, (105.0, 68.0)
+    truth = np.full(n, "H", dtype=object)
+    truth[500:530] = "D"  # a 1,2 s stoppage
+    ball = np.tile([50.0, 30.0], (n, 1))
+    ball[530] = [40.0, -0.3]
+    out = np.zeros(n, dtype=bool)
+    out[500:530] = True
+    tags, _ = restart_team.dfl_tags(truth, ball, pitch, out, [(0, n)], errors_s=(-2.0,))
+    throw = [t for t in tags if t.kind == THROW_IN][0]
+    assert throw.frame == 501  # -2 s would be 480, before the stoppage
+    assert throw.tag_start == 501 - 125  # the tag itself may start before it

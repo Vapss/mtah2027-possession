@@ -2,7 +2,8 @@
 
 Estado: **pre-registro** (secciones 1–6), escrito y commiteado antes de correr ninguna variante
 contra ninguna etiqueta (DFL, slice, banco) y antes de medir el acuerdo P-vs-L o el Smart Tagging
-de ninguna variante en BAR-ATH.
+de ninguna variante en BAR-ATH. Pre-registro en `65274a7`; **enmienda** (sección 6 bis) en un commit
+aparte, también antes de medir: la primera ejecución de DFL se detuvo sin leer su salida.
 
 Código: `tools/restart_team.py`; pruebas: `tests/test_restart_team.py`. Este documento no cambia el
 motor ni `docs/DECISIONS.md`: el coordinador integra.
@@ -199,3 +200,24 @@ rellena nada hacia atrás.
 3. Las diferencias de `spellF1` entre variantes que pasan no alteran el orden.
 4. Si ninguna pasa, el resultado es **negativo**, la cadena entregada se mantiene, y se reporta qué
    compuerta falla y por cuánto.
+
+## 6 bis. Enmienda antes de medir (declarada)
+
+Tras commitear el pre-registro, el coordinador avisó de un fallo de la revisión de #57 en los tags
+sintéticos de d-edges que este carril reproducía: la estimación se recortaba a la mitad pero no al
+inicio de la parada, así que con −2 s en una parada corta **la reanudación caía antes de que el balón
+saliera** (y el tag empieza antes de la salida en el 8,8% de los tags de d-edges). La ejecución de DFL
+ya lanzada se detuvo y se borró **sin leer nada de su salida**; ninguna otra medición había corrido.
+Dos cambios, y nada más:
+
+1. **Tags sintéticos de DFL:** la estimación nunca cae antes del primer frame muerto + 1 de su parada
+   (en el `Kick Off (Start)`, del inicio de la mitad). El inicio del tag sigue a 5 s (3,5 s) de la
+   estimación, recortado solo a la mitad: puede empezar antes de la salida, como un tag real de 5 s
+   tras una parada corta.
+2. **P no mira antes de la salida del balón:** su ventana pasa a ser
+   `[max(inicio del tag, ancla), reanudación estimada)`, con el ancla de L (inicio de la parada
+   etiquetada). Antes del ancla el balón estaba en juego y quien lo tenía es la jugada anterior, que
+   en un saque de banda suele ser el rival del que saca. En los `Kick Off (Start)` el ancla es el
+   inicio de la mitad y no cambia nada.
+
+Las constantes, las variantes, las mediciones, las compuertas y el orden de prior no cambian.
