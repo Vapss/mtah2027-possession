@@ -6,8 +6,8 @@ Equipo: TODO (nombre del equipo; el archivo entregado debe llamarse `<equipo>.md
 Convenciones. `Dnn` es la entrada `nn` de [`docs/DECISIONS.md`](DECISIONS.md); los carriles de
 investigación están en `docs/proposals/lane-*.md` y las tablas generadas en `docs/analysis/`. Cada
 número de este documento está copiado de esas fuentes, que dicen cómo regenerarlo. Los números de
-la cadena entregada son los de su versión final (SHA-256 `72c98ed4bb4a…`), que ninguna de las seis
-rondas de investigación cambió (D39–D43). "Slice"
+la cadena entregada son los de su versión final (SHA-256 `72c98ed4bb4a…`), la que dejó la ronda 1
+(D34, D36) y que ninguna de las cinco rondas siguientes cambió (rondas 2–6, D39–D43). "Slice"
 es la ventana pública de 5 minutos con ground truth (bloque 1★, 17 posesiones); "partido" son los
 dos medios tiempos (158.857 frames graduados). Los datos del partido son licenciados: aquí solo hay
 agregados ya publicados en el repositorio.
@@ -95,12 +95,13 @@ escala temporal. Reproduce la caída relativa del banco por balón perdido (−2
 **Partidos abiertos de Metrica** (D42, D43, `tools/metrica_open.py`). Los dos partidos de muestra de
 Metrica con tracking (g1, g2) y su registro de eventos, sincronizado al frame, dan una verdad de
 posesión independiente de nuestro motor: cada cambio se fecha en la primera acción anotada del nuevo
-equipo. Su escala sí es comparable a la nuestra (3,65 y 3,35 posesiones/min), así que juzga *cuándo*
-y *si* cambia la posesión, que DFL no puede. Dos límites, medidos: el balón de la muestra está
-sincronizado con los eventos (a 0,06 m del pie en cada uno), mucho más limpio que el nuestro en el
-toque, por lo que cada regla se juzga también con un balón degradado a nuestra precisión (ruido de
-posición σ = 0,85 m fijado sin etiquetas, y nuestros huecos); y sus eventos dan la posesión a quien
-*toca* un balón suelto, mientras el reto la da a quien lo *controla*.
+equipo. Su escala sí es comparable a la nuestra (3,65 y 3,35 posesiones/min), así que juzga *si*
+cambia la posesión, que DFL no puede (D37), y es un segundo juez de *cuándo*, junto a DFL. Dos
+límites, medidos: el balón de la muestra está sincronizado con los eventos (a 0,06 m del pie en cada
+uno), mucho más limpio que el nuestro en el toque, por lo que las reglas de la ronda 6 se juzgaron
+también con un balón degradado a nuestra precisión (ruido de posición σ = 0,85 m fijado sin
+etiquetas, y nuestros huecos; D43); y sus eventos dan la posesión a quien *toca* un balón suelto,
+mientras el reto la da a quien lo *controla*.
 
 **Auditoría del margen** (D40, D41, `tools/headroom.py`, `docs/analysis/headroom.md`). Un
 diagnóstico con la GT pública que no elige nada: cambia un componente de la cadena por la verdad y
@@ -249,7 +250,7 @@ decidió no tomar ninguna decisión de fusión con evidencia del slice y dejar e
 | Final de las paradas (`cut`, `kick`, ronda 3) | una reanudación etiquetada corta el tramo de los jugadores | `cut`: slice +0,0105 y banco 0,4474, pero gana 3 de 7 partidos DFL (pedía 6); `kick`: slice −0,0211 | D40, `lane-d-edges.md` |
 | Equipo de los saques sin equipo (ronda 4) | nombrar el equipo de 26 saques de banda y 6 de centro | por la ley, acierto 0,518 en DFL; por posición, 0,925 (pedía 0,95) y cambia 48 frames del partido, ninguno del slice | D41, `lane-restart-team.md` |
 | Fecha juzgada en Metrica (ronda 5) | redatar al toque del nuevo equipo | gana con el balón limpio de Metrica y falla las tres en DFL; dos pierden una posesión del slice (−0,0105, −0,0211) | D42, `lane-m-dating.md` |
-| Recuperar cambios perdidos (ronda 6) | cambiar con un control sostenido o un relevo rápido | `relay`: 4,11 posesiones/min, Smart Tagging −4,2 puntos, slice −0,0526; las otras dos mueven 16–42 frames | D43, `lane-m-whether.md` |
+| Recuperar cambios perdidos (ronda 6) | cambiar con un control sostenido o un relevo rápido | `relay` y `relay+settle`: 4,11 / 4,03 posesiones/min, Smart Tagging −4,2 puntos, slice −0,0526; `persist` y `settle` mueven 42 y 16 frames | D43, `lane-m-whether.md` |
 
 ## 7. Limitaciones, y qué haríamos con más tiempo
 
@@ -282,9 +283,10 @@ decidió no tomar ninguna decisión de fusión con evidencia del slice y dejar e
 - **El equipo cerca de un cambio es donde queda el margen, y nuestro balón lo limita.** La
   auditoría (sección 3) pone ahí casi todo el `spellF1` que falta. Con el balón limpio de Metrica la
   cadena fecha bien los cambios (mediana +0,04 / +0,16 s) y las reglas de fecha mejoran; con el
-  nuestro, y con el de DFL, un toque temprano es tan a menudo falso como verdadero, y una regla que
-  recupera cambios con un balón limpio se los inventa con uno ruidoso (17 → 48–69 sobrantes, D42,
-  D43). El límite es la precisión del balón en el toque, no la regla.
+  nuestro, y con el de DFL, un toque temprano es tan a menudo falso como verdadero (D42). Con un
+  balón degradado a nuestra precisión, la propia cadena entregada pasa de 17 a 48–69 cambios
+  sobrantes en Metrica, y las reglas que recuperan cambios con el balón limpio añaden más (D43). El
+  límite es la precisión del balón en el toque, no la regla.
 - **Las verdades externas no tienen la definición del reto.** DFL y los eventos de Metrica dan la
   posesión a quien toca un balón suelto; el reto, a quien lo controla. Por eso un juez externo puede
   premiar reglas que añaden cambios y BAR-ATH las rechaza (D37, D43).
@@ -292,10 +294,10 @@ decidió no tomar ninguna decisión de fusión con evidencia del slice y dejar e
 Con más tiempo: un detector de balón que generalice entre mitades (el afinado no lo hizo, D38) y,
 si recupera balón en huecos reales, reevaluar la imputación con verdad física (D34); una verdad de
 Metrica con la definición del reto (un `RECOVERY` abre posesión solo si su equipo vuelve a jugar el
-balón antes que el rival), el juez que faltó para decidir *si* cambia la posesión (D43); el inicio
-de las paradas en la deceleración (U1), que ganó los 7 partidos DFL y quedó sin refutar, dentro de
-una combinación que pase el slice (D39). La regla `rule+first-control` y el corte de las paradas en
-la reanudación ya se midieron y no entraron (D39, D40).
+balón antes que el rival), el juez que faltó para decidir *si* cambia la posesión (D43). Ya se
+midieron y no entraron: `rule+first-control` y el inicio de las paradas en la deceleración (U1),
+solo y combinado (U3 `onset+first-control` pierde en el slice, D39; `cut+onset` empeora el error de
+inicio en DFL, D40), y el corte de las paradas en la reanudación (D40).
 
 ## 8. Reproducción
 
@@ -334,11 +336,12 @@ Sale con 0 e imprime un único SHA-256 si coinciden; el de la cadena actual empi
 `72c98ed4bb4a` (D36). La cadena vive en Python, no solo en el Makefile, porque `make` no viene
 en un Windows de serie (D28).
 
-**Tiempo de ejecución.** Medido en un portátil con un Intel Core i9-13980HX, 16 GB de RAM, Windows
-11 y Python 3.12.3: `make engine` tarda 14 s (13,8 / 13,8 / 14,1 s en tres corridas, con el mismo
-SHA-256 las tres) y `make repro`, que construye dos veces, 27 s. De ese tiempo, la primera carga del
-tracking son 3 s y 230 MB por proceso (D14); el resto es sobre todo el cálculo de las paradas de los
-jugadores (`lane-dead-v2.md` §9).
+**Tiempo de ejecución** (`docs/analysis/runtime.md`, que da los comandos). En un portátil con un
+Intel Core i9-13980HX, 16 GB de RAM, Windows 11 y Python 3.12.3, `make engine` tarda 14 s (13,8 /
+13,8 / 14,1 s en tres corridas, con el mismo SHA-256 las tres) y `make repro`, que construye dos
+veces, 27 s. Por etapas: cargar el tracking y calcular los rasgos 4,1 s, las paradas de los
+jugadores 6,0 s, la decodificación 0,04 s; el resto es el artefacto, el ensamblador y el validador
+oficial.
 
 ## Referencias
 
