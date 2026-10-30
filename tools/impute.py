@@ -373,7 +373,8 @@ def viterbi(
 
     The state starts as `before` and must be `after` at `q`; each switch costs `switch_cost` nats
     (`end_cost` for one at `q` itself, the engine's own answer) and each candidate adds its
-    log-odds for the team it is given. Ties keep the earlier state.
+    log-odds for the team it is given. Ties put a switch as late as possible: the engine's own
+    answer is the latest one.
     """
     end_cost = switch_cost if end_cost is None else end_cost
     n = len(candidates)
@@ -383,10 +384,10 @@ def viterbi(
     back = np.zeros((n, 2), dtype=np.int8)
     for i in range(n):
         stay, move = score, score[::-1] - switch_cost
-        back[i] = np.where(stay >= move, [0, 1], [1, 0])
+        back[i] = np.where(stay > move, [0, 1], [1, 0])
         score = np.maximum(stay, move) + gain[i]
     # Arriving at q: a final switch onto `after` is allowed at q itself.
-    final = score[iv.after] if score[iv.after] >= score[1 - iv.after] - end_cost else None
+    final = score[iv.after] if score[iv.after] > score[1 - iv.after] - end_cost else None
     path = np.zeros(n, dtype=np.int8)
     current = iv.after if final is not None else 1 - iv.after
     for i in range(n - 1, -1, -1):
