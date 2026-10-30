@@ -495,7 +495,7 @@ Aplicando la sección 6 tal cual: **ninguna variante pasa las cinco compuertas.*
    una posesión** en el slice y bajan el banco. El acuerdo con el Smart Tagging no las distingue
    (76,7% y 77,1% frente a 77,1%).
 4. **La explicación más simple de 1–3 es el balón.** En Metrica el balón está a 0,06 m del pie en
-   cada evento y quiebra justo donde se anota un toque (sección 3); ahí un toque disputado o rápido
+   la mediana de los eventos (a ≤ 2 m en el 94,6–96,0%) y quiebra justo donde se anota un toque (sección 3); ahí un toque disputado o rápido
    **se ve** y redatar acierta. En DFL el equipo que actúa está a ≤ 1,5 m solo en la mitad de los
    eventos, y en nuestro tracking peor (la calibración degradada ya ensanchaba la cola). Con un balón
    ruidoso en los toques, el ancla temprana es tan a menudo un falso toque como el verdadero. Es la
