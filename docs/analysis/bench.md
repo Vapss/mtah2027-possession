@@ -1,6 +1,6 @@
 # Banco de trasplante de huecos
 
-Generado por `python tools/bench.py --method engine --method smooth50 --write docs/analysis/bench.md` desde el commit `ffbd6de1`. No se edita a mano. Cada fila es un bloque donante: su
+Generado por `python tools/bench.py --method engine --method smooth50 --write docs/analysis/bench.md` desde el commit `c6061023`. No se edita a mano. Cada fila es un bloque donante: su
 patrón de balón ausente se trasplanta sobre la ventana pública (bloque 1★), y se puntúa
 contra su ground truth: robustez a la cantidad y longitud de balón perdido, no al lugar.
 
