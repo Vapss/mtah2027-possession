@@ -95,3 +95,51 @@ def test_sample_frames_draws_runs_that_qualify_entirely_and_is_seeded() -> None:
     assert all(np.array_equal(a[k], b[k]) for k in a)
     assert present[a["with_ball"]].all() and not present[a["gap"]].any()
     assert ((a["gap"] >= 50) & (a["gap"] < 950)).all()
+
+
+def test_positive_crop_contains_the_label_box_and_negative_crop_stays_clear() -> None:
+    rng = np.random.default_rng(0)
+    for u, v in [(5.0, 5.0), (960.0, 540.0), (1915.0, 1075.0)]:
+        (x0, y0), (cx, cy, w, h), negative = vb.crop_boxes(u, v, rng)
+        assert 0 <= x0 <= vb.WIDTH - vb.CROP and 0 <= y0 <= vb.HEIGHT - vb.CROP
+        assert np.isclose(x0 + cx, u, atol=vb.LABEL_BOX_PX / 2) and 0 < w <= vb.LABEL_BOX_PX
+        assert cx - w / 2 >= 0 and cx + w / 2 <= vb.CROP and h > 0
+        if negative is not None:
+            nx, ny = negative
+            inside = nx <= u <= nx + vb.CROP and ny <= v <= ny + vb.CROP
+            assert not inside
+
+
+def test_training_frames_are_equispaced_among_frames_with_ball() -> None:
+    present = np.zeros(100, dtype=bool)
+    present[[10, 20, 30, 40, 50, 90]] = True
+    assert vb.training_frames(present, 0, 60, 3).tolist() == [10, 30, 50]
+
+
+def test_out_inside_reads_the_ball_like_the_dead_ball_stream() -> None:
+    ball = np.array([[0.5, 0.5, 0.0], [1.02, 0.5, 0.0], [np.nan, np.nan, 0.0]])
+    out, inside = vb.out_inside(ball)
+    assert out.tolist() == [False, True, False] and inside.tolist() == [True, False, False]
+
+
+def test_the_excluded_window_covers_the_public_slice_with_a_minute_each_side() -> None:
+    assert vb.EXCLUDED[0] <= 11185 - 1500 and vb.EXCLUDED[1] >= 18685 + 1500
+
+
+def test_project_ball_is_the_inverse_of_to_pitch() -> None:
+    ball = np.array([[0.25, 0.75, 0.0]])
+    u, v = vb.project_ball(np.stack([H]), ball)
+    x, y = vb.to_pitch(np.stack([H]), u, v)
+    assert np.allclose([x[0], y[0]], [0.25, 0.75])
+
+
+def test_operating_threshold_is_the_smallest_reaching_the_precision_target() -> None:
+    rows = [
+        {"conf": 0.1, "precision_2m": 0.8},
+        {"conf": 0.3, "precision_2m": 0.91},
+        {"conf": 0.5, "precision_2m": 0.96},
+        {"conf": 0.7, "precision_2m": float("nan")},
+    ]
+    assert vb.operating_threshold(rows, 0.90) == 0.3
+    assert vb.operating_threshold(rows, 0.95) == 0.5
+    assert vb.operating_threshold(rows, 0.99) is None

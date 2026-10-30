@@ -51,6 +51,8 @@ PITCH_M = np.asarray(games.GAMES[games.GAME]["pitch"], dtype=float)
 WIDTH, HEIGHT = 1920, 1080
 SPORTS_BALL = 32  # the COCO class id of "sports ball"
 SEED = 2027
+# Block 1 (the public slice and the bench window) plus one minute each side: never trained on.
+EXCLUDED = (11185 - 1500, 18685 + 1500)
 
 
 # -- the video ---------------------------------------------------------------------------------
@@ -90,6 +92,7 @@ class DetectorConfig:
     conf: float = 0.05  # keep weak boxes; the confidence threshold is applied later, in numpy
     max_det: int = 5  # boxes kept per frame, best first
     half: bool = True
+    cls: int = SPORTS_BALL  # 0 for the fine-tuned single-class model (proposal, section 4)
 
 
 DEFAULT_DETECTOR = DetectorConfig()
@@ -112,7 +115,7 @@ class Detector:
             list(frames),
             imgsz=c.imgsz,
             conf=c.conf,
-            classes=[SPORTS_BALL],
+            classes=[c.cls],
             max_det=c.max_det,
             half=c.half,
             device=self.device,
@@ -171,6 +174,103 @@ def detect_frames(
         "fps": round(len(frames) / max(1e-9, t_decode + t_detect), 2),
     }
     return detections, timing
+
+
+# -- training data for the fine-tuned detector (proposal, section 4) ---------------------------
+
+CROP = 640
+LABEL_BOX_PX = 24  # contains the ball for ~80% of ATD projections (8.9 px median offset, p75 16)
+NEGATIVE_CLEAR_PX = 48
+
+
+def project_ball(matrices: np.ndarray, ball: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Normalised pitch positions -> pixels, one homography per row (the starter's `project`)."""
+    m = np.asarray(matrices, dtype=float)
+    x, y = ball[:, 0], ball[:, 1]
+    den = m[:, 2, 0] * x + m[:, 2, 1] * y + m[:, 2, 2]
+    return (m[:, 0, 0] * x + m[:, 0, 1] * y + m[:, 0, 2]) / den, (
+        m[:, 1, 0] * x + m[:, 1, 1] * y + m[:, 1, 2]
+    ) / den
+
+
+def crop_boxes(
+    u: float, v: float, rng: np.random.Generator
+) -> tuple[tuple[int, int], tuple[float, float, float, float], tuple[int, int] | None]:
+    """A positive crop origin with the ball's label box in crop pixels `(cx, cy, w, h)`, and a
+    negative crop origin whose crop stays `NEGATIVE_CLEAR_PX` clear of the box (None if none fits
+    in 50 draws). The ball lands anywhere in the positive crop, never within 16 px of its edge."""
+    half = LABEL_BOX_PX / 2
+    x0 = int(np.clip(round(u - rng.uniform(16, CROP - 16)), 0, WIDTH - CROP))
+    y0 = int(np.clip(round(v - rng.uniform(16, CROP - 16)), 0, HEIGHT - CROP))
+    cx, cy = u - x0, v - y0
+    left, top = max(cx - half, 0.0), max(cy - half, 0.0)
+    right, bottom = min(cx + half, float(CROP)), min(cy + half, float(CROP))
+    box = ((left + right) / 2, (top + bottom) / 2, right - left, bottom - top)
+    negative = None
+    for _ in range(50):
+        nx = int(rng.integers(0, WIDTH - CROP + 1))
+        ny = int(rng.integers(0, HEIGHT - CROP + 1))
+        clear = NEGATIVE_CLEAR_PX + half
+        if not (nx - clear <= u <= nx + CROP + clear and ny - clear <= v <= ny + CROP + clear):
+            negative = (nx, ny)
+            break
+    return (x0, y0), box, negative
+
+
+def training_frames(present: np.ndarray, start: int, stop: int, count: int) -> np.ndarray:
+    """`count` frames with the tracking's ball, equispaced among those in `[start, stop)`."""
+    frames = start + np.flatnonzero(present[start:stop])
+    return frames[np.round(np.linspace(0, len(frames) - 1, count)).astype(np.int64)]
+
+
+def prepare(
+    video: str | Path,
+    out: Path,
+    split: str,
+    frames: np.ndarray,
+    u: np.ndarray,
+    v: np.ndarray,
+    seed: int = SEED,
+) -> dict:
+    """Write positive and negative crops (JPEG 95) with YOLO labels under `out/images|labels/split`.
+
+    Reads the span `frames.min()..frames.max()` sequentially and keeps the selected frames. The
+    crops are derived licensed data: `runs/` only, never opened by an image tool, deleted after.
+    """
+    import cv2
+
+    rng = np.random.default_rng(seed)
+    images, labels = out / "images" / split, out / "labels" / split
+    images.mkdir(parents=True, exist_ok=True)
+    labels.mkdir(parents=True, exist_ok=True)
+    wanted = {int(f): k for k, f in enumerate(frames)}
+    start, stop = int(frames.min()), int(frames.max()) + 1
+    n_pos = n_neg = 0
+    for offset, image in enumerate(read_frames(video, start, stop - start)):
+        k = wanted.get(start + offset)
+        if k is None:
+            continue
+        (x0, y0), (cx, cy, w, h), negative = crop_boxes(float(u[k]), float(v[k]), rng)
+        name = f"{split}_{start + offset:06d}"
+        cv2.imwrite(
+            str(images / f"{name}_p.jpg"),
+            image[y0 : y0 + CROP, x0 : x0 + CROP],
+            [cv2.IMWRITE_JPEG_QUALITY, 95],
+        )
+        (labels / f"{name}_p.txt").write_text(
+            f"0 {cx / CROP:.6f} {cy / CROP:.6f} {w / CROP:.6f} {h / CROP:.6f}\n", encoding="ascii"
+        )
+        n_pos += 1
+        if negative is not None:
+            nx, ny = negative
+            cv2.imwrite(
+                str(images / f"{name}_n.jpg"),
+                image[ny : ny + CROP, nx : nx + CROP],
+                [cv2.IMWRITE_JPEG_QUALITY, 95],
+            )
+            (labels / f"{name}_n.txt").write_text("", encoding="ascii")
+            n_neg += 1
+    return {"split": split, "positives": n_pos, "negatives": n_neg}
 
 
 # -- pixels to pitch (numpy only) ----------------------------------------------------------------
@@ -602,6 +702,12 @@ def load_matrices() -> np.ndarray:
     return matrices
 
 
+def operating_threshold(rows: Sequence[dict], target: float) -> float | None:
+    """The smallest threshold whose precision within 2 m reaches `target` (section 4), or None."""
+    ok = [r["conf"] for r in rows if r["precision_2m"] >= target]
+    return min(ok) if ok else None
+
+
 def _load_npz(path: Path) -> dict[str, np.ndarray]:
     with np.load(path) as data:
         return {key: data[key] for key in data.files}
@@ -612,6 +718,12 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("sample", help="choose the feasibility frames (tracking only)")
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--span", type=int, nargs=2, action="append", help="restrict to [START, STOP)")
+    p = sub.add_parser("prepare", help="training crops for the fine-tuned detector (video env)")
+    p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--count", type=int, default=6000)
+    p.add_argument("--span", type=int, nargs=2, required=True, metavar=("START", "STOP"))
+    p.add_argument("--split", default="train")
     p = sub.add_parser("detect", help="run the detector on frames (video environment)")
     p.add_argument("--frames", type=Path, help="npz of frame-index arrays")
     p.add_argument("--range", type=int, nargs=2, metavar=("START", "STOP"), help="half-open")
@@ -619,9 +731,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--weights", default=DetectorConfig.weights)
     p.add_argument("--imgsz", type=int, default=DetectorConfig.imgsz)
     p.add_argument("--batch", type=int, default=8)
+    p.add_argument("--cls", type=int, default=SPORTS_BALL)
+    p = sub.add_parser("train", help="fine-tune the single-class detector (video env)")
+    p.add_argument("--data", type=Path, required=True, help="the dataset folder from `prepare`")
+    p.add_argument("--project", type=Path, required=True)
+    p.add_argument("--weights", default="yolo11s.pt")
     p = sub.add_parser("feasibility", help="detections against the tracking ball")
     p.add_argument("--frames", type=Path, required=True)
     p.add_argument("--detections", type=Path, required=True)
+    p.add_argument("--thresholds", type=float, nargs="+", help="default: the section-1 list")
+    p.add_argument("--control-thresholds", type=float, nargs="+", default=[0.2, 0.3, 0.5])
     p = sub.add_parser("evaluate", help="variants on the public slice and the transplant bench")
     p.add_argument("--detections", type=Path, required=True, help="video balls for the variants")
     p.add_argument("--variants", nargs="+", default=list(VARIANTS), choices=sorted(VARIANTS))
@@ -635,7 +754,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "sample":
         _ball, present = atd.load("tactical").ball()
-        chosen = sample_frames(present, half_runs())
+        chosen = sample_frames(present, [tuple(r) for r in args.span] if args.span else half_runs())
         args.out.parent.mkdir(parents=True, exist_ok=True)
         np.savez(args.out, **chosen)
         print(json.dumps({k: len(v) for k, v in chosen.items()}))
@@ -645,11 +764,22 @@ def main(argv: list[str] | None = None) -> int:
             frames = np.arange(*args.range)
         else:
             frames = np.unique(np.concatenate(list(_load_npz(args.frames).values())))
-        config = DetectorConfig(weights=args.weights, imgsz=args.imgsz)
+        config = DetectorConfig(weights=args.weights, imgsz=args.imgsz, cls=args.cls)
         detections, timing = detect_frames(games.video_path(), frames, Detector(config), args.batch)
         args.out.parent.mkdir(parents=True, exist_ok=True)
         np.savez(args.out, **detections)
         print(json.dumps({"config": config.__dict__, **timing}))
+        return 0
+    if args.command == "train":
+        return _train(args)
+    if args.command == "prepare":
+        ball, present = atd.load("tactical").ball()
+        frames = training_frames(present, *args.span, args.count)
+        if np.any((frames >= EXCLUDED[0]) & (frames < EXCLUDED[1])):
+            raise ValueError("training frames overlap the excluded public window")
+        u, v = project_ball(load_matrices()[frames], ball[frames])
+        stats = prepare(games.video_path(), args.out, args.split, frames, u, v)
+        print(json.dumps(stats))
         return 0
     if args.command == "feasibility":
         from tools import dead_ball, emision, engine
@@ -660,7 +790,7 @@ def main(argv: list[str] | None = None) -> int:
         tracking = atd.load("tactical")
         ball, _present = tracking.ball()
         n = len(matrices)
-        thresholds = (0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7)
+        thresholds = args.thresholds or (0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7)
         rows = agreement(det, sets["with_ball"], ball, matrices, thresholds)
         for row in rows:
             best = best_per_frame(det["frame"], det["conf"], n, row["conf"])
@@ -672,16 +802,68 @@ def main(argv: list[str] | None = None) -> int:
         _ctrl, state, lab = engine.chain(f, engine.DEFAULT, ev.restarts, dead)
         live = (state != engine.NONE) & (lab != "D")
         ctrl_rows = control_agreement(
-            det, matrices, tracking, teams, sets, engine.control(f), state, live, (0.2, 0.3, 0.5)
+            det,
+            matrices,
+            tracking,
+            teams,
+            sets,
+            engine.control(f),
+            state,
+            live,
+            args.control_thresholds,
         )
         players_m = tracking.players_array[:, :, :2] * PITCH_M
         diag = diagnose(det, sets["with_ball"], ball, players_m, matrices)
-        report = {"position": rows, "control": ctrl_rows, "diagnose": diag}
+        report = {
+            "position": rows,
+            "control": ctrl_rows,
+            "diagnose": diag,
+            "operating": {str(t): operating_threshold(rows, t) for t in (0.90, 0.95)},
+        }
         print(json.dumps(report, indent=1))
         return 0
     if args.command == "evaluate":
         return _evaluate(args)
     return 2
+
+
+TRAIN = {
+    # Fixed in the addendum (proposal, section 4). The ball's pixel scale is physical, so no scale
+    # or colour augmentation; mosaic would paste balls from other frames next to real ones.
+    "imgsz": CROP,
+    "epochs": 20,
+    "batch": 16,
+    "seed": 0,
+    "deterministic": True,
+    "hsv_h": 0.0,
+    "hsv_s": 0.0,
+    "hsv_v": 0.0,
+    "mosaic": 0.0,
+    "fliplr": 0.5,
+    "scale": 0.0,
+    "workers": 2,
+    "plots": False,
+}
+
+
+def _train(args: argparse.Namespace) -> int:
+    import os
+
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+    from ultralytics import YOLO
+
+    data = args.data.resolve()
+    yaml = data / "ball.yaml"
+    yaml.write_text(
+        f"path: {data.as_posix()}\ntrain: images/train\nval: images/val\nnames:\n  0: ball\n",
+        encoding="utf-8",
+    )
+    model = YOLO(args.weights)
+    model.train(
+        data=str(yaml), project=str(args.project.resolve()), name="ft", exist_ok=True, **TRAIN
+    )
+    print(json.dumps({"weights": str(args.project.resolve() / "ft" / "weights" / "last.pt")}))
+    return 0
 
 
 def _evaluate(args: argparse.Namespace) -> int:
