@@ -338,3 +338,38 @@ predicción frente a verdad, limpio y degradado (tablas «Escala temporal por pa
 - Lectura obligatoria: P1 falló y el sesgo va contra fusionar posesiones (la verdad DFL es más fina
   que la nuestra), así que una confirmación es una **alarma, no un veredicto**. La decisión de
   entregar `touch` debe salir del informe de bloques de BAR-ATH.
+
+## 6. Resultado del arbitraje
+
+`docs/analysis/external-decoder.md`, generado por el comando de §5 exactamente, con
+`tools/decoder.py` de `23bdc52` copiado sin commitear (de ahí el `-dirty` de su cabecera: el único
+fichero sin commitear era esa copia, borrada después). Dos ejecuciones dieron los mismos números.
+Control: `decoder.engine` es idéntico a nuestro `engine`, y este a `engine-bare`, partido a partido.
+
+| A : B | escenario | spellF1 A | spellF1 B | Δ A−B | A gana | B gana | ritmo de A más lejos |
+|---|---|---:|---:|---:|---:|---:|---:|
+| V6 `mid+uncontested` : V2 `uncontested` | **degradado** | 0,2319 | 0,2394 | −0,0075 | 1/7 | **6/7** | 0/7 |
+| V6 : V2 | limpio | 0,3383 | 0,3495 | −0,0112 | 0/7 | 7/7 | 0/7 |
+| V6 : `decoder.engine` | degradado | 0,2319 | 0,2631 | −0,0312 | 0/7 | 7/7 | 7/7 |
+| V2 : `decoder.engine` | degradado | 0,2394 | 0,2631 | −0,0237 | 0/7 | 7/7 | 7/7 |
+| V3 `touch` : `decoder.engine` | **degradado** | 0,2185 | 0,2631 | −0,0446 | 0/7 | **7/7** | **7/7** |
+| V5 `mid+uncontested+touch` : V6 | **degradado** | 0,2051 | 0,2319 | −0,0268 | 0/7 | **7/7** | **7/7** |
+
+Para comparar, en nuestros instrumentos: V6 / V2 dan público 0,5405 / 0,5189, banco 0,3944 / 0,3792,
+banco con poco balón 0,3072 / 0,3021.
+
+**Decisión 1, por la regla de §5.1: «el corpus pone V6 por debajo de V2»** (media degradada menor y
+V2 gana 6/7). Por la regla del coordinador, V6 se revierte a V2. Lo que hay que saber al aplicarla:
+la diferencia es pequeña (−0,0075) y viene toda de `mid`, que solo cambia el instante en que se fecha
+el cambio. Ese instante depende de cómo define el cambio el ground truth: en el corpus perdió 7/7 por
+sí solo, en nuestro banco ganó. El corpus dice que la ganancia de `mid` no es general; no dice que sea
+falsa en BAR-ATH.
+
+**Decisión 2, por la regla de §5.2: «el corpus confirma un daño de escala temporal»** para V3 y para
+V5. Pierden contra su variante sin `touch` en 7/7 partidos degradados, y su ritmo queda más lejos del
+de la verdad en 7/7. Por la misma regla es una alarma y no un veredicto: la verdad DFL es más fina que
+la nuestra. Pero `touch` baja el ritmo en todos los partidos, de modo que la pregunta para BAR-ATH
+es concreta: ¿cuántas posesiones por minuto da por bloque en `tools/blocks.py`, frente a ~3,4?
+
+Ninguna variante del carril decode gana a la regla de control desnuda en el corpus: 0/7 en todas,
+limpio y degradado, salvo V2 limpio (1/7).
