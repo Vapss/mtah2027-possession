@@ -151,7 +151,15 @@ def test_the_video_bench_without_video_reproduces_the_engine_bench() -> None:
     from tools import atd, bench, dead_ball, emision
 
     f, ev, gt, cut = bench.load()
-    reference = bench.summary(bench.bench(bench.METHODS["engine"], f, ev, gt, cut))
+    from tools import engine
+
+    # The lane measured against the D31 engine with the tagged D only (DECISIONS 29-32), not the
+    # delivered chain, which since DECISIONS 34-36 adds the duel rule and the players' stoppages.
+    def _engine_d31(f, ev):
+        tagged = dead_ball.dead_mask(ev, engine.halves(), "out")
+        return engine.chain(f, engine.D31, ev.restarts, tagged)[2]
+
+    reference = bench.summary(bench.bench(_engine_d31, f, ev, gt, cut))
     tracking = atd.load("tactical")
     ball, _present = tracking.ball()
     rows = vb.bench_video(

@@ -1145,3 +1145,37 @@ que viene de su estado vivo/muerto por frame).
 - **V6 sigue fuera, por otro motivo que ya bastaba**: su única ganancia en el slice eran las dos
   posesiones que ganaba `mid`, una regla derivada de mirar las latencias de ese mismo slice, y el banco
   reutiliza esas 17 posesiones. Sin un juez independiente, una regla contaminada por el slice no entra.
+
+---
+
+## 38. El balón del vídeo no entra: el sesgo de selección de los huecos, medido
+
+**Contexto.** El carril de vídeo (`docs/proposals/lane-ball-video.md`, `tools/video_ball.py`) intentó
+recuperar el balón del vídeo táctico donde el tracking lo pierde: un detector local proyectado al
+campo con la homografía y fundido en las features del motor. Pre-registro antes de medir; números
+reproducidos por el carril y revisados por el coordinador.
+
+**Resultado: negativo.**
+
+- **Detector genérico (YOLO11x, COCO).** Como posición del balón no es defendible: precisión ≤ 0,75 a
+  menos de 2 m del balón del tracking. En los **huecos reales** del slice, la mejor variante baja el
+  `spellF1` de 0,4585 a 0,4372 (falla su compuerta). Pero en el banco, rellenando los huecos
+  trasplantados, la cota superior parecía enorme: 0,4288 de media frente a 0,3516. **Esa diferencia es
+  el sesgo de selección, ahora medido**: los huecos reales están donde detectar es difícil (balón en el
+  aire, oclusiones), y el banco los pone donde el balón se veía.
+- **Detector afinado con etiquetas del propio tracking** (YOLO11s, sin el bloque 1 ni un minuto a cada
+  lado). Precisión 0,913 en los bloques donde se fijó el umbral, **0,651 en la otra mitad**: no
+  generaliza entre mitades. No-go por la compuerta pre-registrada (≥ 0,90), y no se procesó el partido.
+
+**Decidido.** El vídeo no entra en la cadena. Se conserva como evidencia: el módulo y sus pruebas, con
+el motor `D31` contra el que se midió (los pesos afinados, 19 MB, no se commitean). El coste habría sido
+además serio para la reproducción: ~1 h de GPU o ~18,5 h de CPU para el partido.
+
+**Lo que enseña al resto.** El banco sobreestima todo lo que actúa en los huecos: el vídeo y la
+imputación (decisión 34) mejoraban en el banco y empeoraban o eran contradichos en huecos reales. Para
+cualquier método de huecos, el banco es necesario pero no suficiente; hace falta una señal sobre huecos
+reales (el slice tiene 391 frames vivos sin balón; el Smart Tagging, ~98% en ellos).
+
+**Fin de la ronda 1.** Cinco carriles: dos positivos integrados (duelo, balón muerto por los jugadores),
+tres negativos o fuera de la entrega con su motivo escrito (imputación, vídeo, escalas temporales del
+decodificador), y dos herramientas nuevas de evaluación (banco, corpus externo).

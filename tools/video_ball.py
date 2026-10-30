@@ -463,7 +463,7 @@ def labels_with_ball(
         out, inside = out_inside(merged)
         ev = dataclasses.replace(ev, out=out, inside=inside)
     dead = dead_ball.dead_mask(ev, engine.halves(), "out")
-    return engine.chain(f, engine.DEFAULT, ev.restarts, dead)[2], filled
+    return engine.chain(f, engine.D31, ev.restarts, dead)[2], filled
 
 
 def bench_video(
@@ -820,7 +820,7 @@ def main(argv: list[str] | None = None) -> int:
         ev = dead_ball.load_evidence()
         dead = dead_ball.dead_mask(ev, engine.halves(), "out")
         f = engine.features(tracking, teams)
-        _ctrl, state, lab = engine.chain(f, engine.DEFAULT, ev.restarts, dead)
+        _ctrl, state, lab = engine.chain(f, engine.D31, ev.restarts, dead)
         live = (state != engine.NONE) & (lab != "D")
         ctrl_rows = control_agreement(
             det,
