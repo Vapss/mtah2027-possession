@@ -258,7 +258,38 @@ def test_on_the_match_the_baseline_is_the_delivered_engine_and_no_variant_touche
     f, ev, _gt, _cut = bench.load()
     delivered = bench._engine(f, ev)
     assert (decoder.METHODS[decoder.BASELINE](f, ev) == delivered).all()
-    for method in decoder.VARIANTS.values():
+    for method in decoder.METHODS.values():
         labels = method(f, ev)
         assert ((labels == "D") == (delivered == "D")).all()
         assert (method(f, ev) == labels).all()  # deterministic
+
+
+# -- section 11: V6 and its rule against V2 --------------------------------------------------------
+
+
+def test_v6_ignores_the_duel_and_dates_the_clean_change_to_its_hand_over() -> None:
+    # H controls at 0 and 2; A wins a duel at 4 (H still within reach), then controls cleanly at 8.
+    ctrl = ctrl_of(H, NONE, H, NONE, A, NONE, NONE, NONE, A, NONE)
+    home_m = np.array([0.5, 9, 0.5, 9, 1.0, 9, 9, 9, 4.0, 9])
+    away_m = np.array([3.0, 9, 3.0, 9, 0.5, 9, 9, 9, 0.5, 9])
+    switch = decoder.uncontested(ctrl, home_m, away_m, radius_m=1.5)
+    state = decoder.decode(ctrl, [(0, 10)], switch=switch)
+    assert state.tolist() == [H] * 8 + [A] * 2  # the duel at 4 does not change possession
+    # H's last control is 2, so the hand-over is (2, 8]: the change moves three frames back.
+    moved = decoder.redate_mid(state, ctrl, [(0, 10)])
+    assert moved.tolist() == [H] * 5 + [A] * 5
+
+
+def test_v6_replaces_v2_only_through_every_gate_and_a_low_ball_bench_that_does_not_drop() -> None:
+    v2 = decoder.FOLLOW_UP_BASELINE
+    v6 = decoder.FOLLOW_UP
+    assert decoder.adopt_follow_up({v2: _row(), v6: _row(spell_f1=0.46)})
+    # G2 tolerates -0.01 on the low-ball mean; the follow-up rule does not.
+    assert not decoder.adopt_follow_up({v2: _row(), v6: _row(bench_low=0.275)})
+    assert not decoder.adopt_follow_up({v2: _row(), v6: _row(spell_f1=0.44)})
+
+
+def test_runs_and_episodes_join_only_short_breaks() -> None:
+    mask = np.array([1, 1, 0, 1, 0, 0, 0, 1], dtype=bool)
+    assert decoder._true_runs(mask, 10) == [(10, 12), (13, 14), (17, 18)]
+    assert decoder._episodes(mask, 0, join=1) == [(0, 4), (7, 8)]

@@ -386,3 +386,93 @@ con poco balón es ≥ 0 (más estricto que G2). Si no, se queda V2. Se reporta 
 una sola posesión cubre el 91,4% del bloque. Se reporta, solo con agregados, cuánto tiempo falta el
 balón dentro de esa posesión y si los duelos que V2 ignora ahí (los cambios de la cadena entregada
 que V2 no hace) ocurren dentro o al lado de huecos largos de balón. No sale ninguna regla de esto.
+
+### 11.1 Resultado de V6 (escrito después de medir)
+
+*El pre-registro de arriba es el del commit `1974f54`, sin cambios. Reproducible con
+`python tools/decoder.py --report` (la parte "V6 frente a V2", pegada sin editar; la parte de la
+sección 6 sale idéntica a la de la sección 8).*
+
+Slice público (17 posesiones). Δ, `wins` y jackknife frente a `uncontested`; TP/FP/FN por IoU.
+
+| variante | spellF1 | macroF1 | Δ | wins uncontested–var | jackknife Δ | TP/FP/FN 0,3 | 0,5 | 0,7 | pred | trans ±25 | \|lat\| | equipo |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `uncontested` | 0,5189 | 0,7114 | 0,0000 | 0–0 | 0,0000 .. 0,0000 | 13/7/4 | 10/10/7 | 5/15/12 | 20 | 4/20 | 12,5 | 84,3% |
+| `mid+uncontested` | 0,5405 | 0,7200 | 0,0216 | 0–2 | 0,0111 .. 0,0222 | 13/7/4 | 12/8/5 | 5/15/12 | 20 | 6/20 | 11,8 | 85,6% |
+
+Banco de trasplante (19 donantes, 6 con < 50% de balón) e informe por bloques.
+
+| variante | banco limpio | media | poco balón | peor | pos/min | bloque mín–máx | sin pos. | ST partido | ST bloques 7/9/11/18 | %D |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `uncontested` | 0,5189 | 0,3792 | 0,3021 | 0,2370 | 3,29 | 0,34–5,20 | 0 | 73,4% | 72,4% | 12,3% |
+| `mid+uncontested` | 0,5405 | 0,3944 | 0,3072 | 0,2370 | 3,25 | 0,34–5,20 | 0 | 73,1% | 72,1% | 12,3% |
+
+Compuertas de la sección 6, frente a `uncontested` (sección 11).
+
+| variante | G1 slice | G2 banco | G3 bloques |
+|---|---|---|---|
+| `mid+uncontested` | pasa | pasa | pasa |
+
+Δ banco con poco balón (V6 − V2): 0,0051.
+Decisión por la regla: **`mid+uncontested`**.
+
+`compare_submissions.py runs/decode/uncontested.csv runs/decode/mid_uncontested.csv --gt public`
+da lo mismo: Δ +0,0216, `wins` 0–2, jackknife +0,0111 .. +0,0222; TP por IoU 0,3 / 0,4 / 0,5 /
+0,6 / 0,7 de 13 / 12 / 10 / 8 / 5 (V2) a 13 / 12 / 12 / 8 / 5 (V6). Dos corridas de
+`--variant mid+uncontested` dan el mismo SHA-256 (`405763bc1f064a10…`).
+
+**Decisión por la regla: V6 `mid+uncontested` sustituye a V2.** Pasa G1 (Δ +0,0216, 2–0, ningún
+pliegue con signo contrario), G2 (banco +0,0152 de media, +0,0051 con poco balón, peor donante
+igual) y G3 (3,25 posesiones/min, ningún bloque vacío ni a menos de la mitad de V2, acuerdo con el
+Smart Tagging 73,1% frente a 73,4%, dentro del punto de margen), y el banco con poco balón no baja.
+
+**Con la cautela declarada.** Todo el Δ en el slice son dos posesiones que pasan a emparejarse a
+IoU 0,5 (10 → 12) y nada más se mueve: son las mismas 2–0 que V1 ganaba sobre el motor (sección
+8), y la regla de V1 salió de mirar las latencias de esas transiciones (sección 2a). Dos
+discordantes no son evidencia (hacen falta ≥ 6). Lo que el slice no pudo elegir lo sostienen el
+banco, que mejora en media y con poco balón sin empeorar el peor donante, y que V1 no añade ninguna
+escala de tiempo: mueve bordes ≤ 1 s, no crea ni borra posesiones (20 predichas en las dos). El
+precio es 0,3 puntos de acuerdo con el Smart Tagging.
+
+**Integración** (para el coordinador): la de la sección 9 más la fecha,
+`redate_mid(decode(ctrl, halves(), forced, uncontested(...)), ctrl, halves(), forced)`, que es
+`decoder._mid_uncontested`. Solo numpy, determinista, sin constantes nuevas.
+
+### 11.2 Diagnóstico del bloque 11 (agregados, sin regla)
+
+Salida de `python tools/decoder.py --block 11`, pegada sin editar:
+
+Bloque 11, posesión más larga de `uncontested` que lo toca: equipo `A`, 163,3 s, 91,4% del bloque.
+
+| balón en la posesión | sin balón | huecos | hueco más largo | huecos > 20 s | parte del déficit en ellos | controles rivales sin disputa |
+|---:|---:|---:|---:|---:|---:|---:|
+| 17,5% | 134,8 s | 4 | 69,5 s | 2 | 79,1% | 0 |
+
+Duelos que la variante ignora dentro de esa posesión (controles rivales disputados, unidos si distan ≤ 1 s), con la isla de balón visible que los contiene y los huecos a cada lado:
+
+| duelo | frames | disputados | isla visible | hueco antes | hueco después |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 5 | 5 | 13,8 s | 69,5 s | 10,9 s |
+
+La cadena entregada etiqueta 48,0% de esa posesión con el otro equipo (número de cambios: 1). Smart Tagging: cubre 42,3% de la posesión y, de eso, vota `A` en 13,2%.
+
+| tramo de la posesión | cobertura del Smart Tagging | de lo cubierto, vota `A` |
+|---|---:|---:|
+| las dos cadenas dicen `A` | 81,4% | 13,2% |
+| solo la variante dice `A` | 0,0% | — |
+
+**Lectura.** La posesión de 163 s que V2 da a `A` tiene balón en el 17,5% de sus frames; el 79,1%
+de lo que falta está en dos huecos de más de 20 s, el mayor de 69,5 s. Dentro no hay **ningún**
+control rival sin disputa, y V2 ignora **un solo duelo**: 5 frames (0,2 s) de control disputado
+de `H`, en una isla visible de 13,8 s entre un hueco de 69,5 s antes y uno de 10,9 s después. La
+cadena entregada cambia la posesión en ese duelo y etiqueta `H` el 48,0% de la posesión; V2 la
+deja en `A`. Así que la pregunta del coordinador tiene respuesta: sí, el duelo que V2 ignora está
+pegado a huecos largos, y de esos 5 frames depende la etiqueta de ~78 s.
+
+**Ni el balón ni el Smart Tagging deciden ese tramo.** El Smart Tagging no cubre **ningún** frame
+del tramo donde solo V2 dice `A` (el posterior al duelo), así que no arbitra el duelo. Donde las dos
+cadenas dicen `A`, cubre el 81,4% y vota `A` solo en el 13,2%: contradice a las dos por igual, que
+es el 29,0% de acuerdo del bloque en ambas (sección 10). Es un problema de hueco de balón, no de
+decodificación: con la evidencia de este carril, la cadena entregada y V2 apuestan los mismos ~78 s
+a una observación de 0,2 s, en sentidos contrarios. No sale ninguna regla de aquí; si algo puede
+decidirlo es una evidencia nueva dentro de los huecos (carril de imputación o el corpus externo).
