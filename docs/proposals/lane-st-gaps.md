@@ -155,3 +155,168 @@ El banco **no veta solo** (su sesgo es pesimista aquí): entra en E y en el dese
 integrables se recomienda la de mayor media de donantes en el banco; si otra queda a ≤ 0,005 y
 cambia menos frames del partido, la más conservadora. Si ninguna es integrable el resultado es
 **negativo o no demostrado**, se dice cuál, y se recomienda no integrar.
+
+---
+
+Las secciones 2 en adelante se escribieron **después** de medir. El pre-registro de arriba está en el
+commit `b71360c` (empujado antes de cualquier lectura del ground truth, del banco o del pareado); el
+código medido, en `d7c7dbb`. Sin desviaciones del pre-registro.
+
+## 2. Cómo se reproducen los números
+
+```bash
+export MTAH_DATA_DIR="<carpeta del bundle>"
+uv sync --locked --inexact
+.venv/Scripts/python tools/st_gaps.py --explore                     # sin GT: dónde actúa la regla
+mkdir -p runs/st_gaps
+.venv/Scripts/python tools/st_gaps.py --measure runs/st_gaps > runs/st_gaps/measure.json
+.venv/Scripts/python tools/compare_submissions.py runs/st_gaps/engine.csv runs/st_gaps/V3.csv --gt public
+```
+
+Cada número de la sección 3 es un campo de `measure.json` (solo agregados; las CSV de etiquetas de
+`runs/st_gaps/` no se comprometen). Tarda ~80 s. Las tablas se generaron desde ese JSON, no a mano.
+`engine` es la cadena entregada tal como la registra el banco (`bench.METHODS["engine"]`, la misma
+que `engine.run()`).
+
+## 3. Mediciones
+
+### (a) Slice público, huecos reales
+
+| | spellF1 | macroF1 | Δ pareado | discordantes (cadena–variante) | jackknife | acierto en frames vivos sin balón (391) | frames cambiados en la ventana |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| cadena entregada | 0,5368 | 0,8533 | | | | 94,9% | |
+| V1 | 0,5368 | 0,8533 | 0,0000 | 0 (0–0) | 0,0000 .. 0,0000 | 94,9% | 0 |
+| V2 | 0,5368 | 0,8533 | 0,0000 | 0 (0–0) | 0,0000 .. 0,0000 | 94,9% | 0 |
+| V3 | 0,5368 | 0,8533 | 0,0000 | 0 (0–0) | 0,0000 .. 0,0000 | 94,9% | 0 |
+| V4 | 0,5368 | 0,8533 | 0,0000 | 0 (0–0) | 0,0000 .. 0,0000 | 94,9% | 0 |
+
+### (b) Banco de trasplante
+
+| donante | balón | cadena | V1 | V2 | V3 | V4 |
+|---|---:|---:|---:|---:|---:|---:|
+| 1★ (sin trasplante) | 88,2% | 0,5368 | 0,5368 | 0,5368 | 0,5368 | 0,5368 |
+| 2 | 70,9% | 0,5647 | 0,4889 | 0,4889 | 0,4889 | 0,4889 |
+| 3 | 64,7% | 0,5529 | 0,5263 | 0,5263 | 0,5263 | 0,5529 |
+| 4 | 61,5% | 0,4229 | 0,4842 | 0,4526 | 0,4842 | 0,4432 |
+| 5 | 53,5% | 0,5212 | 0,4588 | 0,4588 | 0,4588 | 0,4588 |
+| 6 | 54,9% | 0,3667 | 0,3667 | 0,3667 | 0,3667 | 0,3667 |
+| 7 | 28,4% | 0,3586 | 0,3586 | 0,3586 | 0,3586 | 0,3586 |
+| 8 | 52,9% | 0,4432 | 0,3619 | 0,3429 | 0,4400 | 0,4432 |
+| 9 | 21,1% | 0,3704 | 0,3704 | 0,3704 | 0,4000 | 0,3704 |
+| 10 | 50,4% | 0,4118 | 0,4118 | 0,4118 | 0,4343 | 0,4118 |
+| 12 | 76,0% | 0,5000 | 0,5189 | 0,5405 | 0,5189 | 0,5000 |
+| 13 | 57,6% | 0,5212 | 0,4000 | 0,4000 | 0,4000 | 0,5212 |
+| 14 | 61,7% | 0,4933 | 0,4375 | 0,4875 | 0,4375 | 0,4375 |
+| 15 | 41,6% | 0,3871 | 0,3294 | 0,3294 | 0,3294 | 0,3294 |
+| 16 | 68,8% | 0,5368 | 0,5368 | 0,5368 | 0,5368 | 0,5368 |
+| 17 | 51,0% | 0,4000 | 0,3778 | 0,3889 | 0,3778 | 0,3778 |
+| 18 | 19,0% | 0,2400 | 0,2400 | 0,2400 | 0,3067 | 0,2400 |
+| 19 | 44,8% | 0,5037 | 0,4516 | 0,4387 | 0,4516 | 0,5037 |
+| 20 | 45,6% | 0,2971 | 0,4108 | 0,3579 | 0,4108 | 0,4108 |
+| 21 | 52,1% | 0,3750 | 0,3543 | 0,3771 | 0,3543 | 0,3750 |
+
+| resumen | cadena | V1 | V2 | V3 | V4 |
+|---|---:|---:|---:|---:|---:|
+| media de donantes (19) | 0,4351 | 0,4150 | 0,4144 | 0,4253 | 0,4277 |
+| Δ media frente a la cadena | | −0,0201 | −0,0207 | −0,0097 | −0,0074 |
+| media con < 50% de balón (6) | 0,3595 | 0,3601 | 0,3492 | 0,3762 | 0,3688 |
+| Δ poco balón | | +0,0006 | −0,0103 | +0,0167 | +0,0093 |
+| peor donante | 0,2400 | 0,2400 | 0,2400 | 0,3067 | 0,2400 |
+| donantes mejor / peor que la cadena | | 3 / 10 | 4 / 9 | 6 / 10 | 2 / 5 |
+| frames de la ventana que cambia (suma de donantes) | | 10822 | 10076 | 12853 | 7264 |
+| … de ellos acierta la variante / la cadena | | 3633 / 6644 | 3217 / 6314 | 5428 / 6868 | 2582 / 4397 |
+
+### (c) Informe de bloques
+
+| | cadena | V1 | V2 | V3 | V4 |
+|---|---:|---:|---:|---:|---:|
+| posesiones/min, partido | 3,62 | 3,85 | 3,85 | 3,78 | 3,68 |
+| mín. / máx. bloque | 1,01 / 6,00 | 1,34 / 6,20 | 1,34 / 6,20 | 1,01 / 6,00 | 1,34 / 6,00 |
+| bloques sin posesiones | 0 | 0 | 0 | 0 | 0 |
+| bloques por debajo de la mitad de su tasa con la cadena | 0 | 0 | 0 | 0 | 0 |
+| bloque 7: pos/min · `larga` | 2,00 · 12,2% | 2,00 · 12,2% | 2,00 · 12,2% | 2,00 · 12,2% | 2,00 · 12,2% |
+| bloque 9: pos/min · `larga` | 1,60 · 17,3% | 1,60 · 17,3% | 1,60 · 17,3% | 1,60 · 17,3% | 1,60 · 17,3% |
+| bloque 11: pos/min · `larga` | 1,01 · 34,3% | 1,34 · 34,3% | 1,34 · 34,3% | 1,01 · 34,3% | 1,34 · 34,3% |
+| bloque 18: pos/min · `larga` | 3,60 · 9,4% | 3,60 · 9,4% | 3,60 · 9,4% | 3,60 · 9,4% | 3,60 · 9,4% |
+| acuerdo con el Smart Tagging (no independiente) | 77,1% | 81,9% | 82,5% | 80,6% | 79,1% |
+| bloques cuya tasa cambia | — | 2 (+0,60), 4 (+0,20), 5 (+0,20), 10 (+0,40), 11 (+0,34), 14 (+0,20), 15 (+0,40), 16 (+1,60), 19 (+0,80), 20 (+0,20), 21 (+0,20) | 2 (+0,60), 4 (+0,20), 5 (+0,20), 10 (+0,40), 11 (+0,34), 14 (+0,20), 15 (+0,40), 16 (+1,60), 19 (+0,80), 20 (+0,20), 21 (+0,20) | 2 (+0,60), 10 (+0,20), 13 (+0,20), 14 (+0,20), 16 (+1,20), 19 (+0,80), 20 (+0,20) | 5 (+0,20), 10 (+0,20), 11 (+0,34), 14 (+0,20), 15 (+0,40), 20 (+0,20) |
+
+### (d) Honestidad
+
+| | V1 | V2 | V3 | V4 |
+|---|---:|---:|---:|---:|
+| unidades que saltan | 25 | 25 | 11 | 10 |
+| … en el bloque 1 | 0 | 0 | 0 | 0 |
+| … en los bloques 7, 9, 11, 18 | 1 | 1 | 0 | 1 |
+| frames cambiados en el partido | 3882 | 4225 | 2722 | 1460 |
+| … de ellos sin balón | 3049 | 3049 | 2376 | 1194 |
+| … en los bloques 7, 9, 11, 18 | 24 | 56 | 0 | 24 |
+
+`frames de la ventana que cambia` suma los 19 donantes: en el banco la regla sí actúa sobre el bloque
+1, porque los huecos trasplantados caen donde el balón se veía. En esos frames la nueva etiqueta
+acierta menos que la de la cadena en las cuatro variantes (V3: 5.428 frente a 6.868 de 12.853). Es
+el sesgo declarado en el pre-registro, medido: fuera de los huecos reales el Smart Tagging que
+contradice a la cadena se equivoca más que ella.
+
+**Diagnóstico a posteriori (no decide nada, no cambia la regla).** En los 391 frames vivos sin balón
+del slice, la cadena ya acierta 371 (94,9%) y ninguno es `D`. El Smart Tagging vota por un solo
+equipo en 259 y acierta 254 (98,1%, la cifra de la decisión 34). Solo **contradice a la cadena en 25
+frames** (acierta en 20). Esos 25 están en huecos vivos cortos o con mayoría del equipo arrastrado:
+el bloque 1 tiene 6 huecos vivos, el más largo de 9,3 s, y ninguno salta con X = 0,5. Aunque la regla
+se siguiera en todos, el techo en ese slice sería +15 frames de acierto (≈ +3,8 puntos) sin que haya
+evidencia de que moviera una posesión. Bajar G o X para que la regla salte ahí sería ajustarla al
+slice, y no se hace.
+
+## 4. Compuertas, aplicadas tal como se pre-registraron
+
+| variante | Ga (0 perdidas; acierto sin balón no baja) | Gc (estructura) | E (alguna señal con GT a favor) | resultado |
+|---|---|---|---|---|
+| V1 | pasa (0–0; 94,9% = 94,9%) | pasa (3,85/min; bloques 1,34 .. 6,20; ninguno a la mitad) | **falla**: Δ pareado 0; acierto igual; banco −0,0201 | no integrable |
+| V2 | pasa (0–0; igual) | pasa (3,85/min; 1,34 .. 6,20) | **falla**: 0; igual; banco −0,0207 | no integrable |
+| V3 | pasa (0–0; igual) | pasa (3,78/min; 1,01 .. 6,00) | **falla**: 0; igual; banco −0,0097 | no integrable |
+| V4 | pasa (0–0; igual) | pasa (3,68/min; 1,34 .. 6,00) | **falla**: 0; igual; banco −0,0074 | no integrable |
+
+Ninguna variante es integrable. Ga y Gc se pasan por la razón menos informativa posible: la regla no
+toca el bloque 1, y en el resto del partido mueve como mucho 0,2–1,6 posesiones/min en unos pocos
+bloques. **Resultado: no demostrado**, con el banco en contra en las cuatro medias.
+
+## 5. Recomendación
+
+**No integrar ninguna variante.** La regla no tiene evidencia a favor en ningún instrumento con ground
+truth, y su coste es real: el Smart Tagging dejaría de ser un validador independiente de la cadena,
+justo el único que hay fuera del slice (su acuerdo subiría 2–5 puntos por construcción, 77,1% →
+79,1–82,5%, sin que eso diga nada).
+
+Lo que el coordinador debe saber:
+
+- **La premisa del carril cambió con W1.** La regla se pensó para la posesión arrastrada a través de
+  huecos largos (bloque 11, ~91% de un bloque con 20% de balón). Con la cadena entregada hoy, los
+  huecos largos son casi todo `D` (solo 19.770 de 64.643 frames sin balón son vivos), la posesión
+  más larga del bloque 11 cubre el 34,3%, y en los huecos vivos ≥ 5 s el Smart Tagging está de
+  acuerdo con el equipo arrastrado tres veces más que en contra (44,1% frente a 13,9% de los frames).
+  La regla salta en 11–25 huecos del partido; **ninguno en el bloque 1 y como mucho uno en los
+  bloques 7, 9, 11 y 18**.
+- **El slice no puede juzgarla y el banco la juzga con sesgo en contra.** El slice tiene 391 frames de
+  hueco real, la cadena ya acierta el 94,9% de ellos y la regla no salta allí. El banco sí la hace
+  saltar, pero sobre juego con balón visible, donde el Smart Tagging que contradice a la cadena
+  acierta menos que ella (sección 3). Ninguno de los dos mide lo que la regla pretende.
+- **V3 (hueco vivo, 5 s) es la menos mala** y la única que no toca los bloques con poco balón: −0,0097
+  de media pero +0,0167 en poco balón y sube el peor donante (0,2400 → 0,3067). No basta según la
+  regla escrita (E mira la media) y no se reinterpreta.
+- **Para reabrirlo** haría falta ground truth sobre huecos vivos largos reales, que el slice no tiene
+  (su hueco vivo más largo dura 9,3 s). Sin eso, cualquier umbral que la haga saltar más es un ajuste
+  sin juez.
+
+## 6. Limitaciones
+
+- **El slice no ve la regla.** Ga se pasa trivialmente (0 frames cambiados en la ventana): no es
+  evidencia de inocuidad en el resto del partido, solo de que el slice no la ve.
+- **Mismas 17 posesiones en el banco**, y su sesgo aquí es pesimista por construcción (declarado
+  antes de medir); por eso no veta solo. Pero el pre-registro exigía alguna señal a favor y no hay
+  ninguna.
+- **El 98% del Smart Tagging sin balón es una muestra pequeña** (259 frames votados de un solo bloque,
+  el más fácil); la regla nunca llegó a apoyarse en ella.
+- **Exploración previa sin GT.** La unidad "hueco vivo" y la fecha acotada por la última observación
+  se diseñaron después de ver dónde actuaría la regla (sección 1, declarado); no se miró el GT, el
+  banco ni el pareado antes de `b71360c`.
+- **Un partido.** Cifras de BAR–ATH.
