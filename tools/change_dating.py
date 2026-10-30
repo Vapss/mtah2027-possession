@@ -33,6 +33,7 @@ import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -40,6 +41,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from tools import dead_ball, engine  # noqa: E402
+
+if TYPE_CHECKING:
+    from tools import metrica_open
 
 NONE = engine.NONE
 FPS = engine.FPS
@@ -143,8 +147,10 @@ def reception_anchor(h: Handover, f: engine.Features, lookback: int) -> int:
     """V2: the frame of the new team's closest approach to the ball in the last `lookback` frames
     of the hand-over, among frames where the ball is in the pitch and the new team's nearest
     player is within `REACH_M` and strictly nearer than the old team's; the earliest on a tie.
-    The change itself always qualifies (a control is such a frame), so it is never later."""
-    lo = max(h.after + 1, h.frame - lookback)
+    The change itself always qualifies (a control is such a frame), so it is never later. The
+    window is the pre-registered `(max(l, c - lookback), c]`: `lookback` frames ending at the
+    change, the frame `lookback` before it excluded (review of PR #59)."""
+    lo = max(h.after + 1, h.frame - lookback + 1)
     idx = np.arange(lo, h.frame + 1)
     near_new = (f.home_m if h.new == 0 else f.away_m)[idx]
     near_old = (f.away_m if h.new == 0 else f.home_m)[idx]
@@ -216,7 +222,7 @@ def _engine(f: engine.Features, ev: dead_ball.Evidence) -> np.ndarray:
 METHODS = {REFERENCE: _engine, **{name: _bar_ath(name) for name in VARIANTS}}
 
 
-def metrica_dead(game) -> np.ndarray:
+def metrica_dead(game: metrica_open.Game) -> np.ndarray:
     """The delivered `D` on a Metrica game: `engine.delivered_dead`'s union with this game's
     players (that function is pinned to BAR-ATH's)."""
     from tools import dead_ball_v2, metrica_open
@@ -317,7 +323,7 @@ def dating(
     }
 
 
-def open_play(game) -> list[tuple[int, int]]:
+def open_play(game: metrica_open.Game) -> list[tuple[int, int]]:
     """`(frame, new team)` of the event truth's open-play changes (E5)."""
     return [(c.frame, c.new) for c in game.truth.changes if c.open_play]
 
@@ -478,7 +484,10 @@ def dfl_load(match_id: str, root: Path | None = None) -> DflGame:
     root = Path(root) if root is not None else external.data_dir() / "idsse"
     raw = external.raw(match_id, root)
     match = external.build(raw)
-    info = sorted(root.glob(f"DFL_02_01_matchinformation_*_DFL-MAT-{match_id}.xml"))[0]
+    infos = sorted(root.glob(f"DFL_02_01_matchinformation_*_DFL-MAT-{match_id}.xml"))
+    if not infos:
+        raise FileNotFoundError(f"{root}: no match information file for {match_id}")
+    info = infos[0]
     home_id, _guest_id, _ = external.meta(info)
     found = sorted(root.glob(f"DFL_03_02_events_raw_*_DFL-MAT-{match_id}.xml"))
     if len(found) != 1:
@@ -586,15 +595,16 @@ DATING_HEAD = [
 
 
 def keep_mask(runs: Sequence[tuple[int, int]], n: int, donors: Sequence[np.ndarray]) -> np.ndarray:
-    """Per frame, is the ball kept? Donor half `i` over half `i`, repeated if shorter: the
-    deletion pattern of `external.keep_mask`, for a game that is not an `external.Match`."""
-    keep = np.ones(n, dtype=bool)
-    for (start, stop), donor in zip(runs, donors):
-        keep[start:stop] = np.resize(np.asarray(donor, dtype=bool), stop - start)
-    return keep
+    """Per frame, is the ball kept? `external.keep_mask` itself (donor half `i` over half `i`,
+    repeated if shorter, with its checks), for a game that is not an `external.Match`."""
+    from types import SimpleNamespace
+
+    from tools import external
+
+    return external.keep_mask(SimpleNamespace(runs=list(runs), truth=range(n)), donors)
 
 
-def degraded_chain(game, donors: Sequence[np.ndarray]) -> tuple[Chain, float]:
+def degraded_chain(game: metrica_open.Game, donors: Sequence[np.ndarray]) -> tuple[Chain, float]:
     """The chain on `game` with the ball deleted where BAR-ATH's was not seen, and the ball share
     left. The players' stoppages do not read the ball; the tagged ones see the degraded `out`."""
     from tools import bench, dead_ball_v2, metrica_open
@@ -666,6 +676,8 @@ def _touch(f: engine.Features, uncontested: bool = False) -> np.ndarray:
 def _lag_row(name: str, truth, state: np.ndarray, runs) -> str:
     pairs = match(truth, state_changes(state, runs))
     lag = np.array([(at - frame) / FPS for frame, at in pairs])
+    if not lag.size:
+        return f"| {name} | 0 | — | — | — | — | — | — |"
     q = " / ".join(_dec(v) for v in np.quantile(lag, [0.1, 0.25, 0.75, 0.9]))
     return (
         f"| {name} | {len(pairs)} | {_dec(float(np.median(lag)))} "

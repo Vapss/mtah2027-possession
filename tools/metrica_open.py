@@ -17,9 +17,10 @@ What it loads
 the engine takes: an `engine.Features` (nearest home / away player to the ball in metres, ball
 present, ball speed, ball inside the pitch) on a 105 x 68 m pitch (the size game 3's metadata
 states; games 1 and 2 ship none), a `dead_ball.Evidence` whose restarts are the events' set
-pieces, the playing halves and the players in metres. Frame `i` of every array is Metrica's frame
-`i + 1`, both halves in one array: the files number them consecutively, and `runs` keeps them
-apart.
+pieces, the playing halves and the players in metres. Both halves sit in one array with
+`HALF_GAP` frames of nothing between them (`separate_halves`, as `external.build` does), so no
+speed or window bridges half time; `runs` holds the halves. In the first half frame `i` is
+Metrica's frame `i + 1`; later halves, and their events, are moved by the gaps before them.
 
 The event-derived truth (`event_truth`), written down before any engine output met it
 ------------------------------------------------------------------------------------
@@ -70,6 +71,7 @@ from tools import dead_ball, emision, engine  # noqa: E402
 FPS = 25  # Metrica's sample tracking: 0.04 s a frame; `read_tracking` checks the clock says so
 PITCH_M = np.array([105.0, 68.0])  # game 3's metadata (FieldSize 105 x 68); games 1-2 state none
 GAMES = ("g1", "g2")  # game 3 ships events and metadata but no tracking: it cannot be loaded
+HALF_GAP = 250  # frames of nothing between the halves, as `external.HALF_GAP` (10 s)
 HOME, AWAY, NONE = 0, 1, -1
 TEAMS = {"Home": HOME, "Away": AWAY}
 
@@ -211,7 +213,9 @@ def _is_stop(row) -> int | None:
 
 
 def _kind(row) -> str:
-    return "GOAL KICK" if row.type == "PASS" and "GOAL KICK" in row.subtype else str(row.type)
+    # A goal kick is logged as the keeper's PASS, or as a BALL LOST (`GOAL KICK-INTERCEPTION`) or
+    # BALL OUT when it fails: all three are the restart (review of PR #59: 13 of 38 in g1+g2).
+    return "GOAL KICK" if "GOAL KICK" in row.subtype else str(row.type)
 
 
 def event_truth(events: pd.DataFrame, n: int, runs: list[tuple[int, int]]) -> Truth:
@@ -279,6 +283,8 @@ def restarts(events: pd.DataFrame, runs: list[tuple[int, int]]) -> tuple[dead_ba
             key = "GOAL KICK" if _kind(row) == "GOAL KICK" else row.subtype.split("-")[0]
             if row.type != "SET PIECE" and key != "GOAL KICK":
                 continue
+            if "RETAKEN" in row.subtype:
+                continue  # a set piece taken again: the retake, logged next, is the restart
             kind = RESTART_KIND.get(key)
             if kind is None:
                 raise ValueError(f"set piece {row.subtype!r} has no restart kind")
@@ -299,7 +305,7 @@ def build(name: str, home: Tracking, away: Tracking, events: pd.DataFrame) -> Ga
         raise ValueError(f"{name}: the two files disagree on the ball")
     n = len(home.frame)
     runs = []
-    for period in np.unique(home.period):
+    for period in np.unique(home.period[home.period > 0]):  # period 0: the gap between halves
         at = np.flatnonzero(home.period == period)
         runs.append((int(at[0]), int(at[-1]) + 1))
     players = np.concatenate([home.players, away.players], axis=1) * PITCH_M
@@ -344,14 +350,54 @@ def build(name: str, home: Tracking, away: Tracking, events: pd.DataFrame) -> Ga
     )
 
 
+def separate_halves(
+    home: Tracking, away: Tracking, events: pd.DataFrame, gap: int = HALF_GAP
+) -> tuple[Tracking, Tracking, pd.DataFrame]:
+    """The files number both halves consecutively; put `gap` frames of nothing between them, as
+    `external.build` does, so nothing that looks at neighbouring frames (player and ball speeds,
+    stillness, change matching) bridges half time. Gap frames carry period 0 and NaN positions;
+    every event of a later period moves by the gaps before it.
+    """
+    periods = [int(p) for p in np.unique(home.period)]
+    shift = {p: gap * i for i, p in enumerate(periods)}
+
+    def spread(t: Tracking) -> Tracking:
+        parts: dict[str, list[np.ndarray]] = {"period": [], "frame": [], "players": [], "ball": []}
+        for i, p in enumerate(periods):
+            at = t.period == p
+            if i:
+                parts["period"].append(np.zeros(gap, dtype=np.int64))
+                parts["frame"].append(np.full(gap, -1, dtype=np.int64))
+                parts["players"].append(np.full((gap, *t.players.shape[1:]), np.nan))
+                parts["ball"].append(np.full((gap, 2), np.nan))
+            parts["period"].append(t.period[at])
+            parts["frame"].append(t.frame[at])
+            parts["players"].append(t.players[at])
+            parts["ball"].append(t.ball[at])
+        joined = {k: np.concatenate(v) for k, v in parts.items()}
+        return Tracking(
+            joined["period"], joined["frame"], t.names, joined["players"], joined["ball"]
+        )
+
+    moved = events.copy()
+    offset = moved["period"].map(shift)
+    if offset.isna().any():
+        raise ValueError(
+            f"events in periods {sorted(set(moved['period']) - set(shift))} have no tracking"
+        )
+    moved["start"] = moved["start"] + offset.astype(np.int64)
+    moved["end"] = moved["end"] + offset.astype(np.int64)
+    return spread(home), spread(away), moved
+
+
 def load(name: str, root: Path | None = None) -> Game:
     folder = (Path(root) if root is not None else data_dir()) / name
-    return build(
-        name,
+    home, away, events = separate_halves(
         read_tracking(folder / "RawTrackingData_Home_Team.csv"),
         read_tracking(folder / "RawTrackingData_Away_Team.csv"),
         read_events(folder / "RawEventsData.csv"),
     )
+    return build(name, home, away, events)
 
 
 # -- aggregates --------------------------------------------------------------------------------

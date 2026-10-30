@@ -149,8 +149,10 @@ def test_reception_is_the_new_teams_closest_approach_in_the_lookback() -> None:
     f = _features(home, away, [1.0] * 9)
     h = cd.Handover(frame=8, old=0, new=1, after=1)
     assert cd.reception_anchor(h, f, lookback=100) == 3  # the earliest of the two 0.4 m frames
-    assert cd.reception_anchor(h, f, lookback=2) == 8  # only 6, 7, 8 count: 0.5 m at 8
-    assert cd.reception_anchor(h, f, lookback=4) == 4  # from 4 on: the later 0.4 m frame
+    # The pre-registered window (max(l, c - lookback), c]: `lookback` frames ending at the change.
+    assert cd.reception_anchor(h, f, lookback=2) == 8  # only 7, 8 count: 0.5 m at 8
+    assert cd.reception_anchor(h, f, lookback=4) == 8  # 5..8: frame 4 (c - 4) is excluded
+    assert cd.reception_anchor(h, f, lookback=5) == 4  # 4..8: the later 0.4 m frame
 
 
 def test_reception_ignores_frames_where_the_old_team_is_as_close() -> None:

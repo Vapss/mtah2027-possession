@@ -158,7 +158,9 @@ def test_set_pieces_and_goal_kicks_become_restarts_with_their_team() -> None:
             (A, "PASS", "", 0, 10),
             (H, "SET PIECE", "THROW IN", 400, 400),
             (A, "PASS", "GOAL KICK", 900, 950),
-            (H, "SET PIECE", "KICK OFF-RETAKEN", 1500, 1500),
+            (H, "BALL LOST", "GOAL KICK-INTERCEPTION", 1200, 1230),  # a failed goal kick
+            (H, "SET PIECE", "KICK OFF-RETAKEN", 1500, 1500),  # taken again: not the restart
+            (H, "SET PIECE", "KICK OFF", 1600, 1600),
         ]
     )
     found = mo.restarts(ev, [(0, 2000)])
@@ -167,8 +169,11 @@ def test_set_pieces_and_goal_kicks_become_restarts_with_their_team() -> None:
         (0, dead_ball.KICK_OFF_START, A),
         (400, "Throw-in", H),
         (900, "Goal Kick", A),
-        (1500, dead_ball.KICK_OFF_GOAL, H),
+        (1200, "Goal Kick", H),
+        (1600, dead_ball.KICK_OFF_GOAL, H),
     ]
+    second = mo.restarts(ev[ev["start"] >= 1500], [(1500, 2000)])
+    assert [(r.frame, r.kind) for r in second] == [(1600, dead_ball.KICK_OFF_START)]
     assert found[1].tag_start == 400 - 125  # Smart Tagging's window: restart_s before the restart
     assert found[0].tag_start == 0  # never before the half
 
@@ -241,3 +246,20 @@ def test_the_real_sample_games_load_and_their_truth_has_open_play_changes() -> N
         assert len(game.runs) == 2
         assert sum(c.open_play for c in game.truth.changes) > 150
         assert len(game.evidence.restarts) > 50
+
+
+def test_halves_are_kept_apart_by_a_gap_and_events_move_with_them() -> None:
+    n1, n2 = 3, 2
+    t = mo.Tracking(
+        period=np.array([1] * n1 + [2] * n2),
+        frame=np.arange(1, n1 + n2 + 1),
+        names=("Player1",),
+        players=np.zeros((n1 + n2, 1, 2)),
+        ball=np.zeros((n1 + n2, 2)),
+    )
+    ev = _events([(A, "PASS", "", 1, 2), (H, "PASS", "", 3, 4)])
+    ev["period"] = [1, 2]
+    home, away, moved = mo.separate_halves(t, t, ev, gap=4)
+    assert home.period.tolist() == [1, 1, 1, 0, 0, 0, 0, 2, 2]
+    assert np.isnan(home.players[n1 : n1 + 4]).all() and np.isnan(home.ball[n1 : n1 + 4]).all()
+    assert moved["start"].tolist() == [1, 3 + 4] and moved["end"].tolist() == [2, 4 + 4]
