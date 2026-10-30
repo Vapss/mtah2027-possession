@@ -364,3 +364,180 @@ tempranos. Se elige **la primera de ese orden que pase las cinco compuertas**; l
 
 Todo sale de `python tools/change_dating.py --measure` y se pega sin editar en la sección 7, que
 se añade en el commit 3 sin tocar lo anterior.
+
+---
+
+*Lo que sigue se escribió después de medir (commit 3). Las secciones 1–6 son las de los commits
+`8c3fb91` (instrumento y calibración) y `7cec615` (pre-registro), sin cambios.*
+
+## 7. Mediciones
+
+Salida de `python tools/change_dating.py --measure`, pegada sin editar:
+
+### Metrica (g2 reservado; g1, donde se fijaron las constantes, informativo)
+
+**g2**
+
+| tramo | cambios verdad | cambios cadena | emparejados | perdidos | sobrantes | mediana s | mediana \|·\| s | media \|·\| s | p10 / p25 / p50 / p75 / p90 s | ≤ 0,5 s | ≤ 1 s | > 1 s tarde |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|
+| `engine` | 216 | 214 | 145 | 71 | 69 | +0,16 | 0,16 | 0,78 | +0,04 / +0,04 / +0,16 / +1,08 / +2,25 | 58,6% | 72,4% | 26,2% |
+| `first` | 216 | 214 | 146 | 70 | 68 | +0,04 | 0,04 | 0,54 | +0,04 / +0,04 / +0,04 / +0,36 / +1,96 | 74,0% | 82,2% | 16,4% |
+| `reception` | 216 | 214 | 145 | 71 | 69 | +0,00 | 0,00 | 0,41 | +0,00 / +0,00 / +0,00 / +0,08 / +1,27 | 80,0% | 86,2% | 11,0% |
+| `relaxed` | 216 | 214 | 147 | 69 | 67 | +0,04 | 0,04 | 0,44 | -0,14 / +0,04 / +0,04 / +0,12 / +0,94 | 78,2% | 85,0% | 8,8% |
+
+**g2 mitad 1**
+
+| tramo | cambios verdad | cambios cadena | emparejados | perdidos | sobrantes | mediana s | mediana \|·\| s | media \|·\| s | p10 / p25 / p50 / p75 / p90 s | ≤ 0,5 s | ≤ 1 s | > 1 s tarde |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|
+| `engine` | 122 | 124 | 87 | 35 | 37 | +0,16 | 0,16 | 0,76 | +0,04 / +0,04 / +0,16 / +1,18 / +2,23 | 58,6% | 71,3% | 28,7% |
+| `first` | 122 | 124 | 88 | 34 | 36 | +0,04 | 0,04 | 0,48 | +0,04 / +0,04 / +0,04 / +0,24 / +1,75 | 77,3% | 83,0% | 17,0% |
+| `reception` | 122 | 124 | 87 | 35 | 37 | +0,00 | 0,00 | 0,34 | +0,00 / +0,00 / +0,00 / +0,10 / +1,28 | 83,9% | 88,5% | 11,5% |
+| `relaxed` | 122 | 124 | 89 | 33 | 35 | +0,04 | 0,04 | 0,46 | -0,01 / +0,04 / +0,04 / +0,12 / +1,32 | 78,7% | 83,1% | 11,2% |
+
+**g2 mitad 2**
+
+| tramo | cambios verdad | cambios cadena | emparejados | perdidos | sobrantes | mediana s | mediana \|·\| s | media \|·\| s | p10 / p25 / p50 / p75 / p90 s | ≤ 0,5 s | ≤ 1 s | > 1 s tarde |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|
+| `engine` | 94 | 90 | 58 | 36 | 32 | +0,08 | 0,22 | 0,80 | +0,04 / +0,04 / +0,08 / +0,95 / +2,24 | 58,6% | 74,1% | 22,4% |
+| `first` | 94 | 90 | 58 | 36 | 32 | +0,04 | 0,04 | 0,63 | +0,04 / +0,04 / +0,04 / +0,54 / +2,09 | 69,0% | 81,0% | 15,5% |
+| `reception` | 94 | 90 | 58 | 36 | 32 | +0,00 | 0,00 | 0,52 | +0,00 / +0,00 / +0,00 / +0,04 / +1,04 | 74,1% | 82,8% | 10,3% |
+| `relaxed` | 94 | 90 | 58 | 36 | 32 | +0,04 | 0,04 | 0,43 | -0,52 / +0,04 / +0,04 / +0,11 / +0,60 | 77,6% | 87,9% | 5,2% |
+
+**g1**
+
+| tramo | cambios verdad | cambios cadena | emparejados | perdidos | sobrantes | mediana s | mediana \|·\| s | media \|·\| s | p10 / p25 / p50 / p75 / p90 s | ≤ 0,5 s | ≤ 1 s | > 1 s tarde |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|
+| `engine` | 251 | 236 | 170 | 81 | 66 | +0,04 | 0,06 | 0,60 | +0,04 / +0,04 / +0,04 / +0,64 / +1,73 | 69,4% | 77,6% | 18,8% |
+| `first` | 251 | 236 | 170 | 81 | 66 | +0,04 | 0,04 | 0,47 | +0,04 / +0,04 / +0,04 / +0,12 / +1,36 | 78,2% | 82,9% | 12,9% |
+| `reception` | 251 | 236 | 171 | 80 | 65 | +0,00 | 0,00 | 0,38 | +0,00 / +0,00 / +0,00 / +0,08 / +1,00 | 82,5% | 86,0% | 9,9% |
+| `relaxed` | 251 | 236 | 172 | 79 | 64 | +0,04 | 0,04 | 0,40 | +0,04 / +0,04 / +0,04 / +0,12 / +0,73 | 81,4% | 86,0% | 7,6% |
+
+### DFL, eventos (7 partidos)
+
+| tramo | cambios verdad | cambios cadena | emparejados | perdidos | sobrantes | mediana s | mediana \|·\| s | media \|·\| s | p10 / p25 / p50 / p75 / p90 s | ≤ 0,5 s | ≤ 1 s | > 1 s tarde |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|
+| `engine` | 1811 | 1900 | 1067 | 744 | 833 | -0,28 | 1,16 | 1,49 | -2,72 / -1,48 / -0,28 / +0,88 / +2,02 | 20,4% | 44,0% | 22,3% |
+| `first` | 1811 | 1900 | 1064 | 747 | 836 | -0,40 | 1,20 | 1,51 | -2,83 / -1,57 / -0,40 / +0,80 / +1,96 | 20,1% | 43,4% | 20,6% |
+| `reception` | 1811 | 1900 | 1050 | 761 | 850 | -0,66 | 1,24 | 1,58 | -3,16 / -2,00 / -0,66 / +0,56 / +1,60 | 19,9% | 43,5% | 15,3% |
+| `relaxed` | 1811 | 1900 | 1071 | 740 | 829 | -0,60 | 1,12 | 1,51 | -3,00 / -1,76 / -0,60 / +0,56 / +1,64 | 20,7% | 45,2% | 16,1% |
+
+Desplazamiento D2 por partido (frames): J03WMX -17, J03WN1 -42, J03WOH +34, J03WOY +34, J03WPY +0, J03WQQ +10, J03WR9 -19
+
+Mediana \|·\| por partido (s):
+
+| variante | J03WMX | J03WN1 | J03WOH | J03WOY | J03WPY | J03WQQ | J03WR9 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `engine` | 0,94 | 1,00 | 1,28 | 1,08 | 1,38 | 1,26 | 1,56 |
+| `first` | 0,96 | 1,04 | 1,26 | 1,12 | 1,20 | 1,36 | 1,56 |
+| `reception` | 0,92 | 1,12 | 1,82 | 1,26 | 1,24 | 1,24 | 1,50 |
+| `relaxed` | 0,84 | 1,00 | 1,52 | 1,16 | 1,28 | 1,12 | 1,48 |
+
+### BAR-ATH: sin GT, slice público (pareado con `engine`) y banco
+
+| variante | frames movidos | ST partido | ST bloques 7/9/11/18 | pos/min | bloque mín–máx | sin pos. | %D máx. bloque | spellF1 | macroF1 | Δ | wins ref–var | jackknife Δ | banco media | poco balón | peor |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `engine` | 0 | 77,1% | 85,6% | 3,62 | 1,01–6,00 | 0 | 65,5% | 0,5368 | 0,8533 | +0,0000 | 0–0 | +0,0000 .. +0,0000 | 0,4351 | 0,3595 | 0,2400 |
+| `first` | 280 | 77,0% | 86,1% | 3,62 | 1,01–6,00 | 0 | 65,5% | 0,5368 | 0,8545 | +0,0000 | 0–0 | +0,0000 .. +0,0000 | 0,4351 | 0,3595 | 0,2400 |
+| `reception` | 2949 | 76,7% | 85,3% | 3,61 | 1,01–6,00 | 0 | 65,5% | 0,5263 | 0,8650 | -0,0105 | 1–0 | -0,0216 .. +0,0108 | 0,4285 | 0,3612 | 0,2533 |
+| `relaxed` | 3388 | 77,1% | 85,9% | 3,61 | 1,01–6,00 | 0 | 65,5% | 0,5158 | 0,8520 | -0,0211 | 1–0 | -0,0216 .. +0,0000 | 0,4290 | 0,3437 | 0,2133 |
+
+### Compuertas (frente a `engine`)
+
+| variante | Metrica g2 | Metrica g2 mitad 1 | Metrica g2 mitad 2 | DFL eventos (7 partidos) | BAR-ATH sin GT | slice público (pareado) | banco |
+|---|---|---|---|---|---|---|---|
+| `first` | pasa (mediana \|·\| 0,16 → 0,04; mediana +0,16 → +0,04) | pasa (mediana \|·\| 0,16 → 0,04; mediana +0,16 → +0,04) | pasa (mediana \|·\| 0,22 → 0,04; mediana +0,08 → +0,04) | **falla** (mediana \|·\| 1,16 → 1,20; mediana -0,28 → -0,40) | pasa (ST 77,1% → 77,0%; %D máx. por bloque 65,5%; 3,62 pos/min; bloques sin posesión 0) | pasa (Δ +0,0000; wins ref–var 0–0) | pasa (media 0,4351 → 0,4351; poco balón 0,3595 → 0,3595) |
+| `reception` | pasa (mediana \|·\| 0,16 → 0,00; mediana +0,16 → +0,00) | pasa (mediana \|·\| 0,16 → 0,00; mediana +0,16 → +0,00) | pasa (mediana \|·\| 0,22 → 0,00; mediana +0,08 → +0,00) | **falla** (mediana \|·\| 1,16 → 1,24; mediana -0,28 → -0,66) | pasa (ST 77,1% → 76,7%; %D máx. por bloque 65,5%; 3,61 pos/min; bloques sin posesión 0) | **falla** (Δ -0,0105; wins ref–var 1–0) | **falla** (media 0,4351 → 0,4285; poco balón 0,3595 → 0,3612) |
+| `relaxed` | pasa (mediana \|·\| 0,16 → 0,04; mediana +0,16 → +0,04) | pasa (mediana \|·\| 0,16 → 0,04; mediana +0,16 → +0,04) | pasa (mediana \|·\| 0,22 → 0,04; mediana +0,08 → +0,04) | **falla** (mediana \|·\| 1,16 → 1,12; mediana -0,28 → -0,60) | pasa (ST 77,1% → 77,1%; %D máx. por bloque 65,5%; 3,61 pos/min; bloques sin posesión 0) | **falla** (Δ -0,0211; wins ref–var 1–0) | **falla** (media 0,4351 → 0,4290; poco balón 0,3595 → 0,3437) |
+
+Elección por la regla (orden previo `first` > `reception` > `relaxed`): **ninguna; se mantiene la cadena entregada**.
+
+**Reproducción.** Las etiquetas de cada variante en BAR-ATH son deterministas (dos corridas, mismo
+SHA-256 del CSV `frame,label`): `engine` `72c98ed4bb4af230…` (la cadena entregada, como fija el
+test), `first` `f49f8c28eebc51dd…` (**el mismo fichero** que la `first` de lane-dating: la misma
+regla, confirmado), `reception` `99c85d74df19c278…`, `relaxed` `34f5cff3abd2f506…`. Ninguna
+variante mueve un frame `D` ni `X` (test con el bundle).
+
+```bash
+export MTAH_DATA_DIR=...                                   # el bundle licenciado (BAR-ATH)
+export MTAH_EXTERNAL_DIR=...                               # metrica/ e idsse/ (por defecto ~/Downloads/external-football-data)
+python tools/metrica_open.py --describe                    # sección 3
+python tools/change_dating.py --calibrate --degraded       # sección 4
+python tools/change_dating.py --explore                    # sección 5 (solo g1)
+python tools/change_dating.py --dfl                        # sección 6.2 (instrumento DFL, solo la referencia)
+python tools/change_dating.py --measure                    # sección 7
+```
+
+## 8. Resultado: **negativo; se mantiene la cadena entregada**
+
+Aplicando la sección 6 tal cual: **ninguna variante pasa las cinco compuertas.**
+
+| variante | M (Metrica reservado) | E (DFL) | B (BAR-ATH sin GT) | P (slice) | C (banco) |
+|---|---|---|---|---|---|
+| `first` | pasa en g2 y en las dos mitades | **falla**: mediana \|·\| 1,16 → 1,20 s, mediana −0,28 → −0,40 s | pasa | pasa (Δ 0, 0–0) | pasa (igual) |
+| `reception` | pasa | **falla**: 1,16 → 1,24 s, −0,28 → −0,66 s | pasa (ST −0,4) | **falla**: Δ −0,0105, pierde 1 posesión | **falla**: media −0,0066 |
+| `relaxed` | pasa | **falla** en el signo: 1,16 → 1,12 s, pero −0,28 → −0,60 s | pasa | **falla**: Δ −0,0211, pierde 1 posesión | **falla**: media −0,0061, poco balón −0,0158 |
+
+### Lectura
+
+1. **Con el balón de Metrica, redatar funciona, y mucho.** En el partido reservado, las tres bajan
+   la mediana de |retraso| de 0,16 a 0,00–0,04 s y la cola > 1 s tarde de 26,2% a 8,8–16,4%, en
+   las dos mitades, sin cambiar el número de cambios emparejados (145 → 145–147). `first` sola
+   lleva el p75 de +1,08 a +0,36 s. La respuesta a "¿dónde se fecha un cambio?" que da el juez
+   externo es clara: **en el toque del nuevo equipo, aunque sea disputado o rápido**, no en su
+   primer control lento y sin disputa.
+2. **Con tracking real, no.** En DFL ninguna mejora: la mediana con signo se aleja de 0 en las tres
+   (todas adelantan cambios que los eventos de DFL ya fechan después que la cadena) y la mediana de
+   |·| solo baja en `relaxed`, 0,04 s. Por partido, `first` es peor en 4 de 7, mejor en 2 e igual
+   en 1. Es un juez grueso (sección 6.2: 1,16 s de suelo), así que no dice que redatar sea malo con
+   tracking real; dice que **no se ve ninguna mejora** fuera del balón idealizado.
+3. **En BAR-ATH, lo mismo que DFL.** `first` es casi un no-op (280 frames, el mismo resultado que
+   lane-dating). Las dos que sí mueven fechas (`reception` 2.949 frames, `relaxed` 3.388) **pierden
+   una posesión** en el slice y bajan el banco. El acuerdo con el Smart Tagging no las distingue
+   (76,7% y 77,1% frente a 77,1%).
+4. **La explicación más simple de 1–3 es el balón.** En Metrica el balón está a 0,06 m del pie en
+   cada evento y quiebra justo donde se anota un toque (sección 3); ahí un toque disputado o rápido
+   **se ve** y redatar acierta. En DFL el equipo que actúa está a ≤ 1,5 m solo en la mitad de los
+   eventos, y en nuestro tracking peor (la calibración degradada ya ensanchaba la cola). Con un balón
+   ruidoso en los toques, el ancla temprana es tan a menudo un falso toque como el verdadero. Es la
+   misma conclusión que `touch` en lane-dating, ahora vista desde dos jueces externos: **el límite
+   no es la regla de fecha, es la precisión del balón en el toque.**
+
+**No se reinterpreta la regla.** `first` falla E por 0,04 s de mediana \|·\| y 0,12 s de signo,
+dentro del ruido declarado de DFL, y pasa todo lo demás. La compuerta estaba escrita y dice "no
+peor"; se cumple la regla. Aunque se hubiera adoptado, su efecto en la entrega sería de 280 frames
+y Δ 0 en el slice: no cambia nada que el `spellF1` vea.
+
+## 9. Recomendación
+
+- **Se mantiene la cadena entregada** (`72c98ed4bb4a…`). Ninguna variante de fecha entra.
+- **El instrumento sí queda**: `tools/metrica_open.py` es el primer juez externo de *cuándo* cambia
+  la posesión, con una verdad de escala comparable a la nuestra (3,35–3,65 posesiones/min). Su
+  límite está escrito: el balón de muestra está sincronizado con los eventos y es más limpio que el
+  nuestro en los toques.
+- **Lo que dice para la ronda siguiente**, sin probarlo aquí:
+  - Con la regla de fecha actual, la mediana ya está en el toque (1–4 frames). El síntoma del slice
+    (+1,4 s de mediana) no se reproduce fuera: tiene que venir de lo que el slice tiene y Metrica
+    no — balón perdido y ruidoso en los toques, colas de `D` y fragmentación (lane-dating, sección 9).
+  - **El tercio de cambios sin pareja** (sección 4: 81 de 251 y 71 de 216 cambios en juego sin
+    cambio de la cadena a ±5 s, con otros tantos sobrantes) pesa más que la fecha. Es una cuestión
+    de **si**, y necesita su propio carril con la banda del informe por bloques (decisión 37).
+  - Una regla de fecha solo valdrá la pena con un balón mejor en el toque (el vídeo ya no entra,
+    decisión 38). Hasta entonces, cualquier variante que adelante cambios está expuesta al falso
+    toque.
+
+## 10. Limitaciones
+
+- **Dos partidos de Metrica**, uno para fijar constantes y otro reservado: ~145 cambios emparejados
+  en el reservado. Las mejoras en g2 son grandes y coherentes por mitades, pero vienen de un balón
+  idealizado (sección 3).
+- **La verdad de eventos fecha cada cambio en la primera acción anotada del nuevo equipo** (E3).
+  Otra definición (por ejemplo, el primer control) daría otra mediana; esta es la que más se
+  parece a la del reto ("el nuevo equipo gana el balón").
+- **DFL** fecha con `EventTime` anotados en vivo; el desplazamiento por partido corrige el retraso
+  medio, no la dispersión (sección 6.2). Su compuerta es la más débil de las cinco, y es la única
+  que decide `first`.
+- **No se probó ninguna regla de "si"** (sección 6.1). El brief la permitía; el motivo de no hacerlo
+  está escrito antes de medir.
+- **Deuda aceptada.** `LOW_BALL_BLOCKS` y los formateadores (`_dec`, `_abs`, `_pct`) se repiten
+  entre los módulos de las rondas 2–5; el traspaso (`handovers`) es el de `tools/dating.py`,
+  reescrito aquí para no importar un módulo de otro carril.
