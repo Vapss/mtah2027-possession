@@ -60,9 +60,15 @@ class Params:
     radius_m: float = 1.5  # reach plus tracking noise: closer than this, the player can play it
     speed_mps: float = 5.0  # a fast dribble; a pass travels at 10 m/s and more
     dwell: int = 1  # consecutive frames of the other team's control needed to change possession
+    # A duel does not change possession (DECISIONS 34): a rival control only counts when the team
+    # in possession has nobody within `radius_m` of the ball. False is the engine of DECISIONS 29.
+    duel: bool = True
 
 
 DEFAULT = Params()
+# The engine before the duel rule (DECISIONS 29-32): what the research lanes measured against and
+# archived. Their evidence stays reproducible against it; nothing delivered uses it.
+D31 = Params(duel=False)
 
 
 @dataclass(frozen=True)
@@ -114,17 +120,30 @@ def control(f: Features, params: Params = DEFAULT) -> np.ndarray:
     return team
 
 
+def uncontested(ctrl: np.ndarray, f: Features, radius_m: float) -> np.ndarray:
+    """`ctrl` where the other team's nearest player is beyond `radius_m`, `NONE` elsewhere.
+
+    A control both teams could play is a duel. An unknown distance is not evidence that the other
+    team is far, so it fails closed, like everything else in the engine.
+    """
+    other = np.where(ctrl == 0, f.away_m, f.home_m)
+    clear = np.nan_to_num(other, nan=-np.inf) > radius_m
+    return np.where((ctrl != NONE) & clear, ctrl, NONE).astype(np.int8)
+
+
 def decode(
     ctrl: np.ndarray,
     runs: list[tuple[int, int]],
     dwell: int = 1,
     forced: dict[int, int] | None = None,
+    switch: np.ndarray | None = None,
 ) -> np.ndarray:
     """Carry the last controlling team inside each `[start, stop)` run; `NONE` outside them.
 
     The first control of a run sets the state at once; after that, a change needs `dwell`
     consecutive control frames of the other team and is dated to the first of them. A frame in
     `forced` (a restart, DECISIONS 30) hands the ball to its team at once, whatever `dwell` is.
+    With `switch` (`uncontested`), a rival control that is not in it is a duel and changes nothing.
     """
     if dwell < 1:
         raise ValueError(f"dwell must be at least 1 frame, got {dwell}")
@@ -134,6 +153,8 @@ def decode(
         current, rival, streak, since = NONE, NONE, 0, start
         for i in range(start, stop):
             seen = int(ctrl[i])
+            if switch is not None and current not in (NONE, seen) and switch[i] == NONE:
+                seen = NONE  # a duel: the team in possession can still play the ball
             if i in forced:
                 current, rival, streak = forced[i], NONE, 0
             elif seen in (NONE, current):
@@ -198,7 +219,8 @@ def chain(
     """
     ctrl = control(f, params)
     forced = restart_controls(restarts, ctrl) if restarts is not None else None
-    state = decode(ctrl, halves(), params.dwell, forced)
+    switch = uncontested(ctrl, f, params.radius_m) if params.duel else None
+    state = decode(ctrl, halves(), params.dwell, forced, switch)
     out = labels(state)
     if dead is not None:
         out[np.asarray(dead, dtype=bool)] = "D"
@@ -259,6 +281,8 @@ def build(
     # Its own process, like every step of a delivered chain (DECISIONS 28): two repro builds must
     # not share the cached tracking or any module state.
     flags = ["--radius", params.radius_m, "--speed", params.speed_mps, "--dwell", params.dwell]
+    if not params.duel:
+        flags.append("--no-duel")
     if not dead:
         flags.append("--bare")
     elif not restarts:
@@ -288,10 +312,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--radius", type=float, default=Params.radius_m)
     parser.add_argument("--speed", type=float, default=Params.speed_mps)
     parser.add_argument("--dwell", type=int, default=Params.dwell)
+    parser.add_argument("--no-duel", action="store_true", help="a duel changes possession (D29)")
     parser.add_argument("--bare", action="store_true", help="the engine alone: no D, no restarts")
     parser.add_argument("--no-restarts", action="store_true", help="I0: D but no restart control")
     args = parser.parse_args(argv)
-    params = Params(args.radius, args.speed, args.dwell)
+    params = Params(args.radius, args.speed, args.dwell, not args.no_duel)
     chain = {"dead": not args.bare, "restarts": not (args.bare or args.no_restarts)}
     try:
         if args.build:

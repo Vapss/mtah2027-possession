@@ -545,7 +545,7 @@ def _engine_out(f: engine.Features, ev: dead_ball.Evidence) -> np.ndarray:
     the pitch for at least a second is dead until it is next seen inside (dead_ball's `untagged`
     stoppage, its constants unchanged). With no restarts, every other source of `D` is silent."""
     dead = dead_ball.dead_mask(ev, dead_ball.halves(), "out+still+untagged")
-    return engine.chain(f, engine.DEFAULT, None, dead)[2]
+    return engine.chain(f, engine.D31, None, dead)[2]
 
 
 METHODS: dict[str, Method] = {

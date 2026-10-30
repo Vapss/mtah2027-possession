@@ -253,11 +253,16 @@ def test_selection_follows_the_prior_order_not_the_score() -> None:
 
 @requires_bundle
 def test_on_the_match_the_baseline_is_the_delivered_engine_and_no_variant_touches_d() -> None:
-    from tools import bench
+    from tools import bench, dead_ball, engine
 
     f, ev, _gt, _cut = bench.load()
     delivered = bench._engine(f, ev)
-    assert (decoder.METHODS[decoder.BASELINE](f, ev) == delivered).all()
+    # The lane's baseline is the engine it measured against (DECISIONS 29-32, `engine.D31`); its V2
+    # is what DECISIONS 34 integrated, so it must equal the delivered chain exactly.
+    dead = dead_ball.dead_mask(ev, engine.halves(), "out")
+    before = engine.chain(f, engine.D31, ev.restarts, dead)[2]
+    assert (decoder.METHODS[decoder.BASELINE](f, ev) == before).all()
+    assert (decoder.METHODS["uncontested"](f, ev) == delivered).all()
     for method in decoder.METHODS.values():
         labels = method(f, ev)
         assert ((labels == "D") == (delivered == "D")).all()

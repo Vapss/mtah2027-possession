@@ -454,7 +454,7 @@ def impute(
     ctx = ctx or context()
     runs = engine.halves()
     dead = dead_ball.dead_mask(ev, runs, "out")
-    ctrl, state, _ = engine.chain(f, engine.DEFAULT, ev.restarts, dead)
+    ctrl, state, _ = engine.chain(f, engine.D31, ev.restarts, dead)
     forced = engine.restart_controls(ev.restarts, ctrl)
     ivs = intervals(ctrl, forced, f.present, runs)
     ell = None
@@ -499,7 +499,7 @@ def heldout(ctx: Context, f: engine.Features, ev: dead_ball.Evidence) -> dict:
     """Model accuracy on synthetic gap rows of unseen blocks, against carrying the state."""
     runs = engine.halves()
     dead = dead_ball.dead_mask(ev, runs, "out")
-    _, state, _ = engine.chain(f, engine.DEFAULT, ev.restarts, dead)
+    _, state, _ = engine.chain(f, engine.D31, ev.restarts, dead)
     parity = formation.block_parity(len(state))
     out: dict = {}
     hits = carry_hits = total = carry_total = 0
@@ -542,14 +542,14 @@ def self_bench(f: engine.Features, ev: dead_ball.Evidence) -> dict:
 
     runs = engine.halves()
     dead = dead_ball.dead_mask(ev, runs, "out")
-    _, state, truth = engine.chain(f, engine.DEFAULT, ev.restarts, dead)
+    _, state, truth = engine.chain(f, engine.D31, ev.restarts, dead)
     pseudo = pm.label_codes(list(truth))
     out: dict = {}
     for shift in SELF_BENCH_SHIFTS:
         f2, ev2 = bench.degrade(f, ev, (0, len(state)), shifted(f.present, runs, shift))
         hidden = f.present & ~f2.present & (state != NONE) & ~dead
         dead2 = dead_ball.dead_mask(ev2, runs, "out")
-        _, base, base_labels = engine.chain(f2, engine.DEFAULT, ev2.restarts, dead2)
+        _, base, base_labels = engine.chain(f2, engine.D31, ev2.restarts, dead2)
         row: dict = {
             "ball": float(f2.present[_inside(len(state), runs)].mean()),
             "engine": {
@@ -622,7 +622,7 @@ def measure(out_dir: Path) -> dict:
     ev = dead_ball.load_evidence()
     runs = engine.halves()
     dead = dead_ball.dead_mask(ev, runs, "out")
-    _, state, engine_labels = engine.chain(f, engine.DEFAULT, ev.restarts, dead)
+    _, state, engine_labels = engine.chain(f, engine.D31, ev.restarts, dead)
     result: dict = {"heldout": heldout(ctx, f, ev), "self_bench": self_bench(f, ev)}
     result["bench"] = bench_rows(f, ev)
 

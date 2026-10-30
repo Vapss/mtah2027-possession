@@ -196,7 +196,7 @@ def test_the_rewrite_is_deterministic_and_stays_inside_the_gap_intervals() -> No
     assert (first[1] == second[1]).all()
     runs = engine.halves()
     dead = dead_ball.dead_mask(ev, runs, "out")
-    ctrl, state, _ = engine.chain(f, engine.DEFAULT, ev.restarts, dead)
+    ctrl, state, _ = engine.chain(f, engine.D31, ev.restarts, dead)
     inside = np.zeros(len(state), dtype=bool)
     for iv in im.intervals(ctrl, engine.restart_controls(ev.restarts, ctrl), f.present, runs):
         inside[iv.p + 1 : iv.q] = True

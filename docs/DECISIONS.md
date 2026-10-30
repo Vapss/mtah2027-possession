@@ -1035,3 +1035,21 @@ posesiones. **Si el corpus externo, que no está contaminado, la sitúa por deba
 El bloque 11 (19,9% de balón) no es un problema de decodificación: una posesión de 163 s tiene balón
 en el 17,5% de sus frames, y ~78 s dependen de un duelo de 0,2 s justo tras un hueco de 69,5 s. Es un
 problema de huecos de balón.
+
+**Adenda 2: el corpus externo revierte V6 a V2.** El carril externo convirtió los 7 partidos abiertos
+de DFL/IDSSE (CC-BY) en un corpus puntuable (`tools/external.py`, `docs/analysis/external*.md`). Su
+compuerta de dominio **falla**: la verdad de DFL tiene 4,58 posesiones/min, mediana de 3,8 s y
+41–52% de `D` (nuestro partido: 3,4/min, 7,6 s, 19,6%), así que **no sirve para fijar escalas de
+tiempo ni reglas de `D`**. Sí reproduce la pérdida relativa por balón perdido del banco (−28% frente
+a −34%) y el mismo orden entre métodos, lo que valida el banco desde fuera.
+
+Con su regla pre-registrada, V6 queda por debajo de V2 (0,2319 frente a 0,2394 degradado; V2 gana 6
+de 7 partidos), así que **se revierte a V2**, como decía la adenda anterior. El matiz se declara: lo
+que V6 añade es solo redatar los cambios, que depende de la definición de la verdad, y la de DFL es
+otra; pero la regla estaba escrita y no se reinterpreta. `touch` y V5 pierden 7 de 7 frente a su
+referencia sin `touch`, con tasas más lejos de la verdad: alarma de escala temporal, siguen fuera.
+
+**Integración.** La regla del duelo entra en `tools/engine.py` (`Params.duel = True`, `uncontested`,
+`decode(switch=…)`), con etiquetas idénticas frame a frame al V2 del carril. `engine.D31` conserva el
+motor anterior, contra el que los carriles midieron y archivaron. Cadena entregada: **slice 0,5189**,
+banco 0,3792 (poco balón 0,3021).

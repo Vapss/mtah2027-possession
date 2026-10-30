@@ -132,18 +132,21 @@ def _public_score(table) -> tuple[float, float]:
 
 
 @requires_bundle
-def test_the_bare_engine_reproduces_its_public_score() -> None:
-    """DECISIONS 29 and 31: 0,4390 before a ball off the pitch stopped counting as control, 0,4195
-    after (the bare engine has no restart to hand the ball back); 87,2% team accuracy on live."""
-    spell, accuracy = _public_score(engine.run(dead=False, restarts=False)[0])
+def test_the_engine_before_the_duel_rule_reproduces_its_public_score() -> None:
+    """DECISIONS 29-32 (`engine.D31`): bare 0,4195 and 87,2% team accuracy on live; I0 0,4667;
+    delivered 0,4585. The research lanes measured against this engine."""
+    spell, accuracy = _public_score(engine.run(engine.D31, dead=False, restarts=False)[0])
     assert round(spell, 4) == 0.4195
     assert round(accuracy, 3) == 0.872
+    assert round(_public_score(engine.run(engine.D31, restarts=False)[0])[0], 4) == 0.4667
+    assert round(_public_score(engine.run(engine.D31)[0])[0], 4) == 0.4585
 
 
 @requires_bundle
 def test_the_delivered_chain_reproduces_its_public_score() -> None:
-    """DECISIONS 30 anchors: I0 (with D) 0,4667 and I1 (D + restart control, delivered) 0,4585."""
-    assert round(_public_score(engine.run(restarts=False)[0])[0], 4) == 0.4667
+    """DECISIONS 34 anchors, with the duel rule: bare 0,4757, I0 0,5263, delivered 0,5189."""
+    assert round(_public_score(engine.run(dead=False, restarts=False)[0])[0], 4) == 0.4757
+    assert round(_public_score(engine.run(restarts=False)[0])[0], 4) == 0.5263
     table, summary = engine.run()
-    assert round(_public_score(table)[0], 4) == 0.4585
+    assert round(_public_score(table)[0], 4) == 0.5189
     assert round(summary["dead_share"], 3) == 0.123
