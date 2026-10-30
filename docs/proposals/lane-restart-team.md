@@ -1,6 +1,6 @@
 # Carril restart-team — QUÉ EQUIPO reanuda cuando el tag no lo dice
 
-Estado: **pre-registro** (secciones 1–6), escrito y commiteado antes de correr ninguna variante
+Estado: **medido — resultado negativo** (sección 9). Pre-registro (secciones 1–6), escrito y commiteado antes de correr ninguna variante
 contra ninguna etiqueta (DFL, slice, banco) y antes de medir el acuerdo P-vs-L o el Smart Tagging
 de ninguna variante en BAR-ATH. Pre-registro en `65274a7`; **enmienda** (sección 6 bis) en un commit
 aparte, también antes de medir: la primera ejecución de DFL se detuvo sin leer su salida.
@@ -221,3 +221,187 @@ Dos cambios, y nada más:
    inicio de la mitad y no cambia nada.
 
 Las constantes, las variantes, las mediciones, las compuertas y el orden de prior no cambian.
+
+---
+
+*Lo que sigue se escribió después de medir. Las secciones 1–6 bis son las de `65274a7` + `129e0bd`
+sin cambios, salvo la línea de estado.*
+
+## 7. Cómo se reproducen los números
+
+```bash
+export MTAH_DATA_DIR=...                         # el bundle licenciado
+python tools/restart_team.py dfl > runs/restart_team/dfl.json   # 8.1 (IDSSE en MTAH_EXTERNAL_DIR)
+python tools/restart_team.py --match             # 8.2, sin ground truth
+for v in engine law pos pos+law agree; do
+  python tools/restart_team.py --variant "$v" --labels "runs/restart_team/$v.csv" --gt public
+done
+python tools/blocks.py runs/restart_team/{engine,law,pos,pos+law,agree}.csv
+for v in law pos pos+law agree; do
+  python tools/compare_submissions.py runs/restart_team/engine.csv "runs/restart_team/$v.csv" --gt public
+done
+python tools/restart_team.py --bench
+```
+
+**`engine` es la cadena entregada, byte a byte:** `runs/restart_team/engine.csv` y
+`tools/engine.py --labels` dan el mismo SHA-256, `72c98ed4bb4a…`, y
+`tests/test_restart_team.py::test_the_engine_variant_reproduces_the_delivered_run` lo fija (etiquetas
+iguales a `engine.run()` y prefijo del SHA). Variantes: `law` `aedb072fcd42…`, `pos` y `agree`
+`967f9e372790…` (idénticas, ver 8.2), `pos+law` `b44f5f9eb8e9…`. El orden de lectura fue el del
+brief: DFL; luego BAR-ATH sin GT; luego el slice y el banco.
+
+## 8. Mediciones
+
+### 8.1 DFL (7 partidos, tags sintéticos, ciclo de errores −2..+2 s)
+
+Reanudaciones sin equipo con equipo verdadero conocido: 290 saques de banda, 17 saques de centro tras
+gol, 14 de inicio de mitad (321). Cobertura = parte decidida; acierto = en las decididas.
+
+| | limpio: cobertura | limpio: acierto | con nuestro balón: cobertura | con nuestro balón: acierto |
+|---|---:|---:|---:|---:|
+| **P** (todas) | 0,455 | 0,925 | 0,324 | 0,913 |
+| P, banda | 0,472 | 0,920 | 0,334 | 0,907 |
+| P, centro tras gol ⚠ | 0,412 | 1,000 (7) | 0,294 | 1,000 (5) |
+| P, inicio de mitad ⚠ | 0,143 | 1,000 (2) | 0,143 | 1,000 (2) |
+| **L** (todas, en la cadena `law`) | 0,963 | 0,521 | 0,963 | 0,518 |
+| L, banda | 1,000 | **0,493** | 1,000 | 0,497 |
+| L, centro tras gol | 1,000 | 0,941 | 1,000 | 0,824 |
+| **V1 `law`** | 0,956 | 0,518 | 0,956 | 0,515 |
+| **V2 `pos`** | 0,455 | 0,925 | 0,324 | 0,913 |
+| **V3 `pos+law`** | 0,969 | 0,695 | 0,969 | 0,653 |
+| **V4 `agree`** | 0,252 | 0,926 | 0,159 | 0,922 |
+
+⚠ Muestras mínimas, y P no es juzgable ahí en DFL (sección 5.1): balón congelado donde entró, o
+ninguna ventana antes del saque inicial.
+
+Acierto / cobertura, limpio, con el error del tag **fijo** (todas las reanudaciones sin equipo; P
+también solo en saques de banda):
+
+| | −2 s | −1 s | 0 s | +1 s | +2 s |
+|---|---:|---:|---:|---:|---:|
+| V1 `law` | 0,502 / 0,956 | 0,511 / 0,956 | 0,511 / 0,956 | 0,515 / 0,956 | 0,518 / 0,956 |
+| V2 `pos` | 0,856 / 0,324 | 0,869 / 0,333 | 0,886 / 0,355 | 0,944 / 0,673 | 0,979 / 0,607 |
+| V3 `pos+law` | 0,619 / 0,956 | 0,625 / 0,956 | 0,648 / 0,956 | 0,797 / 0,981 | 0,791 / 1,000 |
+| V4 `agree` | 0,889 / 0,140 | 0,902 / 0,159 | 0,891 / 0,171 | 0,957 / 0,364 | 0,965 / 0,352 |
+| P, solo banda | 0,856 / 0,359 | 0,869 / 0,369 | 0,886 / 0,393 | 0,943 / 0,662 | 0,982 / 0,566 |
+
+`spellF1` (media de 7; gana/pierde = partidos estrictamente por encima/debajo de `engine`):
+
+| cadena | limpio | gana/pierde | con nuestro balón | gana/pierde |
+|---|---:|---:|---:|---:|
+| `engine` | 0,4859 | — | 0,3585 | — |
+| V1 `law` | 0,4834 | 3 / 4 | 0,3556 | 4 / 3 |
+| V2 `pos` | 0,4900 | **7 / 0** | 0,3610 | **6 / 1** |
+| V3 `pos+law` | 0,4879 | 5 / 2 | 0,3583 | 5 / 2 |
+| V4 `agree` | 0,4900 | **7 / 0** | 0,3610 | **6 / 1** |
+
+| cadena | limpio por partido (J03WMX, WN1, WOH, WOY, WPY, WQQ, WR9) | con nuestro balón |
+|---|---|---|
+| `engine` | 0,4688 0,4366 0,5041 0,5020 0,4918 0,4933 0,5049 | 0,3529 0,3050 0,3842 0,3637 0,3575 0,3831 0,3632 |
+| V1 `law` | 0,4701 0,4433 0,5030 0,4953 0,4709 0,4919 0,5093 | 0,3543 0,3144 0,3620 0,3635 0,3401 0,3876 0,3670 |
+| V2 `pos` | 0,4714 0,4415 0,5090 0,5075 0,4961 0,4954 0,5091 | 0,3518 0,3122 0,3878 0,3663 0,3602 0,3836 0,3652 |
+| V3 `pos+law` | 0,4729 0,4499 0,5074 0,4976 0,4753 0,4948 0,5171 | 0,3579 0,3172 0,3660 0,3689 0,3431 0,3887 0,3663 |
+| V4 `agree` | igual que `pos` | igual que `pos` |
+
+`pos` y `agree` dan el mismo `spellF1` en los 14 casos, y lo mismo pasa en BAR-ATH (8.2): no es un
+error. Donde `pos` decide y `agree` no, P y L discrepan, es decir, P nombra al equipo que la cadena ya
+arrastra (L es su rival), y forzarlo no cambia nada.
+
+### 8.2 BAR-ATH, sin ground truth
+
+| | saques de banda (26) | centro tras gol (4) | inicio de mitad (2) |
+|---|---:|---:|---:|
+| P decide | 11 | 3 | **0** |
+| L decide | 26 | 4 | 0 |
+| P y L deciden / coinciden | 11 / **6** | 3 / 2 | 0 / 0 |
+| nombradas / forzadas: `law` | 26 / 23 | 4 / 4 | 0 / 0 |
+| … `pos` | 11 / 8 | 3 / 3 | 0 / 0 |
+| … `pos+law` | 26 / 23 | 4 / 4 | 0 / 0 |
+| … `agree` | 6 / 5 | 2 / 2 | 0 / 0 |
+
+**Acuerdo P-vs-L en saques de banda: 6 de 11 = 0,545.**
+
+Voto de fase del Smart Tagging en los 5 s tras cada reanudación recién forzada:
+
+| | reanudaciones con voto | voto mayoritario coincide | frames con voto | frames que coinciden |
+|---|---:|---:|---:|---:|
+| `law` | 18 | 9 | 1.721 | 52,2% |
+| `pos` | 7 | 7 | 728 | 100% |
+| `pos+law` | 18 | 12 | 1.721 | 68,5% |
+| `agree` | 4 | 4 | 448 | 100% |
+
+Informe de bloques (`D` no cambia en ninguna variante: el equipo no toca la máscara):
+
+| cadena | frames cambiados (partido / slice) | posesiones | pos/min | bloque con más `D` | mín. posesiones en un bloque | acuerdo ST |
+|---|---:|---:|---:|---:|---:|---:|
+| `engine` | — | 383 | 3,616 | 65,5% (9) | 3 | 77,072% |
+| V1 `law` | 1.363 / 0 | 386 | 3,645 | 65,5% | 3 | **77,044%** |
+| V2 `pos` | 48 / 0 | 380 | 3,588 | 65,5% | 3 | 77,074% |
+| V3 `pos+law` | 1.299 / 0 | 383 | 3,616 | 65,5% | 3 | 77,104% |
+| V4 `agree` | 48 / 0 | 380 | 3,588 | 65,5% | 3 | 77,074% |
+
+Diagnóstico posterior (agregados, sin GT, no elige nada): **P no decide ningún saque de centro de
+inicio de mitad** porque en la primera mitad la estimación cae en el primer frame de la mitad (la
+ventana de P queda vacía) y en la segunda el balón lo *tienen* los dos equipos en frames distintos
+de la ventana (2 y 3 frames; mediana del más cercano 13,8 m local, 4,7 m visitante). En los saques de
+centro tras gol el balón se ve en el 0–15% de la ventana. Los agregados del brief (0,0–0,4 m frente a
+8,9–12,7 m) no eran de esta ventana.
+
+### 8.3 Slice público (contaminado, declarado) y banco
+
+**Ninguna variante cambia un solo frame del slice** (tabla de 8.2): el saque de centro de 11.185 no se
+nombra (P no decide; 8.2) y no hay otra reanudación sin equipo que cambie un frame graduado. Todas:
+`spellF1` 0,5368, `macroF1` 0,8533, 21 posesiones, precisión / recall de `D` 0,877 / 0,897; Δ pareado
+0,0000, 17 empates, ganadas motor/variante 0 / 0. Banco: idéntico al de `engine` en todas, limpio
+0,5368, media 0,4351, poco balón 0,3595 (n = 6), peor donante 0,2400.
+
+## 9. Recomendación: **mantener la cadena entregada** (resultado negativo)
+
+| compuerta | V1 `law` | V2 `pos` | V3 `pos+law` | V4 `agree` |
+|---|---|---|---|---|
+| G-DFL1 acierto ≥ 0,95 limpio y con balón | **no (0,518; 0,515)** | **no (0,925; 0,913)** | **no (0,695; 0,653)** | **no (0,926; 0,922)** |
+| G-DFL2 gana ≥ 6/7 limpio y con balón | **no (3/7; 4/7)** | sí (7/7; 6/7) | **no (5/7; 5/7)** | sí (7/7; 6/7) |
+| G-PL P-vs-L ≥ 0,90 (si usa los dos) | — | — | **no (0,545, n = 11)** | **no (0,545, n = 11)** |
+| G-ST acuerdo ST ≥ 77,072% | **no (77,044%)** | sí (77,074%) | sí (77,104%) | sí (77,074%) |
+| G-B ≤ 70% `D`, sin vacíos, 3,4 ± 0,5 | sí (65,5%; 3,65) | sí (65,5%; 3,59) | sí (65,5%; 3,62) | sí (65,5%; 3,59) |
+| G-PUB Δ ≥ 0, `wins_a ≤ wins_b`, prec. `D` ≥ 0,85 | sí (0; 0–0; 0,877) | sí (ídem) | sí (ídem) | sí (ídem) |
+| G-BENCH ≥ 0,4351 / 0,3595 | sí (igual) | sí (igual) | sí (igual) | sí (igual) |
+
+Ninguna pasa todas. Por la regla de la sección 6, **la cadena entregada no cambia** (`72c98ed4bb4a…`).
+Las compuertas del slice y del banco pasan **en vacío**: ninguna variante toca un frame de la ventana
+pública, así que no son evidencia a favor de nada.
+
+Lo que queda como resultado:
+
+- **La premisa del reglamento no se sostiene con nuestra cadena.** L acierta el 49,3% de los saques de
+  banda de DFL (limpio; 49,7% con nuestro balón): el equipo que la cadena tiene en posesión cuando el
+  balón sale no es, en la práctica, el que lo echó fuera; acierta la mitad de las veces. Es lo que dice
+  la decisión 40 desde el otro lado: el equipo equivocado se concentra a menos de 4 s de un cambio
+  verdadero, y un balón que sale es a menudo ese cambio (un despeje, un pase interceptado que acaba
+  fuera, un duelo). Así que "tras un saque de banda el motor arrastra al equipo equivocado" es cierto
+  la mitad de las veces, no casi siempre. En BAR-ATH lo confirman P-vs-L (6 de 11) y el Smart Tagging
+  tras los forzados de `law` (52%). En los saques de centro tras gol L es mejor (0,94 limpio, 16 de 17),
+  pero son pocos y casi siempre el tracking ya los resuelve.
+- **P es la evidencia buena, y se queda corta.** 0,925 limpio / 0,913 con nuestro balón, por debajo de
+  0,95. La tabla de error fijo dice por qué en DFL: con el balón congelado (errores ≤ 0) acierta
+  0,86–0,89; cuando la ventana alcanza el balón real tras el saque (+1/+2 s), 0,94–0,98. El veredicto de
+  DFL sobre P depende de ese artefacto, que BAR-ATH no tiene (allí el Smart Tagging coincide en los 7
+  forzados de `pos`); **no se reabre** cambiando la ventana o la forma del error: sería ajustar el
+  instrumento después de ver que falla. Y en BAR-ATH P apenas cambia nada: 48 frames del partido,
+  porque cuando decide nombra casi siempre al equipo que la cadena ya arrastra.
+- **El inicio del partido no se arregla así.** Ninguna variante nombra los dos `Kick Off (Start)`: en
+  la primera mitad la estimación coincide con el primer frame de la mitad. Los 9,2 s de `X` del inicio
+  siguen ahí; como el scorer rellena una abstención con la etiqueta anterior de la mitad, solo cuestan
+  si la primera etiqueta es la equivocada.
+
+## 10. Limitaciones y lo que queda abierto
+
+- **DFL juzga P con un balón que no es el nuestro** (5.1): congelado y teletransportado. La única
+  señal de P sobre balón real es el +1/+2 s de la tabla de error fijo y el Smart Tagging de BAR-ATH
+  (7 de 7, una muestra pequeña). Un juez con balón real durante la parada (no lo hay en DFL ni, por
+  d-edges 2.3, en Metrica) es lo que haría falta para reabrir P.
+- **L hereda el error de la cadena.** Una L de "último toque" (el último jugador al alcance del balón
+  antes de la salida, sin la condición de velocidad del control) no se probó: no estaba entre las
+  cuatro. Es la única forma razonable de la regla del reglamento que queda sin medir.
+- **El margen de la decisión 40 no está aquí.** En el slice no cambia ni un frame: los 690 frames
+  vivos equivocados cerca de un cambio verdadero no son de reanudaciones sin equipo.
