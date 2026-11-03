@@ -344,6 +344,30 @@ veces, 27 s. Por etapas: cargar el tracking y calcular los rasgos 4,1 s, las par
 jugadores 6,0 s, la decodificación 0,04 s; el resto es el artefacto, el ensamblador y el validador
 oficial.
 
+## 9. Las reglas del reto, aplicadas a esta entrega
+
+La organización aclaró el 3 de noviembre de 2026 qué está permitido y qué no, y esa aclaración
+manda sobre la documentación anterior. Esto es lo que hace esta entrega frente a cada prohibición
+(AGENTS.md, reglas 5, 9 y 10).
+
+| prohibición | esta entrega | evidencia |
+|---|---|---|
+| Comprobar la salida contra el vídeo | La cadena no lee el vídeo: entran el tracking automático, el Smart Tagging y la homografía. El vídeo se probó como fuente y no entró, y la salida no se compara con él. | D38, `tools/engine.py` |
+| Etiquetas a mano sobre el partido | Ninguna etiqueta del partido se escribe ni se corrige a mano. Las anotaciones que usamos son de corpus externos con licencia. | AGENTS.md regla 5, `tools/contract.py` |
+| Subir los datos a servicios de IA | El repositorio no contiene datos del partido: `data/` solo trae el README. El trabajo se hace sobre el código y sobre los agregados ya publicados en `docs/analysis/`. | `make guard`, `.gitignore`, AGENTS.md regla 10 |
+| Entrenar o ajustar sobre la verdad o el vídeo | No hay modelo aprendido ni pesos: son umbrales físicos tomados de la literatura, fijados antes del barrido pre-registrado de 27 configuraciones, que no encontró ninguna mejor que el default. | D29, `engine-sensitivity.md` |
+
+**La prueba de que el slice no dirige las decisiones** es que, cuando la regla escrita y el número
+del slice discreparon, ganó la regla: se entregó I1 (0,4585) en vez de I0 (0,4667) (D30), la regla
+del duelo en vez de la combinación con mejor slice (0,5829) y el detector de una sola regla en vez
+del modelo logístico (0,4762 frente a 0,5026). La fase de investigación se cerró después de cinco
+rondas que no cambiaron la entrega (D39–D43).
+
+El ground truth público se usa como **comprobación automática** (`make score`), que la aclaración
+permite, y no como objetivo de búsqueda. Los corpus externos —DFL/IDSSE (CC-BY 4.0) y los partidos
+de muestra de Metrica— se usan dentro de los derechos que declaran sus licencias; donde su escala no
+coincidía con la del reto, no fijaron reglas (D33, D37, D42).
+
 ## Referencias
 
 - Bassek, M., Rein, R., Weber, H., Memmert, D. (2025). *Scientific Data* 12:195,
