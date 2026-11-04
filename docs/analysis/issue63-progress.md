@@ -74,7 +74,8 @@ cada constante de bibliotecas o validadores; faltan auditorías de dependencias 
 
 `tests/test_gt_guard.py` activa un audit hook de Python en el proceso y en procesos Python hijos.
 Los controles negativos comprueban que un acceso prohibido deja evidencia incluso si se captura la
-excepción. La prueba sintética ejecuta la cadena de reproducción real sustituyendo los lectores y
+excepción; también se intenta importar un módulo desde un directorio GT sintético. La prueba
+sintética ejecuta la cadena de reproducción real sustituyendo los lectores y
 detectores cuyos datos licenciados no están disponibles. Una prueba separada, marcada para cuando
 exista el bundle, ejecuta la reproducción con entradas reales y la misma vigilancia. Se exige que
 el hook se haya iniciado en al menos siete procesos: `repro` y los tres pasos de cada build.

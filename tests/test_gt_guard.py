@@ -15,9 +15,11 @@ ROOT = Path(__file__).resolve().parent.parent
 GUARD = Path(__file__).parent / "gt_guard"
 
 
-def guarded(code: str, *args: str, synthetic: bool = False) -> subprocess.CompletedProcess:
+def guarded(
+    code: str, *args: str, synthetic: bool = False, guard_root: Path = ROOT
+) -> subprocess.CompletedProcess:
     env = os.environ.copy()
-    env["POSSESSION_GT_GUARD_ROOT"] = str(ROOT)
+    env["POSSESSION_GT_GUARD_ROOT"] = str(guard_root)
     env["POSSESSION_SYNTHETIC_BUILD"] = "1" if synthetic else "0"
     env["PYTHONPATH"] = os.pathsep.join((str(GUARD), str(ROOT), env.get("PYTHONPATH", "")))
     with tempfile.TemporaryDirectory(prefix="gt-audit-") as directory:
@@ -57,6 +59,23 @@ def test_guard_records_a_blocked_read_even_when_caught() -> None:
     result = guarded(code)
     assert result.returncode == 0
     assert result.gt_attempted
+
+
+def test_guard_blocks_import_from_synthetic_gt_directory(tmp_path) -> None:
+    fake_gt = tmp_path / "evaluation" / "gt"
+    fake_gt.mkdir(parents=True)
+    module = fake_gt / "fake_ground_truth.py"
+    module.write_text("raise AssertionError('module executed')\n", encoding="utf-8")
+    code = (
+        "import importlib.util, sys; "
+        "s=importlib.util.spec_from_file_location('fake_ground_truth', sys.argv[1]); "
+        "s.loader.exec_module(importlib.util.module_from_spec(s))"
+    )
+    result = guarded(code, str(module), guard_root=tmp_path)
+    assert result.returncode != 0
+    assert result.gt_attempted
+    assert "GT access forbidden during submission build" in result.stderr
+    assert "module executed" not in result.stderr
 
 
 def test_b5_generation_default_does_not_read_gt(tmp_path) -> None:
