@@ -493,12 +493,17 @@ def noisy_features(game: metrica_open.Game, sigma: float, seed: int) -> engine.F
     return features_from(game.players_m, home_slots(game), game.ball_m + noise)
 
 
+# Round 6 fitted the noise with W1's stoppages marking the dead frames (DECISIONS 43); DECISIONS 44
+# keeps that sigma, so the fit and its target are pinned to the same detector.
+SIGMA_DETECTOR = "rule"
+
+
 def fit_sigma(
-    game, target_m: float, grid: Sequence[float] = NOISE_SIGMA_GRID, detector: str | None = None
+    game, target_m: float, grid: Sequence[float] = NOISE_SIGMA_GRID, detector: str = SIGMA_DETECTOR
 ) -> tuple:
     """The sigma of `grid` whose noisy game puts the median slow-ball distance closest to
     `target_m` (ties: the smaller), and every `(sigma, distance)` tried. `detector` picks the
-    players' stoppages that mark the dead frames (default: the delivered one)."""
+    players' stoppages that mark the dead frames: round 6's W1 by default."""
     live = _live(len(game.ball_m), game.runs, cd.metrica_dead(game, detector))
     tried = [
         (s, slow_ball_distance(noisy_features(game, s, NOISE_SEED[game.name]), live)) for s in grid
@@ -525,15 +530,8 @@ def degraded(
 
 
 def metrica_dead_on(game, ev: dead_ball.Evidence) -> np.ndarray:
-    """The delivered `D` on a (possibly degraded) Metrica game: the players' stoppages do not
-    read the ball; the tagged ones see this evidence's `out`."""
-    from tools import dead_ball_v2, metrica_open
-
-    runs = [tuple(r) for r in game.runs]
-    kinematic = dead_ball_v2.kinematic_mask(
-        game.players_m, metrica_open.PITCH_M, runs, engine.KINEMATIC
-    )
-    return dead_ball_v2.dead_union(engine.KINEMATIC, ev, kinematic, runs)
+    """The delivered `D` on a (possibly degraded) Metrica game (`change_dating.metrica_dead_on`)."""
+    return cd.metrica_dead_on(game, ev)
 
 
 # -- the variants (pre-registered, lane-m-whether.md section 6) --------------------------------
@@ -650,9 +648,10 @@ def variant_chain(
     if "relay" in parts:
         ctrl, switch = relayed(ctrl, switch, f, runs, frames("relay"))
     # A restart is cancelled only by a control the decoder accepts (DECISIONS 35): the variant's.
-    forced = engine.restart_controls(ev.restarts, switch)
-    state = engine.decode(ctrl, runs, engine.DEFAULT.dwell, forced, switch)
+    # The first-control forcing of DECISIONS 44 reads the same accepted controls, as the reference.
     dead = np.asarray(dead, dtype=bool)
+    forced = engine.restart_forcing(ev.restarts, switch, engine.DEFAULT, dead, runs)
+    state = engine.decode(ctrl, runs, engine.DEFAULT.dwell, forced, switch)
     if "settle" in parts:
         state = settled(state, runs, forced, dead, frames("settle"))
     return cd.Chain(ctrl, switch, forced, state, dead)
@@ -912,7 +911,12 @@ def anatomy_report() -> str:
         "",
         *anatomy_tables(a, truth),
         "",
-        *degraded_tables(game, truth, f, _live(len(f.present), bar_runs, bar_dead)),
+        *degraded_tables(
+            game,
+            truth,
+            f,
+            _live(len(f.present), bar_runs, engine.delivered_dead(ev, detector=SIGMA_DETECTOR)),
+        ),
         "",
         "### Estructura sin verdad: Metrica g1 frente a BAR-ATH",
         "",

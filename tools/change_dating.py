@@ -14,8 +14,8 @@ The instrument, fixed before the first engine output on Metrica
 - **The chain on Metrica** is the delivered one with Metrica's halves: `engine.inputs` (control,
   duel rule, restarts) and `engine.decode`, the events' set pieces and goal kicks as tagged
   restarts (team known, Smart Tagging's window), and the delivered `D`: tagged stoppages
-  (`dead_ball.dead_mask`, "out") united with the players' stoppages (W1,
-  `dead_ball_v2.kinematic_mask`, "rule").
+  (`dead_ball.dead_mask`, "out") united with the players' stoppages (`metrica_kinematic`: the
+  delivered detector, W3 since DECISIONS 44; the lanes of rounds 5-6 measured W1, "rule").
 - **A chain change** is a frame where the decoded state goes from one team to the other inside a
   half (the state, before `D` is written over it: `D` is not a dating rule).
 - **Matching.** Each open-play truth change (E5) is paired with at most one chain change to the
@@ -223,15 +223,40 @@ def _engine(f: engine.Features, ev: dead_ball.Evidence) -> np.ndarray:
 METHODS = {REFERENCE: _engine, **{name: _bar_ath(name) for name in VARIANTS}}
 
 
-def metrica_dead(game: metrica_open.Game, detector: str | None = None) -> np.ndarray:
-    """The delivered `D` on a Metrica game: `engine.delivered_dead`'s union with this game's
-    players (that function is pinned to BAR-ATH's). `detector` defaults to the delivered one."""
+_KINEMATIC: dict[tuple[str, int, str], np.ndarray] = {}
+
+
+def metrica_kinematic(game: metrica_open.Game, detector: str | None = None) -> np.ndarray:
+    """The players' stoppages of a Metrica game, once per game and detector: no degradation
+    touches the players, so every condition shares them. `detector` defaults to the delivered."""
     from tools import dead_ball_v2, metrica_open
 
     detector = detector or engine.KINEMATIC
+    key = (game.name, len(game.players_m), detector)
+    if key not in _KINEMATIC:
+        runs = [tuple(r) for r in game.runs]
+        mask = dead_ball_v2.kinematic_mask(game.players_m, metrica_open.PITCH_M, runs, detector)
+        mask.flags.writeable = False
+        _KINEMATIC[key] = mask
+    return _KINEMATIC[key]
+
+
+def metrica_dead_on(
+    game: metrica_open.Game, ev: dead_ball.Evidence, detector: str | None = None
+) -> np.ndarray:
+    """The delivered `D` on a (possibly degraded) Metrica game: the players' stoppages do not
+    read the ball; the tagged ones see this evidence's `out`."""
+    from tools import dead_ball_v2
+
+    detector = detector or engine.KINEMATIC
     runs = [tuple(r) for r in game.runs]
-    kinematic = dead_ball_v2.kinematic_mask(game.players_m, metrica_open.PITCH_M, runs, detector)
-    return dead_ball_v2.dead_union(detector, game.evidence, kinematic, runs)
+    return dead_ball_v2.dead_union(detector, ev, metrica_kinematic(game, detector), runs)
+
+
+def metrica_dead(game: metrica_open.Game, detector: str | None = None) -> np.ndarray:
+    """The delivered `D` on a Metrica game: `engine.delivered_dead`'s union with this game's
+    players (that function is pinned to BAR-ATH's). `detector` defaults to the delivered one."""
+    return metrica_dead_on(game, game.evidence, detector)
 
 
 # -- changes and their dating error ------------------------------------------------------------
@@ -609,16 +634,12 @@ def keep_mask(runs: Sequence[tuple[int, int]], n: int, donors: Sequence[np.ndarr
 def degraded_chain(game: metrica_open.Game, donors: Sequence[np.ndarray]) -> tuple[Chain, float]:
     """The chain on `game` with the ball deleted where BAR-ATH's was not seen, and the ball share
     left. The players' stoppages do not read the ball; the tagged ones see the degraded `out`."""
-    from tools import bench, dead_ball_v2, metrica_open
+    from tools import bench
 
     n = len(game.features.present)
     runs = [tuple(r) for r in game.runs]
     f, ev = bench.degrade(game.features, game.evidence, (0, n), keep_mask(runs, n, donors))
-    kinematic = dead_ball_v2.kinematic_mask(
-        game.players_m, metrica_open.PITCH_M, runs, engine.KINEMATIC
-    )
-    dead = dead_ball_v2.dead_union(engine.KINEMATIC, ev, kinematic, runs)
-    return delivered(f, ev, runs, dead), float(f.present.mean())
+    return delivered(f, ev, runs, metrica_dead_on(game, ev)), float(f.present.mean())
 
 
 def calibrate(donors: Sequence[np.ndarray] | None = None) -> str:

@@ -15,6 +15,7 @@ import argparse
 import base64
 import datetime as dt
 import hashlib
+import html as html_lib
 import os
 import re
 import shutil
@@ -59,7 +60,9 @@ def render(team: str, repo: str, sha: str, date: str) -> str:
 
     html = re.sub(r"\{\{FIG:([\w.-]+)\}\}", figure, html)
     for key, value in {"TEAM": team, "REPO": repo, "SHA": sha, "DATE": date}.items():
-        html = html.replace("{{" + key + "}}", value)
+        if not value.strip():
+            raise ValueError(f"{key.lower()} must not be empty")
+        html = html.replace("{{" + key + "}}", html_lib.escape(value.strip()))
     left = re.findall(r"\{\{[A-Z:]+[^}]*\}\}", html)
     if left:
         raise ValueError(f"unfilled placeholders: {sorted(set(left))}")
@@ -75,6 +78,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, required=True, help="the PDF to write")
     parser.add_argument("--browser", help="path to Chrome or Edge")
     args = parser.parse_args(argv)
+    if not args.out.stem or args.out.suffix.lower() != ".pdf":
+        parser.error(f"--out must name a .pdf file, got {args.out}")
 
     html = render(args.team, args.repo, sha256(args.submission), args.date)
     out = args.out.resolve()

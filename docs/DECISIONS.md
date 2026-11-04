@@ -1476,3 +1476,22 @@ con la cadena W3 y este protocolo; `docs/technical-report.md` apunta a él. `ben
 `headroom.md` y `runtime.md` se regeneraron con W3. `engine-sensitivity.md` queda como el mapa
 histórico de la decisión 29 sobre W1: un barrido puntuado con el ground truth ya no puede elegir
 nada (`AGENTS.md`, regla 9).
+
+**Revisión de código (PR #70).** `/code-review` encontró 10 puntos; todos se corrigieron:
+
+- **Primer control coherente.** Las variantes de la ronda 6 ya aplican el mismo primer control que su
+  referencia, a través de `engine.restart_forcing`, que también usa `engine.inputs`.
+- **Referencias separadas.** `engine.D31` vuelve a ser histórico (sin primer control) y
+  `engine.NO_DUEL` es "la cadena entregada sin duelo", con la que la 44 compara. Los números de la
+  prueba C no cambian.
+- **σ fijada a W1.** El ajuste de σ de la ronda 6 y su objetivo quedan fijados a W1
+  (`SIGMA_DETECTOR`), así que regenerar ese informe vuelve a dar 0,85.
+- **Máscara de Metrica única.** Las paradas de los jugadores en Metrica se calculan una vez por
+  partido (`change_dating.metrica_kinematic`) y hay una sola función de `D` degradado.
+- **Prueba B reproducible.** La prueba B forma parte de `readjudication.md`, que se regeneró con el
+  comando documentado.
+- **Tests sin datos** del primer control y de las dos reglas de veredicto.
+- **Documento técnico.** `make paper` y `build.py` rechazan un equipo o repositorio vacíos y escapan
+  los valores.
+- **Metrica.** La regla 5 dice ya en qué términos se usan sus datos: el editor, que es el organizador,
+  los ofrece para su uso con reconocimiento de la fuente.

@@ -319,7 +319,7 @@ def test_the_noise_sigma_is_the_one_fitted_on_g1_against_bar_aths_target() -> No
     f, ev, _gt, _cut = bench.load()
     # Round 6 fitted it with W1's stoppages (DECISIONS 43); DECISIONS 44 keeps that sigma.
     live = cw._live(len(f.present), engine.halves(), engine.delivered_dead(ev, detector="rule"))
-    sigma, _tried = cw.fit_sigma(mo.load("g1"), cw.slow_ball_distance(f, live), detector="rule")
+    sigma, _tried = cw.fit_sigma(mo.load("g1"), cw.slow_ball_distance(f, live))
     assert sigma == cw.NOISE_SIGMA_M
 
 

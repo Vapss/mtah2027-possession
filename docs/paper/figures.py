@@ -86,8 +86,11 @@ def rules() -> None:
     _player(c, 8.6, 4.6, HOME, "receiver")
     _player(c, 5.6, 5.6, AWAY)
     _ball(c, 4.8, 3.5)
-    c.add_patch(FancyArrowPatch((1.9, 2.5), (8.1, 4.4), arrowstyle="-|>", mutation_scale=8,
-                                color=BALL, lw=0.8, ls=":"))
+    c.add_patch(
+        FancyArrowPatch(
+            (1.9, 2.5), (8.1, 4.4), arrowstyle="-|>", mutation_scale=8, color=BALL, lw=0.8, ls=":"
+        )
+    )
     c.set_xlabel("nobody controls (> 5 m/s):\nthe last team keeps it", fontsize=6.8)
 
     _pitch(d, "(d) restart")
@@ -95,8 +98,14 @@ def rules() -> None:
     _player(d, 8.9, 2.2, AWAY, "taker")
     _player(d, 5.0, 3.6, HOME)
     _ball(d, 9.75, 1.6)
-    d.text(4.6, 5.6, "tag: Throw-in, away", ha="center", fontsize=6.6,
-           bbox={"fc": "white", "ec": GREY, "lw": 0.5})
+    d.text(
+        4.6,
+        5.6,
+        "tag: Throw-in, away",
+        ha="center",
+        fontsize=6.6,
+        bbox={"fc": "white", "ec": GREY, "lw": 0.5},
+    )
     d.set_xlabel("dead until the kick; then\nthe restarting team has it", fontsize=6.8)
     for ax in axes:
         ax.axis("on")

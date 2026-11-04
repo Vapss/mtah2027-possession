@@ -307,7 +307,8 @@ def chain(
 
 
 def match_kinematic() -> np.ndarray:
-    """BAR-ATH's players' stoppages, W1 exactly as delivered (DECISIONS 36)."""
+    """BAR-ATH's players' stoppages exactly as delivered: W3 since DECISIONS 44 (the lane
+    measured W1, DECISIONS 41), so its reference stays the delivered chain."""
     return np.array(engine._players_stoppages(engine.KINEMATIC))
 
 

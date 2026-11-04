@@ -70,6 +70,8 @@ blocks:  ## #36 structural report of $(BLOCKS_INPUTS) in 22 blocks -> $(BLOCKS_D
 	$(PY) tools/blocks.py $(BLOCKS_INPUTS) --write $(BLOCKS_DOC)
 
 paper:  ## technical document: figures, then the PDF (make paper TEAM="<name>" REPO=<url>)
+	$(if $(strip $(TEAM)),,$(error TEAM is required: make paper TEAM="<name>" REPO=<url>))
+	$(if $(strip $(REPO)),,$(error REPO is required: make paper TEAM="<name>" REPO=<url>))
 	$(PY) docs/paper/figures.py
 	$(PY) docs/paper/build.py --team "$(TEAM)" --repo "$(REPO)" --out "runs/paper/$(TEAM).pdf"
 

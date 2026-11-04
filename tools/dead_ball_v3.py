@@ -182,9 +182,10 @@ def chain(
     ev: dead_ball.Evidence,
     kinematic: np.ndarray,
     variant: str,
-    params: engine.Params = engine.DEFAULT,
+    params: engine.Params = engine.D36,
 ) -> np.ndarray:
-    """The delivered chain with this variant's change: H/A/D/X per frame for the whole match.
+    """The W1 chain (`engine.D36`: what this lane measured against; DECISIONS 44 replaced it) with
+    this variant's change: H/A/D/X per frame for the whole match.
 
     `kinematic` is the players' `D` for the variant (`kinematic_for`): W1 as delivered, or W1 with
     its onsets. It is united with the tagged stoppages exactly as `engine.delivered_dead` does;

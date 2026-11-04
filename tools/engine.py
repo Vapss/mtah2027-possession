@@ -76,7 +76,9 @@ DEFAULT = Params()
 KINEMATIC = "model"
 # The engine before the duel rule (DECISIONS 29-32): what the research lanes measured against and
 # archived. Their evidence stays reproducible against it; nothing delivered uses it.
-D31 = Params(duel=False)
+D31 = Params(duel=False, first_control=False)
+# The delivered chain without the duel rule: what DECISIONS 44 compares the duel rule against.
+NO_DUEL = Params(duel=False)
 # The chain of DECISIONS 36 (W1, no first-control forcing): what rounds 2-6 measured against. With
 # `detector="rule"` it reproduces their reference, SHA-256 72c98ed4bb4a; nothing delivered uses it.
 D36 = Params(first_control=False)
@@ -228,28 +230,42 @@ def inputs(
 ) -> tuple[np.ndarray, np.ndarray | None, dict[int, int] | None]:
     """`decode`'s inputs under these thresholds: `(ctrl, switch, forced)`.
 
-    `switch` is `None` without the duel rule and `forced` is `None` without `restarts`. With the
-    stoppages (`dead`) and `params.first_control`, each stoppage no tagged restart closes also
-    forces the team of its first accepted control (DECISIONS 44), inside `runs` (default: this
-    match's halves); a tag always wins. The one
-    preamble of the delivered chain: the research lanes call it instead of copying it.
+    `switch` is `None` without the duel rule and `forced` is `None` without `restarts`; `forced` is
+    `restart_forcing`'s. The one preamble of the delivered chain: the research lanes call it
+    instead of copying it. Without `dead` there is no first-control forcing, so a caller that
+    wants the delivered chain passes its stoppages.
     """
-    from tools import dead_ball_v2
-
     ctrl = control(f, params)
     switch = uncontested(ctrl, f, params.radius_m) if params.duel else None
     # A restart is cancelled only by a control the decoder accepts: a duel observes no possession
     # (DECISIONS 35).
     accepted = switch if switch is not None else ctrl
-    forced = restart_controls(restarts, accepted) if restarts is not None else None
-    if forced is not None and dead is not None and params.first_control:
-        frames = [r.frame for r in restarts]
-        halves_ = [tuple(r) for r in runs] if runs is not None else halves()
-        extra = dead_ball_v2.first_control_forcing(
-            accepted, np.asarray(dead, bool), halves_, frames
-        )
-        forced = {**extra, **forced}
+    forced = (
+        restart_forcing(restarts, accepted, params, dead, runs) if restarts is not None else None
+    )
     return ctrl, switch, forced
+
+
+def restart_forcing(
+    restarts: Sequence,
+    accepted: np.ndarray,
+    params: Params = DEFAULT,
+    dead: np.ndarray | None = None,
+    runs: Sequence[tuple[int, int]] | None = None,
+) -> dict[int, int]:
+    """`{frame: team}` the decoder forces: the tagged restarts (`restart_controls`) and, with the
+    stoppages (`dead`) and `params.first_control`, the first accepted control after each stoppage
+    no tagged restart closes (DECISIONS 44), inside `runs` (default: this match's halves). A tag
+    always wins a shared frame. `accepted` is the controls the decoder accepts (`switch`)."""
+    from tools import dead_ball_v2
+
+    forced = restart_controls(restarts, accepted)
+    if dead is None or not params.first_control:
+        return forced
+    spans = [tuple(r) for r in runs] if runs is not None else halves()
+    frames = [r.frame for r in restarts]
+    extra = dead_ball_v2.first_control_forcing(accepted, np.asarray(dead, bool), spans, frames)
+    return {**extra, **forced}
 
 
 def chain(

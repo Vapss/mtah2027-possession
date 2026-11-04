@@ -37,8 +37,10 @@ and must never be quoted as if they were.
 5. **Labels come from code, never from a person.** No hand-editing a label file, no hand-correcting a
    model frame by frame, no using the private ground truth. That is a disqualification, not a style
    issue. No data produced by a person about this match either, not even to train or validate
-   (the organisers' clarification, rule 9). Hand-annotated *external* datasets, such as Metrica's
-   open event logs, are allowed when their licence allows it.
+   (the organisers' clarification, rule 9). Hand-annotated *external* datasets are allowed when
+   their licence or their publisher's stated terms allow it: DFL/IDSSE is CC-BY 4.0, and Metrica's
+   open sample data has no licence file but its publisher (the organiser) offers it for use with an
+   acknowledgement of the source, which the technical document gives.
 6. **The repository must regenerate the submitted file.** Same data plus this code plus the
    documented command = byte-identical CSV. Anything stochastic in the labelling path breaks this,
    which is why an LLM may write code and documentation but does not label frames through a sampling
