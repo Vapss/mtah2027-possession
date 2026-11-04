@@ -94,7 +94,7 @@ def test_the_reference_variant_is_the_delivered_file_byte_for_byte() -> None:
     assert labels.tolist() == bench.METHODS["engine"](f, ev).tolist()
     table = pd.DataFrame({"frame": np.arange(len(labels)), "label": labels})
     digest = hashlib.sha256(table.to_csv(index=False, lineterminator="\n").encode()).hexdigest()
-    assert digest.startswith("72c98ed4bb4a")  # DECISIONS 36: the delivered chain's SHA-256
+    assert digest.startswith("7a7f70b68d39")  # DECISIONS 45: the delivered chain's SHA-256
 
 
 @requires_bundle

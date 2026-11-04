@@ -148,14 +148,15 @@ def test_the_engine_before_the_duel_rule_reproduces_its_public_score() -> None:
 
 @requires_bundle
 def test_the_delivered_chain_reproduces_its_public_score() -> None:
-    """DECISIONS 34-36 anchors: bare (duel) 0,4757; tagged D only 0,5189; with the players'
-    stoppages, I0 0,5231 and the delivered chain 0,5368, with 40,0% D in the halves."""
+    """DECISIONS 34-36 and 44 anchors, a reproduction check and never a target: bare (duel) 0,4757;
+    tagged D only 0,5189; with the players' stoppages (W3), I0 and the delivered chain 0,5714, with
+    48,2% D in the halves."""
     assert round(_public_score(engine.run(dead=False, restarts=False)[0])[0], 4) == 0.4757
     assert round(_public_score(engine.run(kinematic=False)[0])[0], 4) == 0.5189
-    assert round(_public_score(engine.run(restarts=False)[0])[0], 4) == 0.5231
+    assert round(_public_score(engine.run(restarts=False)[0])[0], 4) == 0.5714
     table, summary = engine.run()
-    assert round(_public_score(table)[0], 4) == 0.5368
-    assert round(summary["dead_share"], 3) == 0.400
+    assert round(_public_score(table)[0], 4) == 0.5714
+    assert round(summary["dead_share"], 3) == 0.482
 
 
 def test_a_duel_in_the_restart_window_does_not_cancel_the_restart() -> None:
@@ -178,3 +179,38 @@ def test_a_duel_in_the_restart_window_does_not_cancel_the_restart() -> None:
     # Before the fix the duel cancelled the restart and was then ignored: home kept the ball.
     before = engine.decode(ctrl, [(0, n)], 1, engine.restart_controls(restarts, ctrl), switch)
     assert before[15] == 0
+
+
+def _stoppage_scene():
+    """Home controls at 2, an untagged stoppage over [5, 10), away's first control at 12."""
+    n = 16
+    home = np.full(n, 5.0)
+    away = np.full(n, 5.0)
+    home[2], away[12] = 0.5, 0.5
+    f = feats(home=home, away=away, speed=np.full(n, 1.0))
+    dead = np.zeros(n, dtype=bool)
+    dead[5:10] = True
+    return f, dead, [(0, n)]
+
+
+def test_an_untagged_stoppage_restarts_with_its_first_accepted_control() -> None:
+    """DECISIONS 45 (W3): after the stoppage the ball is away's from its first live frame."""
+    f, dead, runs = _stoppage_scene()
+    ctrl, switch, forced = engine.inputs(f, engine.DEFAULT, (), dead, runs)
+    assert forced == {10: 1}
+    state = engine.decode(ctrl, runs, 1, forced, switch)
+    assert state[4] == 0 and state[10] == 1 and state[11] == 1
+
+
+def test_without_the_stoppages_or_with_first_control_off_nothing_is_forced() -> None:
+    f, dead, runs = _stoppage_scene()
+    assert engine.inputs(f, engine.DEFAULT, (), None, runs)[2] == {}
+    assert engine.inputs(f, engine.D36, (), dead, runs)[2] == {}
+    ctrl, switch, forced = engine.inputs(f, engine.D36, (), dead, runs)
+    assert engine.decode(ctrl, runs, 1, forced, switch)[11] == 0  # home carried to the control
+
+
+def test_a_tagged_restart_inside_the_stoppage_wins_over_the_first_control() -> None:
+    f, dead, runs = _stoppage_scene()
+    forced = engine.inputs(f, engine.DEFAULT, (_restart(9, 6, 0),), dead, runs)[2]
+    assert forced == {9: 0}  # the tag closes the stoppage: no first-control forcing
