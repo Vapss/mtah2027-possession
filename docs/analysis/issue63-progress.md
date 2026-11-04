@@ -77,6 +77,17 @@ dependencia. Además, los partidos son universitarios y el acceso a los archivos
 condiciones en Hugging Face. No se descargó ni midió; su posible uso requiere fijar versión, permiso
 y un protocolo acorde con esos límites antes de observar resultados.
 
+Una tercera posibilidad es el [benchmark de ELASTIC](https://github.com/hyunsungkim-ds/elastic/tree/e245224aad7450961eca40954ae2bc85e1e6e696):
+su README publica, bajo CC BY 4.0, eventos corregidos y tiempos de acción y recepción reanotados
+para tres partidos DFL (`J03WMX`, `J03WN1`, `J03WPY`). El [artículo](https://arxiv.org/abs/2608.30227)
+indica que tres analistas fijaron los tiempos observando animaciones del tracking. Es una posible
+referencia externa para estudiar contactos y recepciones, no una verdad completa de spells: el
+origen en el mismo tracking introduce dependencia, los tres partidos DFL ya se exploraron en el
+proyecto y el balón es más limpio que el de la competición. Un protocolo tendría que declarar esas
+limitaciones, evaluar qué acciones implican realmente control y reservar una evaluación no vista.
+No se han abierto las anotaciones ni medido variantes con este benchmark. La licencia del código
+ELASTIC es MPL-2.0 y es distinta de la licencia de las anotaciones; este proyecto no lo incorpora.
+
 ## Pendiente para cerrar #63
 
 1. Resolver la temperatura de B5 con procedencia admisible y documentar sus consumidores.
