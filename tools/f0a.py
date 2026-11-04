@@ -6,9 +6,9 @@ one the evaluation harness already publishes. A baseline that ships with the rep
 input; no match data and no new dependency is involved.
 
     python tools/f0a.py                    # -> runs/f0a/, ledger entry in runs/ledger.jsonl
-    python tools/f0a.py --artifact artifacts/possession.csv   # same chain, real artifact
+    python tools/f0a.py --artifact artifacts/engine.csv       # same chain, real artifact
     make f0a                               # both: the pinned baseline, then the real artifact
-    make f0a ARTIFACT=artifacts/possession.csv
+    make f0a ARTIFACT=artifacts/engine.csv
 
 The baseline mode fails, loudly, when any of these stop being true:
 
@@ -19,15 +19,15 @@ The baseline mode fails, loudly, when any of these stop being true:
    `make submission` cannot silently depend on leftover state.
 
 The artifact mode runs the same validator, determinism check and score with a job's own artifact
-(by default `artifacts/possession.csv`, the #34 emission). Its metrics are not pinned because they
-come from the model, not from the assembly path; the ledger line carries the artifact hash. When
-the licensed bundle is absent the artifact is missing, and the mode skips with a message instead
-of failing -- the pipeline's correctness is already covered by the pinned baseline run.
+(by default `artifacts/engine.csv`, the possession engine's). Its metrics are not pinned because
+they come from the model, not from the assembly path; the ledger line carries the artifact hash.
+When the licensed bundle is absent the artifact is missing, and the mode skips with a message
+instead of failing -- the pipeline's correctness is already covered by the pinned baseline run.
 
-Why its own directory. The documented chain writes `artifacts/possession.csv`, which is also
-the real possession artifact (and what `make verify-b6` reads). Overwriting that with a
-baseline would destroy evidence from another lane, so F0a keeps its inputs and outputs under
-`runs/f0a/`, which is gitignored and disposable. The canonical commands stay as they are.
+Why its own directory. The documented chain writes into `artifacts/`, which also holds the real
+possession artifact (`artifacts/engine.csv`). Overwriting that with a baseline would destroy it,
+so F0a keeps its inputs and outputs under `runs/f0a/`, which is gitignored and disposable. The
+canonical commands stay as they are.
 """
 
 from __future__ import annotations
@@ -225,7 +225,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--artifact",
         default=None,
-        help="job artifact to take through the same chain (e.g. artifacts/possession.csv); "
+        help="job artifact to take through the same chain (e.g. artifacts/engine.csv); "
         "missing means skip, because it needs the licensed bundle",
     )
     parser.add_argument("--workdir", default=None, help="disposable F0a workspace")
@@ -242,7 +242,7 @@ def main(argv: list[str] | None = None) -> int:
     if artifact_path is not None and not artifact_path.is_file():
         print(
             f"SKIP f0a artifact: {artifact_path} is missing -- it needs the licensed tactical "
-            "bundle (python tools/emision.py --output artifacts/possession.csv); nothing scored"
+            "bundle (python tools/engine.py --out artifacts/engine.csv); nothing scored"
         )
         return 0
 

@@ -209,7 +209,7 @@ def chain(
 def match_kinematic(onset: bool, params: Params = DEFAULT) -> np.ndarray:
     """The players' `D` over the delivered match: W1 exactly as delivered, or with its onsets."""
     if not onset:
-        return np.array(engine._players_stoppages())
+        return np.array(engine._players_stoppages("rule"))  # W1: the lane's object (DECISIONS 44)
     from tools import atd
     from tools.ball_gaps import half_runs
 

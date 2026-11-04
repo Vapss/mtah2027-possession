@@ -64,12 +64,22 @@ class Params:
     # A duel does not change possession (DECISIONS 34): a rival control only counts when the team
     # in possession has nobody within `radius_m` of the ball. False is the engine of DECISIONS 29.
     duel: bool = True
+    # A stoppage the tags do not close restarts with the first control the decoder accepts after
+    # it (DECISIONS 44: W3 of DECISIONS 36, "after a stoppage there is a clear possessor"). It only
+    # acts when the chain is given its stoppages (`inputs(..., dead=...)`).
+    first_control: bool = True
 
 
 DEFAULT = Params()
+# The players' stoppages: the logistic detector fitted on the seven DFL matches (DECISIONS 44,
+# W3 of DECISIONS 36), not the one-threshold rule W1 that a ground-truth gate had chosen.
+KINEMATIC = "model"
 # The engine before the duel rule (DECISIONS 29-32): what the research lanes measured against and
 # archived. Their evidence stays reproducible against it; nothing delivered uses it.
 D31 = Params(duel=False)
+# The chain of DECISIONS 36 (W1, no first-control forcing): what rounds 2-6 measured against. With
+# `detector="rule"` it reproduces their reference, SHA-256 72c98ed4bb4a; nothing delivered uses it.
+D36 = Params(first_control=False)
 
 
 @dataclass(frozen=True)
@@ -210,19 +220,35 @@ def restart_controls(restarts: Sequence, ctrl: np.ndarray | None = None) -> dict
 
 
 def inputs(
-    f: Features, params: Params, restarts: Sequence | None
+    f: Features,
+    params: Params,
+    restarts: Sequence | None,
+    dead: np.ndarray | None = None,
+    runs: Sequence[tuple[int, int]] | None = None,
 ) -> tuple[np.ndarray, np.ndarray | None, dict[int, int] | None]:
     """`decode`'s inputs under these thresholds: `(ctrl, switch, forced)`.
 
-    `switch` is `None` without the duel rule and `forced` is `None` without `restarts`. The one
+    `switch` is `None` without the duel rule and `forced` is `None` without `restarts`. With the
+    stoppages (`dead`) and `params.first_control`, each stoppage no tagged restart closes also
+    forces the team of its first accepted control (DECISIONS 44), inside `runs` (default: this
+    match's halves); a tag always wins. The one
     preamble of the delivered chain: the research lanes call it instead of copying it.
     """
+    from tools import dead_ball_v2
+
     ctrl = control(f, params)
     switch = uncontested(ctrl, f, params.radius_m) if params.duel else None
     # A restart is cancelled only by a control the decoder accepts: a duel observes no possession
     # (DECISIONS 35).
     accepted = switch if switch is not None else ctrl
     forced = restart_controls(restarts, accepted) if restarts is not None else None
+    if forced is not None and dead is not None and params.first_control:
+        frames = [r.frame for r in restarts]
+        halves_ = [tuple(r) for r in runs] if runs is not None else halves()
+        extra = dead_ball_v2.first_control_forcing(
+            accepted, np.asarray(dead, bool), halves_, frames
+        )
+        forced = {**extra, **forced}
     return ctrl, switch, forced
 
 
@@ -237,7 +263,7 @@ def chain(
     Control, decode with the restarts that apply under these thresholds, then `D` over the
     stoppages. Shared by `run` and the sensitivity sweep, so the sweep measures what is delivered.
     """
-    ctrl, switch, forced = inputs(f, params, restarts)
+    ctrl, switch, forced = inputs(f, params, restarts, dead)
     state = decode(ctrl, halves(), params.dwell, forced, switch)
     out = labels(state)
     if dead is not None:
@@ -245,20 +271,21 @@ def chain(
     return ctrl, state, out
 
 
-@lru_cache(maxsize=1)
-def _players_stoppages() -> np.ndarray:
+@lru_cache(maxsize=2)
+def _players_stoppages(detector: str = KINEMATIC) -> np.ndarray:
     """BAR-ATH's players' stoppages (DECISIONS 36), once per process: they depend on the players
     only, and are computed over the match's own halves whatever `halves()` returns at call time."""
     from tools import dead_ball_v2
 
-    mask = dead_ball_v2.match_kinematic("rule")
+    mask = dead_ball_v2.match_kinematic(detector)
     mask.flags.writeable = False
     return mask
 
 
-def delivered_dead(evidence, kinematic: bool = True) -> np.ndarray:
+def delivered_dead(evidence, kinematic: bool = True, detector: str = KINEMATIC) -> np.ndarray:
     """The delivered `D`: tagged stoppages (ball out -> restart, DECISIONS 30), united with the
-    stoppages the players' speeds show (W1, DECISIONS 36) when `kinematic`.
+    stoppages the players' speeds show when `kinematic`: the DFL detector since DECISIONS 44
+    (`detector="model"`, W3); `"rule"` is the one-threshold W1 of DECISIONS 36.
 
     The one definition `run`, the bench and the sweep all use, so they measure what is delivered.
     """
@@ -267,17 +294,22 @@ def delivered_dead(evidence, kinematic: bool = True) -> np.ndarray:
     mask = dead_ball.dead_mask(evidence, halves(), "out")
     if not kinematic:
         return mask
-    players = _players_stoppages()
+    players = _players_stoppages(detector)
     if len(players) != len(mask):
         raise ValueError(
             f"the players' stoppages are BAR-ATH's ({len(players)} frames); this evidence has "
             f"{len(mask)}: pass kinematic=False for another match"
         )
-    return dead_ball_v2.dead_union("rule", evidence, players, halves())
+    return dead_ball_v2.dead_union(detector, evidence, players, halves())
 
 
 def run(
-    params: Params = DEFAULT, *, dead: bool = True, restarts: bool = True, kinematic: bool = True
+    params: Params = DEFAULT,
+    *,
+    dead: bool = True,
+    restarts: bool = True,
+    kinematic: bool = True,
+    detector: str = KINEMATIC,
 ) -> tuple[pd.DataFrame, dict]:
     """The delivered chain over the match (DECISIONS 30-36): labels and aggregates.
 
@@ -288,7 +320,7 @@ def run(
 
     f = features(atd.load("tactical"), emision.team_slots())
     evidence = dead_ball.load_evidence() if (dead or restarts) else None
-    mask = delivered_dead(evidence, kinematic) if dead else None
+    mask = delivered_dead(evidence, kinematic, detector) if dead else None
     ctrl, state, lab = chain(f, params, evidence.restarts if restarts else None, mask)
     table = pd.DataFrame({"frame": np.arange(len(lab)), "label": lab})
     inside = np.zeros(len(state), dtype=bool)

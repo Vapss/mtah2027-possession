@@ -392,7 +392,7 @@ def test_the_engine_variant_reproduces_the_delivered_run() -> None:
     assert np.array_equal(labels, engine.run()[0]["label"].to_numpy())
     table = pd.DataFrame({"frame": np.arange(len(labels)), "label": labels})
     csv = table.to_csv(index=False, lineterminator="\n").encode()
-    assert hashlib.sha256(csv).hexdigest().startswith("72c98ed4bb4a")
+    assert hashlib.sha256(csv).hexdigest().startswith("7a7f70b68d39")
 
 
 # -- the amendment before measuring (proposal, "Enmienda") ---------------------------------------

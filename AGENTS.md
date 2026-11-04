@@ -36,7 +36,9 @@ and must never be quoted as if they were.
    `make guard` and the `data-guard` pre-commit hook.
 5. **Labels come from code, never from a person.** No hand-editing a label file, no hand-correcting a
    model frame by frame, no using the private ground truth. That is a disqualification, not a style
-   issue. Hand-labelled data for *training or validating* a model is allowed.
+   issue. No data produced by a person about this match either, not even to train or validate
+   (the organisers' clarification, rule 9). Hand-annotated *external* datasets, such as Metrica's
+   open event logs, are allowed when their licence allows it.
 6. **The repository must regenerate the submitted file.** Same data plus this code plus the
    documented command = byte-identical CSV. Anything stochastic in the labelling path breaks this,
    which is why an LLM may write code and documentation but does not label frames through a sampling
@@ -46,6 +48,17 @@ and must never be quoted as if they were.
    wrong, open an issue upstream.
 8. **Determinism.** Fixed seeds, no network at run time, no timestamps or absolute paths inside
    outputs.
+9. **The public ground truth and the video are for checks, never for choices.** The organisers'
+   clarification takes precedence over every other document, and the team applies its strictest
+   reading (DECISIONS 44). No constant, rule or decision to include a piece of the delivered chain
+   rests on the public 5-minute ground truth, on an instrument scored against it (the slice, the
+   bench, the headroom audit) or on the video; anything that needs tuning is tuned on external data.
+   Scoring a chain that is already decided is an automatic check and is fine; choosing between
+   variants with it is not. No output is ever checked against the video. Enforced by review and by
+   the pre-registration in `docs/DECISIONS.md`: the rule that decides is written before measuring.
+10. **Nothing derived from the match data reaches an AI service except aggregates.** No tracking
+    rows, frame-level labels, images or video in prompts, tool output or agent briefs: jobs print
+    counts, shares and scores only. The data itself never leaves the machine.
 
 ---
 

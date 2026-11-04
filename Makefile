@@ -16,15 +16,13 @@ SUBMISSIONS ?= submissions
 BASELINE ?= evaluation/results/baseline_smooth125.csv
 GRAPHIFY ?= graphify
 GRAPH_OUT ?= graphify-out
-POSTPROCESS_INPUT ?= runs/argmin_baseline.csv
-POSTPROCESS_OUTPUT ?= runs/postprocessed.csv
 F0A_WORKDIR ?= runs/f0a
-ARTIFACT ?= $(ARTIFACTS)/possession.csv
+ARTIFACT ?= $(ARTIFACTS)/engine.csv
 BACKUP_DIR ?= runs/backup
 BLOCKS_INPUTS ?= evaluation/results/baseline_smooth50.csv $(SUBMISSIONS)/backup.csv $(SUBMISSIONS)/engine.csv
 BLOCKS_DOC ?= docs/analysis/blocks.md
 
-.PHONY: help install dev starter test lint fmt guard ingest demo submission validate score score-baselines graph graph-check postprocess verify-b6 f0a backup repro engine engine-sweep blocks ci clean
+.PHONY: help install dev starter test lint fmt guard ingest demo submission validate score score-baselines graph graph-check f0a backup repro engine engine-sweep blocks ci clean
 
 help:  ## list the targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sed 's/:.*## /\t/' | expand -t22
@@ -56,9 +54,6 @@ fmt:  ## apply lint fixes and formatting
 guard:  ## refuse to proceed if licensed data or an oversized file is about to be committed
 	$(PY) tools/guard_data.py
 
-postprocess:  ## apply the fixed #35 cleanup to a frame,label CSV
-	$(PY) tools/postprocess.py $(POSTPROCESS_INPUT) $(POSTPROCESS_OUTPUT)
-
 backup:  ## safety-net entry (DECISIONS 25): smooth50 with ball gaps carried -> $(SUBMISSIONS)/backup.csv
 	$(PY) tools/backup.py --workdir $(BACKUP_DIR) --out $(SUBMISSIONS)/backup.csv
 
@@ -73,9 +68,6 @@ engine-sweep:  ## #6 the pre-registered sensitivity sweep -> docs/analysis/engin
 
 blocks:  ## #36 structural report of $(BLOCKS_INPUTS) in 22 blocks -> $(BLOCKS_DOC) (run `make backup engine` first)
 	$(PY) tools/blocks.py $(BLOCKS_INPUTS) --write $(BLOCKS_DOC)
-
-verify-b6:  ## reproduce B6 public evidence and compare hashes and metrics to its manifest
-	$(PY) tools/verify_b6.py
 
 f0a:  ## run #20 F0a end to end: pinned baseline, then a job artifact when present
 	$(PY) tools/f0a.py --workdir $(F0A_WORKDIR)

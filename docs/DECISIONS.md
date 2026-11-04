@@ -1447,3 +1447,26 @@ importa) y `tools/ablate_emision.py`; el posprocesado con el prior de 14,2 s (`t
 con `viterbi` (prior de 3,4/min) y `mid` (`tools/decoder.py`); y el carril de vídeo, que entrenó un
 detector con el vídeo (`tools/video_ball.py`). Su última versión está en `dev` `8ec43a8`; la
 evidencia que generaron sigue en `docs/` como historia.
+
+**Resultado de la adenda A** (medido después de su pre-registro, `f61feb9`):
+
+- **B.** De las 16 paradas etiquetadas que abre un episodio de menos de 1 s fuera del campo, 11
+  (69%) terminan en un saque de banda, un córner o un saque de puerta (de las 12 con episodios
+  largos, 11). Los episodios cortos son salidas reales: **la corrección 2 sigue revertida**, ahora
+  sin el ground truth (`readjudicate.short_outs`).
+- **G4 con W3:** 48,2% de `D` en los medios tiempos (≤ 51,7%), bloque máximo 70,8% (≤ 88,6%), ningún
+  bloque sin posesiones. **Pasa: W3 entra.**
+- **C.** Con la cadena final, la regla del duelo da 0,4414 frente a 0,4067 degradado (g1 0,4614 /
+  0,4255; g2 0,4215 / 0,3880). **Se queda.**
+
+**La cadena entregada pasa a W3.** SHA-256 `7a7f70b68d39…`, 3,11 posesiones/min, 48,2% de `D`,
+acuerdo con el Smart Tagging 77,7% (W1: 77,1%). Diagnóstico, después de decidir y sin peso:
+
+| | W1 (`72c98ed4bb4a…`) | **W3** |
+|---|---:|---:|
+| `spellF1` slice | 0,5368 | 0,5714 (+0,035; jackknife +0,022 .. +0,059) |
+| `macroF1` slice | 0,8533 | 0,8254 |
+| banco: media / poco balón / peor | 0,4351 / 0,3595 / 0,2400 | 0,4326 / 0,3454 / 0,2571 |
+| Metrica degradado (contexto; no juzga `D`, decisión 42) | 0,4586 | 0,4414 |
+
+Ninguna de estas filas decidió nada: la cadena es la que da la reaplicación de las reglas escritas.

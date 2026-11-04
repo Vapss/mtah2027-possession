@@ -823,7 +823,7 @@ def main(argv: list[str] | None = None) -> int:
         action="append",
         default=[],
         metavar="MODULE:ATTR",
-        help="also score a dict of bench-style methods, or one, e.g. tools.decoder:METHODS",
+        help="also score a dict of bench-style methods, or one, e.g. tools.dating:METHODS",
     )
     parser.add_argument(
         "--pair",

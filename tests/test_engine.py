@@ -148,14 +148,15 @@ def test_the_engine_before_the_duel_rule_reproduces_its_public_score() -> None:
 
 @requires_bundle
 def test_the_delivered_chain_reproduces_its_public_score() -> None:
-    """DECISIONS 34-36 anchors: bare (duel) 0,4757; tagged D only 0,5189; with the players'
-    stoppages, I0 0,5231 and the delivered chain 0,5368, with 40,0% D in the halves."""
+    """DECISIONS 34-36 and 44 anchors, a reproduction check and never a target: bare (duel) 0,4757;
+    tagged D only 0,5189; with the players' stoppages (W3), I0 and the delivered chain 0,5714, with
+    48,2% D in the halves."""
     assert round(_public_score(engine.run(dead=False, restarts=False)[0])[0], 4) == 0.4757
     assert round(_public_score(engine.run(kinematic=False)[0])[0], 4) == 0.5189
-    assert round(_public_score(engine.run(restarts=False)[0])[0], 4) == 0.5231
+    assert round(_public_score(engine.run(restarts=False)[0])[0], 4) == 0.5714
     table, summary = engine.run()
-    assert round(_public_score(table)[0], 4) == 0.5368
-    assert round(summary["dead_share"], 3) == 0.400
+    assert round(_public_score(table)[0], 4) == 0.5714
+    assert round(summary["dead_share"], 3) == 0.482
 
 
 def test_a_duel_in_the_restart_window_does_not_cancel_the_restart() -> None:

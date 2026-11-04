@@ -6,7 +6,9 @@ Why it exists
 -------------
 Every earlier attempt to date a change of possession was judged on the public slice only, which is
 17 possessions and the same ones the bench transplants (DECISIONS 37, lane-dating.md). Metrica's
-open sample games 1 and 2 (github.com/metrica-sports/sample-data, open licence) carry what the slice
+open sample games 1 and 2 (github.com/metrica-sports/sample-data: no licence file; its README
+asks for responsible use and an acknowledgement of the source, which the technical document
+gives) carry what the slice
 lacks: two whole matches of tracking at 25 fps, the same provider family as our export, and a
 hand-annotated event log whose frames are synchronised to that tracking. A change of possession can
 be dated from the events without our engine and without our labels.

@@ -74,9 +74,10 @@ def delivered(
     dead: np.ndarray,
     params: engine.Params = engine.DEFAULT,
 ) -> Chain:
-    ctrl, switch, forced = engine.inputs(f, params, ev.restarts)
+    runs = [tuple(r) for r in runs]
+    ctrl, switch, forced = engine.inputs(f, params, ev.restarts, dead, runs)
     forced = forced or {}
-    state = engine.decode(ctrl, [tuple(r) for r in runs], params.dwell, forced, switch)
+    state = engine.decode(ctrl, runs, params.dwell, forced, switch)
     return Chain(ctrl, switch, forced, state, np.asarray(dead, dtype=bool))
 
 
@@ -213,7 +214,7 @@ def _bar_ath(name: str):
 
 def _engine(f: engine.Features, ev: dead_ball.Evidence) -> np.ndarray:
     """The reference variant on BAR-ATH: the delivered chain rebuilt from this module's pieces.
-    `tests/test_change_dating.py` pins it to the delivered file's SHA-256 (`72c98ed4bb4a`)."""
+    `tests/test_change_dating.py` pins it to the delivered file's SHA-256 (`7a7f70b68d39`)."""
     chain = delivered(f, ev, engine.halves(), engine.delivered_dead(ev))
     return finish(chain.state, chain.dead)
 
@@ -222,14 +223,15 @@ def _engine(f: engine.Features, ev: dead_ball.Evidence) -> np.ndarray:
 METHODS = {REFERENCE: _engine, **{name: _bar_ath(name) for name in VARIANTS}}
 
 
-def metrica_dead(game: metrica_open.Game) -> np.ndarray:
+def metrica_dead(game: metrica_open.Game, detector: str | None = None) -> np.ndarray:
     """The delivered `D` on a Metrica game: `engine.delivered_dead`'s union with this game's
-    players (that function is pinned to BAR-ATH's)."""
+    players (that function is pinned to BAR-ATH's). `detector` defaults to the delivered one."""
     from tools import dead_ball_v2, metrica_open
 
+    detector = detector or engine.KINEMATIC
     runs = [tuple(r) for r in game.runs]
-    kinematic = dead_ball_v2.kinematic_mask(game.players_m, metrica_open.PITCH_M, runs, "rule")
-    return dead_ball_v2.dead_union("rule", game.evidence, kinematic, runs)
+    kinematic = dead_ball_v2.kinematic_mask(game.players_m, metrica_open.PITCH_M, runs, detector)
+    return dead_ball_v2.dead_union(detector, game.evidence, kinematic, runs)
 
 
 # -- changes and their dating error ------------------------------------------------------------
@@ -612,8 +614,10 @@ def degraded_chain(game: metrica_open.Game, donors: Sequence[np.ndarray]) -> tup
     n = len(game.features.present)
     runs = [tuple(r) for r in game.runs]
     f, ev = bench.degrade(game.features, game.evidence, (0, n), keep_mask(runs, n, donors))
-    kinematic = dead_ball_v2.kinematic_mask(game.players_m, metrica_open.PITCH_M, runs, "rule")
-    dead = dead_ball_v2.dead_union("rule", ev, kinematic, runs)
+    kinematic = dead_ball_v2.kinematic_mask(
+        game.players_m, metrica_open.PITCH_M, runs, engine.KINEMATIC
+    )
+    dead = dead_ball_v2.dead_union(engine.KINEMATIC, ev, kinematic, runs)
     return delivered(f, ev, runs, dead), float(f.present.mean())
 
 

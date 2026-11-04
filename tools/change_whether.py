@@ -493,10 +493,13 @@ def noisy_features(game: metrica_open.Game, sigma: float, seed: int) -> engine.F
     return features_from(game.players_m, home_slots(game), game.ball_m + noise)
 
 
-def fit_sigma(game, target_m: float, grid: Sequence[float] = NOISE_SIGMA_GRID) -> tuple:
+def fit_sigma(
+    game, target_m: float, grid: Sequence[float] = NOISE_SIGMA_GRID, detector: str | None = None
+) -> tuple:
     """The sigma of `grid` whose noisy game puts the median slow-ball distance closest to
-    `target_m` (ties: the smaller), and every `(sigma, distance)` tried."""
-    live = _live(len(game.ball_m), game.runs, cd.metrica_dead(game))
+    `target_m` (ties: the smaller), and every `(sigma, distance)` tried. `detector` picks the
+    players' stoppages that mark the dead frames (default: the delivered one)."""
+    live = _live(len(game.ball_m), game.runs, cd.metrica_dead(game, detector))
     tried = [
         (s, slow_ball_distance(noisy_features(game, s, NOISE_SEED[game.name]), live)) for s in grid
     ]
@@ -527,8 +530,10 @@ def metrica_dead_on(game, ev: dead_ball.Evidence) -> np.ndarray:
     from tools import dead_ball_v2, metrica_open
 
     runs = [tuple(r) for r in game.runs]
-    kinematic = dead_ball_v2.kinematic_mask(game.players_m, metrica_open.PITCH_M, runs, "rule")
-    return dead_ball_v2.dead_union("rule", ev, kinematic, runs)
+    kinematic = dead_ball_v2.kinematic_mask(
+        game.players_m, metrica_open.PITCH_M, runs, engine.KINEMATIC
+    )
+    return dead_ball_v2.dead_union(engine.KINEMATIC, ev, kinematic, runs)
 
 
 # -- the variants (pre-registered, lane-m-whether.md section 6) --------------------------------

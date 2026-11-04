@@ -183,10 +183,11 @@ def chain(
     ev: dead_ball.Evidence,
     kinematic: np.ndarray,
     variant: str,
-    params: engine.Params = engine.DEFAULT,
+    params: engine.Params = engine.D36,
     edges: Params = DEFAULT,
 ) -> np.ndarray:
-    """The delivered chain with this variant's end of a stoppage: H/A/D/X for the whole match.
+    """The W1 chain (DECISIONS 36, `engine.D36`: what this lane measured against; DECISIONS 44
+    replaced it) with this variant's end of a stoppage: H/A/D/X for the whole match.
 
     `kinematic` is the players' `D` for the variant (W1, or W1 with its onsets). `engine` unites it
     with the tagged stoppages exactly as `engine.delivered_dead` does. Every other variant first
@@ -365,7 +366,7 @@ def explore() -> dict:
     f = engine.features(atd.load("tactical"), emision.team_slots())
     ev = dead_ball.load_evidence()
     runs = engine.halves()
-    w1 = np.array(engine._players_stoppages())
+    w1 = np.array(engine._players_stoppages("rule"))  # the lane measured W1 (DECISIONS 40)
     estimates = [r.frame for r in ev.restarts]
     through = [x for x in estimates if 0 <= x < len(w1) and w1[x]]
     past = []
