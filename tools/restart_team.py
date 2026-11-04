@@ -212,12 +212,15 @@ def infer(
     params: engine.Params = engine.DEFAULT,
     rt: Params = DEFAULT,
     runs: Sequence[tuple[int, int]] | None = None,
+    dead: np.ndarray | None = None,
 ) -> Inference:
     """Name the team of every team-less `TEAMLESS` restart of `ev` as `variant` does.
 
     Restarts are visited in frame order, and L reads the possession of the variant's own chain:
     the delivered decoder with the tagged teams and every team this variant has named so far, so
-    a throw-in right after another one sees the first one's team. Other restarts are unchanged.
+    a throw-in right after another one sees the first one's team. With the stoppages (`dead`) it
+    also forces each untagged stoppage's first accepted control, as the delivered chain does
+    (DECISIONS 45). Other restarts are unchanged.
     """
     if variant not in VARIANTS:
         raise ValueError(f"unknown variant {variant!r}; expected one of {', '.join(VARIANTS)}")
@@ -254,7 +257,7 @@ def infer(
             law[i] = None if mate is None else 1 - mate
         else:
             current = [dataclasses.replace(x, team=t) for x, t in zip(restarts, teams)]
-            forced = engine.restart_controls(current, accepted)
+            forced = engine.restart_forcing(current, accepted, params, dead, runs)
             state = engine.decode(ctrl, runs, params.dwell, forced, switch)
             half = _half(r.frame, runs)
             after = anchor[i] is not None and anchor[i] != r.frame and anchor[i] in restart_frames
@@ -302,7 +305,7 @@ def chain(
     """
     runs = engine.halves()
     dead = dead_ball_v2.dead_union("rule", ev, kinematic, runs)
-    restarts = infer(f, ev, variant, params, rt, runs).restarts
+    restarts = infer(f, ev, variant, params, rt, runs, dead).restarts
     return engine.chain(f, params, restarts, dead)[2]
 
 

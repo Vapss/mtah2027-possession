@@ -77,6 +77,9 @@ KINEMATIC = "model"
 # The engine before the duel rule (DECISIONS 29-32): what the research lanes measured against and
 # archived. Their evidence stays reproducible against it; nothing delivered uses it.
 D31 = Params(duel=False, first_control=False)
+# The delivered chain without the duel rule (first-control forcing kept): what isolates the duel
+# rule in a comparison against the delivered chain.
+NO_DUEL = Params(duel=False)
 # The chain of DECISIONS 36 (W1, no first-control forcing): what rounds 2-6 measured against. With
 # `detector="rule"` it reproduces their reference, SHA-256 72c98ed4bb4a; nothing delivered uses it.
 D36 = Params(first_control=False)

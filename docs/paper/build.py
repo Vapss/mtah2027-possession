@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import argparse
 import base64
-import datetime as dt
 import hashlib
 import html as html_lib
 import os
@@ -74,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--team", required=True, help="the team name exactly as registered")
     parser.add_argument("--repo", required=True, help="the public repository URL")
     parser.add_argument("--submission", type=Path, default=REPO / "submissions/engine.csv")
-    parser.add_argument("--date", default=dt.date.today().strftime("%B %Y"))
+    parser.add_argument("--date", required=True, help='title-line date, e.g. "November 2026"')
     parser.add_argument("--out", type=Path, required=True, help="the PDF to write")
     parser.add_argument("--browser", help="path to Chrome or Edge")
     args = parser.parse_args(argv)

@@ -529,9 +529,8 @@ def degraded(
     return bench.degrade(f, ev, (0, n), cd.keep_mask(runs, n, donors))
 
 
-def metrica_dead_on(game, ev: dead_ball.Evidence) -> np.ndarray:
-    """The delivered `D` on a (possibly degraded) Metrica game (`change_dating.metrica_dead_on`)."""
-    return cd.metrica_dead_on(game, ev)
+# The delivered `D` on a (possibly degraded) Metrica game: one function, in change_dating.
+metrica_dead_on = cd.metrica_dead_on
 
 
 # -- the variants (pre-registered, lane-m-whether.md section 6) --------------------------------
@@ -705,7 +704,7 @@ def anatomy_tables(a: Anatomy, truth: Truth) -> list[str]:
         "",
         *fair_head(),
         fair_row("cadena entregada", truth, a.fair),
-        fair_row("sin la regla del duelo (`engine.D31`)", truth, a.no_duel),
+        fair_row("sin la regla del duelo (`engine.NO_DUEL`)", truth, a.no_duel),
         "",
         f"Ronda 5: {a.round5['matched']} emparejados, {a.round5['missed']} perdidos, "
         f"{a.round5['extra']} sobrantes. Sus sobrantes, por qué: "
@@ -780,7 +779,7 @@ def _metrica_inputs(game):
     runs = [tuple(r) for r in game.runs]
     dead = cd.metrica_dead(game)
     chain = cd.delivered(game.features, game.evidence, runs, dead)
-    no_duel = cd.delivered(game.features, game.evidence, runs, dead, engine.D31)
+    no_duel = cd.delivered(game.features, game.evidence, runs, dead, engine.NO_DUEL)
     return runs, chain, no_duel
 
 
@@ -808,12 +807,13 @@ def degraded_tables(game, truth: Truth, bar_f: engine.Features, bar_live: np.nda
     sigma, tried = fit_sigma(game, target)
     donors = external.our_ball_halves()
     runs = [tuple(r) for r in game.runs]
-    live = _live(len(game.ball_m), runs, cd.metrica_dead(game))
+    live = _live(len(game.ball_m), runs, cd.metrica_dead(game, SIGMA_DETECTOR))
     lines = [
         "### El balón degradado: el ruido de posición, fijado en g1",
         "",
         f"Objetivo (BAR-ATH, sin etiquetas): mediana de la distancia de un balón lento (≤ "
-        f"{_abs(SLOW_MPS, 0)} m/s, en el campo, fuera del `D` entregado) a su jugador más cercano "
+        f"{_abs(SLOW_MPS, 0)} m/s, en el campo, fuera del `D` de W1, con el que la ronda 6 fijó σ) "
+        f"a su jugador más cercano "
         f"= **{_abs(target)} m**. Rejilla σ {_abs(NOISE_SIGMA_GRID[0])} .. "
         f"{_abs(NOISE_SIGMA_GRID[-1])} m por eje (suavizado {_abs(NOISE_SMOOTH_S, 0)} s); en g1: "
         + ", ".join(f"σ {_abs(s_)} → {_abs(d)} m" for s_, d in tried[::4])
@@ -852,7 +852,7 @@ def degraded_tables(game, truth: Truth, bar_f: engine.Features, bar_live: np.nda
     for name, (f, ev) in built.items():
         dead = metrica_dead_on(game, ev)
         chain = cd.delivered(f, ev, runs, dead)
-        alt = cd.delivered(f, ev, runs, dead, engine.D31)
+        alt = cd.delivered(f, ev, runs, dead, engine.NO_DUEL)
         found[name] = anatomy(truth, chain, f, runs, alt)
         lines.append(fair_row(name, truth, found[name].fair))
     lines += [
@@ -945,7 +945,7 @@ def anatomy_report() -> str:
     labels = pd.read_csv(bench.GROUND_TRUTH).label.astype(str).str.strip().str.upper().to_numpy()
     window = bench.pm.valid_runs(bench.pm.label_codes(list(labels)))
     slice_truth = public_truth(labels, window)
-    bar_no_duel = cd.delivered(f, ev, bar_runs, engine.delivered_dead(ev), engine.D31)
+    bar_no_duel = cd.delivered(f, ev, bar_runs, engine.delivered_dead(ev), engine.NO_DUEL)
     s = anatomy_on(slice_truth, bar, f, window, bar_no_duel)
     lines += anatomy_tables(s, slice_truth)
     return "\n".join(lines) + "\n"

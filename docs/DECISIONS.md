@@ -1559,3 +1559,22 @@ al integrarse. Las dos dicen lo mismo en lo esencial: el slice y el banco compru
   independiente, como dice la 44 de toda cifra del slice.
 - **Sigue abierto en #63**: la justificación externa de 1,5 m / 5 m/s / `dwell` 1 más allá de la
   física. Esta decisión no la da por cerrada.
+
+**Segunda revisión de código (PR #70, tras integrar `dev`).** 9 puntos, todos corregidos:
+
+- **El duelo, aislado otra vez.** La anatomía de la ronda 6 vuelve a aislar la regla del duelo: compara
+  con `engine.NO_DUEL` (la entrega sin duelo, con primer control), no con `engine.D31`, que desde
+  `8ebd11f` es histórico y tampoco tiene primer control. `NO_DUEL` vuelve a existir para eso; la
+  prueba retirada de Metrica ya no lo usa.
+- **Un solo detector en el perfil de σ.** El perfil de ruido de la ronda 6 mide g1 y BAR-ATH con el
+  mismo detector con que se fijó σ (W1).
+- **restart-team sigue a la entrega.** Infiere el equipo con el primer control de la cadena
+  entregada.
+- **Caché correcta.** La caché de paradas de Metrica se indexa por los jugadores y las mitades, no por
+  el nombre.
+- **Paper determinista.** `make paper` fija la fecha (`PAPER_DATE`).
+- **Regla 11 en su sitio.** Va dentro de las no negociables de `AGENTS.md`.
+- **Metrica coherente con la 44.** El docstring y las referencias del paper la citan con su salvedad y
+  su atribución.
+- **Correcciones a lo de arriba.** En la primera revisión, la frase "con la que la 45 compara" ya no
+  vale tras la adenda B, y de las "dos reglas de veredicto" queda una: la prueba B.

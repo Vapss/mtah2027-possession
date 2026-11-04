@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import hashlib
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -223,7 +224,7 @@ def _engine(f: engine.Features, ev: dead_ball.Evidence) -> np.ndarray:
 METHODS = {REFERENCE: _engine, **{name: _bar_ath(name) for name in VARIANTS}}
 
 
-_KINEMATIC: dict[tuple[str, int, str], np.ndarray] = {}
+_KINEMATIC: dict[tuple[str, str, str], np.ndarray] = {}
 
 
 def metrica_kinematic(game: metrica_open.Game, detector: str | None = None) -> np.ndarray:
@@ -232,7 +233,9 @@ def metrica_kinematic(game: metrica_open.Game, detector: str | None = None) -> n
     from tools import dead_ball_v2, metrica_open
 
     detector = detector or engine.KINEMATIC
-    key = (game.name, len(game.players_m), detector)
+    digest = hashlib.blake2b(np.ascontiguousarray(game.players_m).tobytes(), digest_size=16)
+    digest.update(repr([tuple(r) for r in game.runs]).encode())
+    key = (game.name, digest.hexdigest(), detector)
     if key not in _KINEMATIC:
         runs = [tuple(r) for r in game.runs]
         mask = dead_ball_v2.kinematic_mask(game.players_m, metrica_open.PITCH_M, runs, detector)

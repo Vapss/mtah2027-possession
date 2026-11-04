@@ -18,6 +18,7 @@ GRAPHIFY ?= graphify
 GRAPH_OUT ?= graphify-out
 F0A_WORKDIR ?= runs/f0a
 ARTIFACT ?= $(ARTIFACTS)/engine.csv
+PAPER_DATE ?= November 2026
 BACKUP_DIR ?= runs/backup
 BLOCKS_INPUTS ?= evaluation/results/baseline_smooth50.csv $(SUBMISSIONS)/backup.csv $(SUBMISSIONS)/engine.csv
 BLOCKS_DOC ?= docs/analysis/blocks.md
@@ -73,7 +74,7 @@ paper:  ## technical document: figures, then the PDF (make paper TEAM="<name>" R
 	$(if $(strip $(TEAM)),,$(error TEAM is required: make paper TEAM="<name>" REPO=<url>))
 	$(if $(strip $(REPO)),,$(error REPO is required: make paper TEAM="<name>" REPO=<url>))
 	$(PY) docs/paper/figures.py
-	$(PY) docs/paper/build.py --team "$(TEAM)" --repo "$(REPO)" --out "runs/paper/$(TEAM).pdf"
+	$(PY) docs/paper/build.py --team "$(TEAM)" --repo "$(REPO)" --date "$(PAPER_DATE)" --out "runs/paper/$(TEAM).pdf"
 
 f0a:  ## run #20 F0a end to end: pinned baseline, then a job artifact when present
 	$(PY) tools/f0a.py --workdir $(F0A_WORKDIR)
