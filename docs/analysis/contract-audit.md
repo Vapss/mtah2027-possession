@@ -1,10 +1,10 @@
 # Contrato a escala completa: la entrega en los 199.319 frames
 
-Generado por `python tools/contract_audit.py --submission submissions/engine.csv --artifact runs/engine/artifacts/engine.csv --ball-artifact artifacts/possession.csv` desde el commit `80675e5`. No se edita a mano.
+Generado por `python tools/contract_audit.py --submission submissions/engine.csv --artifact runs/engine/artifacts/engine.csv --ball-artifact artifacts/possession.csv` desde el commit `808f10a`. No se edita a mano.
 
-Pre-registro: `docs/experiments/contrato-partido-completo.md`. No lee ground truth,
-video,
-Smart Tagging ni coordenadas: solo la submission, el artefacto y la presencia de balón.
+Pre-registro: `docs/experiments/contrato-partido-completo.md`.
+No lee ground truth, video, Smart Tagging ni coordenadas: solo la submission, el
+artefacto y la presencia de balón.
 
 **Insumo:** presencia de balón desde `artifacts/possession.csv` (confidence > 0)
 
