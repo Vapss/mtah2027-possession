@@ -308,7 +308,7 @@ def chain(
 
 def match_kinematic() -> np.ndarray:
     """BAR-ATH's players' stoppages, W1 exactly as delivered (DECISIONS 36)."""
-    return np.array(engine._players_stoppages())
+    return np.array(engine._players_stoppages(engine.KINEMATIC))
 
 
 def bench_methods(

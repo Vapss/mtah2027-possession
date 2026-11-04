@@ -22,7 +22,7 @@ BACKUP_DIR ?= runs/backup
 BLOCKS_INPUTS ?= evaluation/results/baseline_smooth50.csv $(SUBMISSIONS)/backup.csv $(SUBMISSIONS)/engine.csv
 BLOCKS_DOC ?= docs/analysis/blocks.md
 
-.PHONY: help install dev starter test lint fmt guard ingest demo submission validate score score-baselines graph graph-check f0a backup repro engine engine-sweep blocks ci clean
+.PHONY: help install dev starter test lint fmt guard ingest demo submission validate score score-baselines graph graph-check f0a backup repro engine engine-sweep blocks paper ci clean
 
 help:  ## list the targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sed 's/:.*## /\t/' | expand -t22
@@ -68,6 +68,10 @@ engine-sweep:  ## #6 the pre-registered sensitivity sweep -> docs/analysis/engin
 
 blocks:  ## #36 structural report of $(BLOCKS_INPUTS) in 22 blocks -> $(BLOCKS_DOC) (run `make backup engine` first)
 	$(PY) tools/blocks.py $(BLOCKS_INPUTS) --write $(BLOCKS_DOC)
+
+paper:  ## technical document: figures, then the PDF (make paper TEAM="<name>" REPO=<url>)
+	$(PY) docs/paper/figures.py
+	$(PY) docs/paper/build.py --team "$(TEAM)" --repo "$(REPO)" --out "runs/paper/$(TEAM).pdf"
 
 f0a:  ## run #20 F0a end to end: pinned baseline, then a job artifact when present
 	$(PY) tools/f0a.py --workdir $(F0A_WORKDIR)

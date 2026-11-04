@@ -1470,3 +1470,9 @@ acuerdo con el Smart Tagging 77,7% (W1: 77,1%). Diagnóstico, después de decidi
 | Metrica degradado (contexto; no juzga `D`, decisión 42) | 0,4586 | 0,4414 |
 
 Ninguna de estas filas decidió nada: la cadena es la que da la reaplicación de las reglas escritas.
+
+**Documentos.** El documento técnico pasa a ser el paper en inglés de `docs/paper/` (`make paper`),
+con la cadena W3 y este protocolo; `docs/technical-report.md` apunta a él. `bench.md`, `blocks.md`,
+`headroom.md` y `runtime.md` se regeneraron con W3. `engine-sensitivity.md` queda como el mapa
+histórico de la decisión 29 sobre W1: un barrido puntuado con el ground truth ya no puede elegir
+nada (`AGENTS.md`, regla 9).
