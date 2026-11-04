@@ -27,7 +27,21 @@ El manifiesto histórico B6 fija el hash del artefacto con la temperatura anteri
 la nueva temperatura cambia sus probabilidades y no puede satisfacer ese hash. `make verify-b6`
 solo puede comprobar esa evidencia con el artefacto histórico correspondiente; queda por preparar
 una ruta reproducible para conservarla sin devolver la temperatura anterior al flujo actual. No se
-actualiza el manifiesto sin regeneración y auditoría con el bundle.
+actualiza el manifiesto sin regeneración y auditoría con el bundle. Se propone comprobar la evidencia
+histórica en un checkout aislado del commit anterior al cambio, sin usarla para generar la entrega:
+
+```bash
+git worktree add --detach runs/b6-historical ebec47f9267edae2089389dd845ac4340bdb1a53
+cd runs/b6-historical
+uv sync --locked
+# MTAH_DATA_DIR debe apuntar al bundle licenciado, fuera del repositorio.
+.venv/bin/python tools/emision.py --output artifacts/possession.csv
+make verify-b6
+```
+
+En Windows se usa `.venv/Scripts/python`. El commit conserva la emisión histórica; la auditoría no
+vuelve a adoptar su temperatura para el modelo actual. **Ruta propuesta, no verificada:** aquí no hay
+bundle y no se ha comprobado el hash antiguo ni el resultado de `make verify-b6` en ese checkout.
 
 ## Constantes activas identificadas en la ruta del motor
 
