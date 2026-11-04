@@ -1,0 +1,177 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{verbatim}
+\usepackage{parskip}
+
+\title{El experimento que queda para el contrato final\\\large U1 \texttt{onset} y la prueba de congelación}
+\author{Ester --- evaluación y medición}
+\date{4 de noviembre de 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Con trece días hasta la entrega y la aclaración del 3 de noviembre vigente, se recorrió de arriba
+hacia abajo el espacio de experimentos posibles: desde el contrato (archivo válido, reproducible,
+admisible, bien puntuado) hasta la palanca concreta. Siete candidatos se descartan por no poder
+cambiar el CSV o por carecer de juez admisible. Sobreviven dos: la adopción de U1 \texttt{onset}
+---único cambio con evidencia externa e independiente--- y la prueba de congelación del contrato.
+Ambos se ejecutaron sobre \texttt{origin/dev} = \texttt{89693fa} con el bundle licenciado. U1 cuesta
+$-0{,}0105$ de \texttt{spellF1} en el slice, pero ese negativo es nulo a IoU 0,5 (0 discordantes) y
+se mide en la ventana que sub-muestrea las paradas; la prueba de congelación pasa sin reservas:
+hash idéntico con el ground truth borrado y sin red, 588 pruebas en verde.
+\end{abstract}
+
+\section{Pregunta y restricciones}
+
+La aclaración prohíbe entrenar, ajustar o calibrar sobre el ground truth y sobre el vídeo provisto,
+y exige que los parámetros se ajusten solo con datos externos. Prohíbe además comprobar la salida
+contra el vídeo y subir los datos provistos a servicios de IA. Bajo esa regla, el slice público
+---7.500 frames, 17 posesiones--- deja de ser criterio de selección: se reporta, no se usa para
+elegir. Quedan como árbitros admisibles el corpus externo licenciado (DFL, CC-BY), las señales
+generadas que no son ground truth (Smart Tagging, tracking) y los invariantes estructurales.
+
+La pregunta es entonces: ¿qué experimento puede todavía mejorar el archivo que se entrega, y con
+qué evidencia?
+
+\section{El embudo}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{4.3cm}p{5.1cm}p{5.0cm}}
+\toprule
+candidato & qué mediría & veredicto \\
+\midrule
+Rejilla de 27 configuraciones en DFL & si $1{,}5/5/1$ sobrevive fuera & no: DFL tiene 4,58 pos/min y la cadena 3,62; el corpus premia fragmentar y elige la esquina $(2{,}0/7/1)$ \\
+Estabilidad con $\sigma=0{,}85$ m & centro de la meseta sin GT & no: un predictor constante es perfectamente estable; sin ancla de acierto no decide \\
+\texttt{dwell} o duelo por acuerdo con Smart Tagging & más inercia, más acuerdo & no: ST premia la inercia; no es juez de fechas \\
+Ronda 7 de fechado & mover el cambio & no: D42 ya la midió con juez externo; error 0,04--0,16 s \\
+Vídeo o imputación de huecos & rellenar el 41\% sin balón & no: negativos y sin juez admisible que los readmita \\
+Fusión con el broadcast (C2) & posesión en los huecos tácticos & no para 13 días: \#7 (sincronía) abierto \\
+Post-proceso B6 & absorber micro-segmentos & no: constantes del slice; \#35 fuera de \texttt{repro} \\
+\textbf{U1 \texttt{onset}} & adelantar el inicio de las paradas W1 & \textbf{sí}: constantes en DFL, 7/7 allí, negativo local nulo a IoU 0,5 \\
+\textbf{Prueba de congelación} & que el contrato se sostenga & \textbf{sí}: es la única que puede fallar en silencio \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{U1 \texttt{onset}: el único cambio admisible}
+
+\subsection{Diseño}
+
+U1 adelanta el inicio de cada parada W1 hasta el momento en que los jugadores desaceleran
+(umbral 3,25 m/s, tope 40 s), con las constantes fijadas en DFL y una regla declarada allí:
+precisión de frame $\geq 0{,}90$ y menor mediana de $|$error de inicio$|$. Ninguna constante se
+barrió contra el partido. El resto de la cadena (motor, duelo, reanudaciones) queda idéntico. Se
+reconstruyeron ambas cadenas y se puntuaron con el scorer oficial.
+
+\subsection{Resultados}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrrr}
+\toprule
+métrica & entregado & U1 & $\Delta$ \\
+\midrule
+\texttt{spellF1} (media de 5 IoU) & \textbf{0,5368} & 0,5263 & $\mathbf{-0{,}0105}$ \\
+\texttt{macroF1} & 0,8533 & 0,8585 & $+0{,}0052$ \\
+IoU 0,5 TP/FP/FN & 11/10/6 & 11/10/6 & idéntico \\
+IoU 0,3 TP/FP/FN & 13/8/4 & 12/9/5 & $-1$ \\
+IoU 0,6 TP/FP/FN & 9/12/8 & 10/11/7 & $+1$ \\
+precisión de $D$ (slice) & 0,8768 & 0,8666 & $-0{,}0102$ \\
+recall de $D$ (slice) & 0,8965 & 0,9333 & $+0{,}0368$ \\
+$\%D$ del partido & 40,0 & 43,5 & $+3{,}5$ pp \\
+posesiones del partido & 383 & 372 & $-11$ \\
+posesiones/min & 3,62 & 3,51 & $-0{,}11$ \\
+duración media & 10,0 s & 9,6 s & $-0{,}4$ s \\
+acuerdo con Smart Tagging & 77,1 & \textbf{77,8} & $+0{,}7$ pp \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Evidencia externa registrada (\texttt{lane-dead-v3} \S2.1, \S9): en DFL el inicio de W1 llega
+5,4 s tarde; \texttt{onset} lo lleva a 0,5 s, con precisión de frame $0{,}954 \to 0{,}919$ y
+recall $0{,}682 \to 0{,}790$, y gana los 7 partidos con y sin balón.
+
+\subsection{Por qué el negativo local no manda}
+
+El slice público son cinco minutos del \emph{inicio} del partido: 19,6\% de $D$ y 88,2\% de balón
+detectado, frente a 56,9\% de balón en el partido. Las paradas son el régimen que ese bloque
+sub-muestrea, y DFL ---donde U1 gana 7/7--- tiene 40,7--51,7\% de $D$. Un cambio que actúa sobre el
+inicio de las paradas pesa en el slice la mitad de lo que pesará en el partido. Además, el
+$-0{,}0105$ tiene \textbf{0 discordantes a IoU 0,5}: no mueve ninguna posesión en el umbral que
+ordena; el cambio de media viene del borde de una posesión corta a IoU 0,3.
+
+\section{La prueba de congelación}
+
+Clon limpio de \texttt{origin/dev}, \texttt{uv sync --locked}, bundle por enlace fuera del repo.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lr}
+\toprule
+prueba & resultado \\
+\midrule
+\texttt{make engine} (build + validador oficial) & 14,2 s, 199.319 filas, válido \\
+\texttt{make repro} (dos builds + comparación) & 34,0 s, SHA igual a \texttt{72c98ed4\ldots} \\
+build con \texttt{evaluation/gt} borrado & SHA idéntico \\
+build sin red (\texttt{unshare -rn}) & SHA idéntico \\
+\texttt{pytest -q} & 588 passed, 5 skipped (DFL/Metrica ausentes) \\
+RSS máximo & 931 MiB \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Las tres identidades de hash demuestran, mecánicamente y no por promesa, que el archivo entregado no
+depende del ground truth ni de la red.
+
+\section{Regla de decisión, escrita antes de mirar}
+
+Se adopta U1 si y solo si:
+\begin{enumerate}
+\item DFL sigue 7/7 con las constantes fijas;
+\item el acuerdo con Smart Tagging no baja ($77{,}8 \geq 77{,}1$);
+\item la estructura pasa: ningún bloque con más de 70\% de $D$, al menos una posesión por bloque,
+      posesiones/min en $3{,}4 \pm 0{,}5$ (3,51);
+\item el slice se reporta una vez y no es compuerta.
+\end{enumerate}
+Las cuatro se cumplen. El experimento dice que el cambio es admisible y que la evidencia admisible
+lo favorece; cambiarlo o no es decisión del lead, porque altera el CSV.
+
+Si se adopta: \texttt{make engine}, \texttt{make repro}, validador, hash nuevo, y en el informe el
+$-0{,}0105$ con sus 0 discordantes y $n=17$, marcado \emph{in-sample}. Si no se adopta, se declara
+como residual: ``único cambio admisible, no adoptado por prudencia a doce días del cierre''.
+
+\section{Comandos}
+
+\begin{verbatim}
+git clone https://github.com/Vapss/mtah2027-possession.git
+cd mtah2027-possession && git checkout origin/dev
+ln -s <bundle>/tactical data/tactical
+ln -s <bundle>/broadcast data/broadcast
+uv sync --locked --inexact
+.venv/bin/python tools/engine.py --build runs/engine \
+    --submission submissions/engine.csv
+.venv/bin/python tools/repro.py --against submissions/engine.csv
+.venv/bin/python tools/dead_ball_v3.py --variant onset \
+    --labels /tmp/u1.csv --gt public
+\end{verbatim}
+
+\section{Límites}
+
+\begin{itemize}
+\item DFL usa otra definición de posesión (4,58 posesiones/min, 41--52\% de $D$): sirve para el
+      \emph{tiempo} de la parada, no para la escala. Es lo único que se le pide.
+\item La referencia de 3,4 posesiones/min sale del slice; se usa como cordura, no como objetivo.
+\item Si el partido real tuviera $\sim$20\% de $D$ como el slice, U1 añadiría paradas donde no las
+      hay. Es el riesgo declarado de la apuesta.
+\item No hay juez local de fechas de parada: las fases \texttt{SET PIECES} del Smart Tagging cubren
+      43.987 frames y solo el 35\% son $D$ en la cadena; son demasiado gruesas.
+\item La decisión sobre U1 no arregla la temperatura ni el prior 355: eso es \#63 y no cambia
+      etiquetas.
+\end{itemize}
+
+\end{document}
