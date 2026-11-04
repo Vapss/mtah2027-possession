@@ -23,8 +23,9 @@ ARTIFACT ?= $(ARTIFACTS)/possession.csv
 BACKUP_DIR ?= runs/backup
 BLOCKS_INPUTS ?= evaluation/results/baseline_smooth50.csv $(SUBMISSIONS)/backup.csv $(SUBMISSIONS)/engine.csv
 BLOCKS_DOC ?= docs/analysis/blocks.md
+CONTRACT_DOC ?= docs/analysis/contract-audit.md
 
-.PHONY: help install dev starter test lint fmt guard ingest demo submission validate score score-baselines graph graph-check postprocess verify-b6 f0a backup repro engine engine-sweep blocks ci clean
+.PHONY: help install dev starter test lint fmt guard ingest demo submission validate score score-baselines graph graph-check postprocess verify-b6 f0a backup repro engine engine-sweep blocks contract-audit ci clean
 
 help:  ## list the targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sed 's/:.*## /\t/' | expand -t22
@@ -73,6 +74,11 @@ engine-sweep:  ## #6 the pre-registered sensitivity sweep -> docs/analysis/engin
 
 blocks:  ## #36 structural report of $(BLOCKS_INPUTS) in 22 blocks -> $(BLOCKS_DOC) (run `make backup engine` first)
 	$(PY) tools/blocks.py $(BLOCKS_INPUTS) --write $(BLOCKS_DOC)
+
+contract-audit:  ## #21 full-match contract test of $(SUBMISSIONS)/engine.csv -> $(CONTRACT_DOC) (needs the bundle)
+	$(PY) tools/contract_audit.py --submission $(SUBMISSIONS)/engine.csv \
+	  --artifact runs/engine/artifacts/engine.csv --from-tracking \
+	  --write $(CONTRACT_DOC)
 
 verify-b6:  ## reproduce B6 public evidence and compare hashes and metrics to its manifest
 	$(PY) tools/verify_b6.py
