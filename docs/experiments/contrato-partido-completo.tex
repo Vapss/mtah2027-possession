@@ -1,0 +1,179 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-nodecimaldot]{babel}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{amsmath}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{microtype}
+\usepackage{seqsplit}
+\usepackage[hidelinks]{hyperref}
+
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\sha}{72c98ed4bb4af230f1325573f557366297425a2e23943240c6aef99fd8884544}
+
+\title{El mejor experimento que queda para el contrato final\\
+\large Prueba de contrato a escala completa sobre los 199.319 frames}
+\author{Bruno --- carril de datos, bal\'on muerto y guardi\'an de m\'etrica (\#21)}
+\date{4 de noviembre de 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Con trece d\'ias para el cierre, los experimentos de modelado est\'an agotados: seis rondas y
+quince variantes no movieron la entrega, y la aclaraci\'on de la organizaci\'on del 3 de noviembre
+proh\'ibe elegir con el ground truth. Este documento recorre de arriba hacia abajo los candidatos que
+quedaban, descarta los que no pueden responder la pregunta y propone el \'unico que s\'i puede:
+una prueba de contrato, pre-registrada y sin ground truth, sobre el archivo entregado en el partido
+completo. El resultado es un certificado estructural: la pol\'itica de huecos largos ---el punto
+ciego del slice--- no produce ninguna posesi\'on imposible, y la \'unica desviaci\'on es una
+abstenci\'on de 9,2 s al inicio del primer tiempo que no afecta la m\'etrica de ranking.
+\end{abstract}
+
+\section{El problema}
+
+La entrega se juega en el partido completo: 199.319 frames, con bal\'on detectado en el 56,9\%.
+El slice p\'ublico tiene 17 posesiones en cinco minutos y bal\'on en el 88,2\% de sus frames. Toda la
+evidencia local ---el score, el jackknife y el banco de trasplante--- reutiliza esas mismas 17
+posesiones. El banco, adem\'as, no es independiente: se punt\'ua contra el bloque p\'ublico.
+
+La aclaraci\'on de la organizaci\'on agrega una restricci\'on dura: no se puede entrenar, ajustar ni
+calibrar con el ground truth ni con el v\'ideo provisto. La auditor\'ia del equipo encontr\'o que dos
+constantes entregadas se eligieron con el slice (los umbrales del motor y la regla del duelo) y que
+otras dos no llegan al CSV o no mueven la etiqueta (la temperatura y el prior de 355 frames). El
+archivo entregado es limpio; lo expuesto es el mecanismo de selecci\'on.
+
+Queda entonces una pregunta que ning\'un experimento local responde y que s\'i importa para el
+contrato: \emph{¿la salida es estructuralmente posible en el partido completo, sobre todo donde el
+bal\'on falta y el slice no puede mirar?}
+
+\section{La iteraci\'on: qu\'e se descart\'o y por qu\'e}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}p{4.6cm}p{1.6cm}p{7.4cm}@{}}
+\toprule
+Candidato & Veredicto & Motivo \\
+\midrule
+Rejilla de 27 configuraciones en DFL & descartado &
+D37: el corpus cambia la definici\'on de posesi\'on (4,58 pos/min y 41--52\% de \code{D}, frente a
+3,4 y 19,6\%). Todos los decodificadores pierden 7/7 por escala, no por la regla. \\
+Re-arbitrar el duelo en DFL & descartado &
+Mismo sesgo: DFL marca por toque, \code{CHALLENGE.md} por control. Un test por frame mide la
+definici\'on de DFL, no la nuestra. \\
+Re-arbitrar 1,5 m y 5 m/s en DFL & descartado &
+Son umbrales de \emph{nuestro} sensor: el bal\'on tiene ruido (mediana bal\'on--jugador 1,84 m); el
+de DFL es limpio. Su \'optimo de radio no es el nuestro. \\
+Barrido de estabilidad sin GT & descartado como selecci\'on &
+Mide robustez, no correcci\'on. Su ancla de 3,4 pos/min sale del ground truth p\'ublico; elegir con
+ella vuelve al mismo problema. \\
+U1 \code{onset} (\#39) & no es experimento &
+Decisi\'on sobre evidencia externa ya medida (DFL 7/7). Cambia el CSV; la decide el lead. \\
+M\'as variantes de slice o banco & descartado &
+$n=17$, in-sample, y ahora prohibido como selecci\'on (regla 11). \\
+V\'ideo o imputaci\'on de huecos & descartado &
+Negativos cerrados (D38, D34). \\
+Pregunta escrita a la organizaci\'on & no es experimento &
+M\'axima prioridad, pero no produce una medici\'on. Sigue pendiente de aprobaci\'on. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+La conclusi\'on de la iteraci\'on es que ning\'un candidato de modelado puede producir evidencia
+admisible nueva: o cambia la definici\'on, o mide el sensor equivocado, o elige con el GT. Lo que
+queda es una prueba de falsaci\'on sobre el archivo real, a escala completa.
+
+\section{El experimento propuesto: contrato a escala completa}
+
+Pre-registro: \code{docs/experiments/contrato-partido-completo.md}, escrito antes de la primera
+corrida. No lee ground truth, v\'ideo, Smart Tagging ni coordenadas: solo la submission, el
+artefacto y la presencia de bal\'on por frame. Cuatro compuertas con umbral fijado de antemano:
+
+\begin{enumerate}[leftmargin=1.4em]
+\item \textbf{T1 --- contrato del archivo.} 199.319 filas; frames $0..199.318$; etiquetas en
+$\{H,A,D,X\}$; \code{X} solo fuera de las dos mitades; la submission coincide con el argmax del
+artefacto.
+\item \textbf{T2 --- ninguna posesi\'on de m\'as de 300 s.} Un tramo maximal de $H$ o $A$ no puede
+llegar a 7.500 frames. Es la prueba que ataca la pol\'itica de huecos $>500$ frames, que el slice
+no puede medir.
+\item \textbf{T3 --- ninguna transici\'on de equipo sin bal\'on.} En cada hueco de $\ge 500$
+frames, cero transiciones directas $H\leftrightarrow A$: un cambio exige un control, y un control
+exige bal\'on observado. Las reanudaciones entran por $D$ y se reportan aparte.
+\item \textbf{T4 --- ning\'un bloque degenerado.} En los 22 bloques de 5 minutos: $\%D \le 85$ y al
+menos una posesi\'on por bloque.
+\end{enumerate}
+
+La regla de decisi\'on es expl\'icita: si las cuatro pasan, el archivo se puede congelar y el
+resultado entra en el documento t\'ecnico como certificado sin ground truth. Si alguna falla, se
+reportan los frames y el hueco exacto, no se cambia nada en silencio, y la decisi\'on es del lead.
+
+\section{Resultado sobre el archivo entregado}
+
+Insumo: \code{submissions/engine.csv}, SHA-256 \texttt{\seqsplit{72c98ed4bb4af230f1325573f557366297425a2e23943240c6aef99fd8884544}} (la cadena entregada), 199.319 filas.
+Presencia de bal\'on: 56,94\%, validada por bloque contra \code{docs/analysis/blocks.md}.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+Compuerta & Resultado & Detalle \\
+\midrule
+T1 contrato del archivo & \textbf{falla} & 230 \code{X} dentro de una mitad, en 11.185--11.414 \\
+T2 posesi\'on $>5$ min & pasa & 0; la m\'as larga dura 1.532 frames (61,3 s) \\
+T3 transici\'on sin bal\'on & pasa & 49 huecos $\ge500$; 0 transiciones $H\leftrightarrow A$; 43 reanudaciones $D\to H/A$ \\
+T4 bloque degenerado & pasa & 22 bloques; m\'aximo 65,5\% de \code{D}; m\'inimo 3 posesiones \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Lo que s\'i queda certificado.} El partido tiene 186 huecos de bal\'on; el m\'as largo
+dura 8.689 frames (5 min 47 s). Hay 49 huecos de 500 frames o m\'as, la banda que concentra el 67\%
+del d\'eficit de bal\'on y que el slice no puede medir. En esos 49 huecos no hay \emph{ninguna}
+transici\'on directa de equipo: la cadena arrastra el estado, como dice su pol\'itica, y los 43
+cambios que aparecen son reanudaciones que pasan por $D$. La posesi\'on m\'as larga del partido es
+de 61,3 s. En t\'erminos estructurales, la pol\'itica de huecos largos no produce nada imposible.
+
+\paragraph{La \'unica desviaci\'on.} Los 230 frames de \code{X} son los primeros 9,2 s del primer
+tiempo, desde el saque inicial. El motor no tiene estado hasta el primer control y se abstiene; el
+ground truth p\'ublico, en esos frames, tiene posesi\'on ($A$ 166, $H$ 64). El scorer oficial
+rellena las \code{X} de una mitad con la primera etiqueta conocida, as\'i que la m\'etrica de
+ranking no cambia por ellas: el 0,5368 ya las incluye. Lo que s\'i cuestan es \code{macroF1}:
+230 de 158.857 frames graduados (0,14\%), o 3,07\% de la ventana p\'ublica. No es un defecto
+estructural; es una abstenci\'on honesta con un costo acotado.
+
+\paragraph{Decisi\'on propuesta.} Aceptar y documentar. La alternativa ---inicializar el estado con
+el equipo m\'as cercano al primer bal\'on observado--- es un cambio de una l\'inea en el motor
+(\#6), mejorar\'ia solo \code{macroF1} y llegar\'ia a nueve d\'ias del freeze con un CSV nuevo. No
+compensa para la m\'etrica que rankea. Si el lead prefiere cerrar T1, se hace en el carril del
+motor, y esta misma prueba se vuelve a correr sobre el archivo final.
+
+\section{Qu\'e no resuelve}
+
+Un pase no prueba que la pol\'itica de huecos largos sea \emph{correcta}, solo que es posible: no
+hay corpus admisible que diga lo segundo. Tampoco cubre el Smart Tagging, las coordenadas del
+bal\'on ni U1. Por eso la prueba se corre sobre el archivo definitivo antes del freeze, con
+\code{make contract-audit}, y el resultado se reporta junto al 0,5368 marcado como in-sample.
+
+\section*{Reproducci\'on}
+
+\begingroup\footnotesize
+\begin{verbatim}
+make engine                 # submissions/engine.csv + runs/engine/artifacts/engine.csv
+make contract-audit         # necesita el bundle licenciado
+python tools/contract_audit.py --submission submissions/engine.csv \
+  --artifact runs/engine/artifacts/engine.csv \
+  --ball-artifact artifacts/possession.csv \
+  --write docs/analysis/contract-audit.md
+\end{verbatim}
+\endgroup
+
+El segundo comando es el que se us\'o en este documento (sin bundle, con la presencia de bal\'on
+del artefacto intermedio). El primero es el que debe correr el freeze.
+
+\end{document}
