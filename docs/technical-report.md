@@ -352,7 +352,7 @@ documentación anterior. Esta sección audita dos cosas distintas: **el archivo 
 
 | prohibición | el archivo entregado |
 |---|---|
-| Comprobar la salida contra el vídeo | **cumple.** La cadena no lee el vídeo: entran el tracking automático, el Smart Tagging y la homografía. El vídeo se probó como entrada y quedó fuera (D38); no existe ningún procedimiento que compare la salida contra él. |
+| Comprobar la salida contra el vídeo | **Revisión limitada.** En la ruta del motor revisada no se observa lectura ni comparación de la salida con vídeo. El vídeo se probó como entrada y quedó fuera (D38); esto no certifica acciones fuera de esa ruta. |
 | Etiquetas a mano sobre el partido | **cumple.** Ninguna etiqueta del partido se escribe ni se corrige a mano. Las anotaciones que usamos son de corpus externos (DFL/IDSSE, CC-BY 4.0, y los partidos de muestra de Metrica). |
 | Subir los datos provistos a servicios de IA | **no hay rastro en el repositorio.** `make guard` protege frente a ciertos archivos licenciados en Git; el repositorio también contiene herramientas de descarga, por lo que no se afirma que todas funcionen sin red. No podemos certificar lo que ocurrió fuera del repositorio; la regla 10 de AGENTS.md lo prohíbe desde hoy. |
 | Entrenar o ajustar sobre la verdad o el vídeo | **no cumple del todo.** Ver la tabla siguiente. |
@@ -367,9 +367,10 @@ documentación anterior. Esta sección audita dos cosas distintas: **el archivo 
 | prior de duración `355` frames | `tools/postprocess.py`, D20 | media de 14,2 s del slice | no: #35 no está en `make repro` |
 | 15 variantes rechazadas | D30, D31, D38, D39–D43 | compuertas con Δ del slice y del banco | no: el rechazo basado en el slice también forma parte de la selección |
 
-**Qué significa.** El archivo entregado no lee la verdad ni el vídeo en ningún punto de la cadena:
-`make engine` consume tracking, XML, Smart Tagging y homografía, y los únicos lectores de
-`evaluation/gt` son `score` y `compare`, fuera del build. La exposición es la **selección**: con 17
+**Qué significa.** Según la revisión estática de la ruta `make engine`/`make repro`, el build no
+lee la verdad ni el vídeo. Otras herramientas del repositorio sí leen GT para análisis; falta la
+prueba mecánica de #63 para bloquear la lectura desde el build y sus procesos hijos. La exposición
+es la **selección**: con 17
 posesiones, seis decisiones tomadas sobre la misma muestra hacen que 0,5368 sea una cifra *in-sample*
 y no evidencia. El banco de trasplante tampoco es independiente, porque se puntúa contra el bloque
 público. Las señales que quedan fuera de esa muestra son el acuerdo con el Smart Tagging (77,1%), los

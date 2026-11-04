@@ -1332,9 +1332,9 @@ equipo vuelve a jugar el balón antes que el rival).
 
 **Decidido.** La aclaración de la organización del 3-nov-2026 manda sobre `CHALLENGE.md` y sobre
 cualquier respuesta anterior. Se auditó la entrega y, por separado, cómo se eligió. El archivo que se
-entrega no lee el ground truth ni el vídeo en ningún punto de la cadena: `make engine` consume
-tracking, XML, Smart Tagging y homografía, y los únicos lectores de `evaluation/gt` son `score` y
-`compare`. La exposición está en la **selección**: la temperatura de emisión se calibró *in-sample*
+entrega, según la revisión estática de la ruta `make engine`/`make repro`, no lee el ground truth
+ni el vídeo; consume tracking, XML, Smart Tagging y homografía. Falta la garantía mecánica de #63
+que impida la lectura de GT también en procesos hijos. La exposición está en la **selección**: la temperatura de emisión se calibró *in-sample*
 sobre 5.640 frames públicos (D18), y los umbrales 1,5 m / 5 m/s / `dwell` 1 (D29) y la regla del
 duelo (D34) se adoptaron midiendo en el slice.
 
