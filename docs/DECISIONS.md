@@ -486,6 +486,11 @@ posesiones por ser cortas. Cada operación reduce el número de runs RLE y el bu
 fijo, con límite defensivo de `n_frames+1`. Cualquier otro umbral o variante corresponde al barrido
 pre-registrado de #22.
 
+**Aclaración #63.** El prior de 355 se retira: si los vecinos empatan en duración original,
+también empatan en distancia a cualquier prior; si no empatan, la duración ya decide. Su presencia
+nunca modificaba el desempate. Se conserva la elección del vecino anterior y no se cambia ninguno
+de los otros umbrales de #35. Este postproceso no forma parte de la cadena `make repro`.
+
 **Baseline y resultado público.** El baseline se generó desde el commit de `dev` `d9e0bfb` con
 `python tools/emision.py --output artifacts/possession.csv`; H/A toma el argmin del artefacto y las
 filas con `confidence=0` se emiten como X. Los archivos reproducibles `runs/argmin_baseline.csv`,

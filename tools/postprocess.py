@@ -30,7 +30,6 @@ class PostprocessConfig:
 
     minimum_frames: int = 15
     merge_gap_frames: int = 15
-    duration_prior_frames: int = 355
 
 
 DEFAULT_CONFIG = PostprocessConfig()
@@ -137,13 +136,12 @@ def _next_operation(segments: list[_Segment], config: PostprocessConfig) -> tupl
         ]
         if same_team:
             return index, same_team[0]
-        # Prefer the longer original neighbor. The 355-frame prior is a secondary tie-break,
-        # followed by the previous neighbor for a fully equal candidate.
+        # Prefer the longer original neighbor, then the previous neighbor on a tie. The former
+        # duration-prior tie-break could never decide: equal anchors have equal prior distances.
         target = min(
             neighbors,
             key=lambda neighbor: (
                 -segments[neighbor].anchor_duration,
-                abs(segments[neighbor].anchor_duration - config.duration_prior_frames),
                 neighbor > index,
             ),
         )
@@ -238,7 +236,6 @@ def main(argv: list[str] | None = None) -> int:
                     "config": {
                         "minimum_frames": DEFAULT_CONFIG.minimum_frames,
                         "merge_gap_frames": DEFAULT_CONFIG.merge_gap_frames,
-                        "duration_prior_frames": DEFAULT_CONFIG.duration_prior_frames,
                     },
                 },
                 indent=2,

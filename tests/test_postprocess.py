@@ -43,7 +43,7 @@ def test_merges_same_team_runs_across_14_frame_interruption_but_not_15() -> None
     assert postprocess(over_limit, [(0, len(over_limit))]) == over_limit
 
 
-def test_prior_duration_and_previous_neighbor_are_deterministic_tie_breaks() -> None:
+def test_longer_anchor_and_previous_neighbor_are_deterministic_tie_breaks() -> None:
     source = labels(("H", 20), ("A", 5), ("D", 20))
     result = postprocess(source, [(0, len(source))])
     assert result == ["H"] * 25 + ["D"] * 20
