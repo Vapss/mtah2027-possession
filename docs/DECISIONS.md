@@ -1325,3 +1325,35 @@ la regla, y el vídeo ya no entra (decisión 38). Lo que queda hasta la entrega 
 congelarla (#26) y reproducirla. Una ronda nueva solo se abre con un juez o un dato nuevo, por
 ejemplo una verdad de Metrica con la definición del reto (un `RECOVERY` abre posesión solo si su
 equipo vuelve a jugar el balón antes que el rival).
+
+---
+
+## 44. La aclaración de reglas del 3 de noviembre: el slice comprueba, no elige
+
+**Decidido.** La aclaración de la organización del 3-nov-2026 manda sobre `CHALLENGE.md` y sobre
+cualquier respuesta anterior. Se auditó la entrega y, por separado, cómo se eligió. El archivo que se
+entrega no lee el ground truth ni el vídeo en ningún punto de la cadena: `make engine` consume
+tracking, XML, Smart Tagging y homografía, y los únicos lectores de `evaluation/gt` son `score` y
+`compare`. La exposición está en la **selección**: la temperatura de emisión se calibró *in-sample*
+sobre 5.640 frames públicos (D18), y los umbrales 1,5 m / 5 m/s / `dwell` 1 (D29) y la regla del
+duelo (D34) se adoptaron midiendo en el slice.
+
+Desde hoy ninguna variante ni parámetro se elige por el número del slice ni por el banco de
+trasplante; el slice es comprobación, igual que el banco. La temperatura se sustituye por una
+constante estructural —no mueve el `argmax`, solo la columna de probabilidad—; el prior de 355
+frames de `postprocess.py` (#35, fuera de `make repro`) pasa a un valor redondo; y la rejilla de 27
+configuraciones de D29 se corre por `tools/external.py` sobre DFL y Metrica. Si 1,5 / 5 / 1 no
+sobrevive fuera del slice, se reporta el conflicto antes del freeze y se decide, sin cambiar el
+número en silencio.
+
+**Por qué.** El pre-registro evita el p-hacking, no cambia la fuente del dato: una compuerta escrita
+antes de medir cuyo criterio es «≥6 posesiones discordantes en el slice» sigue siendo ajuste sobre el
+ground truth. Con 17 posesiones y seis decisiones sobre la misma muestra, 0,5368 es *in-sample*. Las
+señales fuera de esa muestra son el acuerdo con el Smart Tagging (77,1%), los siete partidos de DFL y
+los invariantes sobre las 199.319 filas. Declararlo es más barato que dejar que un auditor encuentre
+`in-sample calibrated` en el código.
+
+**Coste.** El informe técnico pierde la frase «el slice no dirigió las decisiones», que era falsa en
+el sentido estricto; gana una sección que admite el riesgo y dice qué se está haciendo. Cambiar la
+temperatura no altera ninguna etiqueta entregada. Si la rejilla no sobrevive en el corpus externo, el
+freeze se decide con un conflicto sobre la mesa, no con un número que ya no se puede justificar.

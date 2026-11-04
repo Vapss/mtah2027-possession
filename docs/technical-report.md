@@ -344,6 +344,48 @@ veces, 27 s. Por etapas: cargar el tracking y calcular los rasgos 4,1 s, las par
 jugadores 6,0 s, la decodificación 0,04 s; el resto es el artefacto, el ensamblador y el validador
 oficial.
 
+## 9. Las reglas del reto: qué cumple la entrega y qué no
+
+La organización aclaró el 3 de noviembre de 2026 qué está permitido, y esa aclaración manda sobre la
+documentación anterior. Esta sección audita dos cosas distintas: **el archivo que se entrega** y
+**cómo se eligió la cadena**. La primera está limpia; la segunda no del todo, y el detalle va abajo.
+
+| prohibición | el archivo entregado |
+|---|---|
+| Comprobar la salida contra el vídeo | **cumple.** La cadena no lee el vídeo: entran el tracking automático, el Smart Tagging y la homografía. El vídeo se probó como entrada y quedó fuera (D38); no existe ningún procedimiento que compare la salida contra él. |
+| Etiquetas a mano sobre el partido | **cumple.** Ninguna etiqueta del partido se escribe ni se corrige a mano. Las anotaciones que usamos son de corpus externos (DFL/IDSSE, CC-BY 4.0, y los partidos de muestra de Metrica). |
+| Subir los datos provistos a servicios de IA | **no hay rastro en el repositorio.** `data/` solo trae el README, `make guard` lo bloquea y ninguna herramienta abre red. No podemos certificar lo que ocurrió fuera del repositorio; la regla 10 de AGENTS.md lo prohíbe desde hoy. |
+| Entrenar o ajustar sobre la verdad o el vídeo | **no cumple del todo.** Ver la tabla siguiente. |
+
+### 9.1 Parámetros que se eligieron con el ground truth público
+
+| parámetro | dónde | qué se hizo | ¿se entrega? |
+|---|---|---|---|
+| temperatura `2,857386876 m` | `tools/emision.py`, D18 | calibrada *in-sample* por log-loss H/A sobre los 5.640 frames públicos vivos con balón | sí, pero no mueve la etiqueta: el `argmax` es invariante a la temperatura, solo cambia la probabilidad y la confianza |
+| umbrales `1,5 m` / `5 m/s` / `dwell = 1` | D29 | elegidos entre 5 configuraciones comparadas por `spellF1` del slice | **sí** |
+| regla del duelo | D34 | adoptada tras medir 0,4585 → 0,5189 en el slice | **sí** |
+| prior de duración `355` frames | `tools/postprocess.py`, D20 | media de 14,2 s del slice | no: #35 no está en `make repro` |
+| 15 variantes rechazadas | D30, D31, D38, D39–D43 | compuertas con Δ del slice y del banco | no: rechazar solo puede costar puntos |
+
+**Qué significa.** El archivo entregado no lee la verdad ni el vídeo en ningún punto de la cadena:
+`make engine` consume tracking, XML, Smart Tagging y homografía, y los únicos lectores de
+`evaluation/gt` son `score` y `compare`, fuera del build. La exposición es la **selección**: con 17
+posesiones, seis decisiones tomadas sobre la misma muestra hacen que 0,5368 sea una cifra *in-sample*
+y no evidencia. El banco de trasplante tampoco es independiente, porque se puntúa contra el bloque
+público. Las señales que quedan fuera de esa muestra son el acuerdo con el Smart Tagging (77,1%), los
+siete partidos de DFL y los invariantes sobre las 199.319 filas.
+
+**Qué hacemos con esto.** (1) Desde el 4 de noviembre ninguna variante se elige por el número del
+slice ni del banco; el slice se reporta como comprobación. (2) La temperatura se sustituye por una
+constante estructural y, si se recalibra, se hace en DFL: no mueve etiquetas. (3) El prior de 355 se
+cambia por un valor redondo o se retira con #35. (4) La rejilla de 27 configuraciones de D29 se corre
+por `tools/external.py` sobre DFL y Metrica para ver si 1,5 / 5 / 1 sobrevive fuera del slice; si no
+sobrevive, se reporta el conflicto y se decide antes del freeze, sin cambiar el número en silencio.
+
+Sobre el método: no hay pesos aprendidos en la cadena —el camino que genera el archivo es numpy y
+pandas—, pero el detector de balón muerto entregado es la regla W1, con umbrales fijados en DFL
+(D36), y el modelo logístico de `D` no entró. Es aprendizaje externo, no ajuste sobre este partido.
+
 ## Referencias
 
 - Bassek, M., Rein, R., Weber, H., Memmert, D. (2025). *Scientific Data* 12:195,
