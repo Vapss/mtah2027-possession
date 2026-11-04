@@ -353,7 +353,7 @@ documentación anterior. Esta sección audita dos cosas distintas: **el archivo 
 | prohibición | el archivo entregado |
 |---|---|
 | Comprobar la salida contra el vídeo | **cumple.** La cadena no lee el vídeo: entran el tracking automático, el Smart Tagging y la homografía. El vídeo se probó como entrada y quedó fuera (D38); no existe ningún procedimiento que compare la salida contra él. |
-| Etiquetas a mano sobre el partido | **cumple.** Ninguna etiqueta del partido se escribe ni se corrige a mano. Las anotaciones que usamos son de corpus externos (DFL/IDSSE, CC-BY 4.0, y los partidos de muestra de Metrica). |
+| Etiquetas a mano sobre el partido | **cumple.** Ninguna etiqueta del partido se escribe ni se corrige a mano. Las anotaciones que usamos son de corpus externos: DFL/IDSSE, CC-BY 4.0, y los partidos de muestra de Metrica. |
 | Subir los datos provistos a servicios de IA | **no hay rastro en el repositorio.** `data/` solo trae el README, `make guard` lo bloquea y ninguna herramienta abre red. No podemos certificar lo que ocurrió fuera del repositorio; la regla 10 de AGENTS.md lo prohíbe desde hoy. |
 | Entrenar o ajustar sobre la verdad o el vídeo | **no cumple del todo.** Ver la tabla siguiente. |
 
@@ -378,13 +378,21 @@ siete partidos de DFL y los invariantes sobre las 199.319 filas.
 **Qué hacemos con esto.** (1) Desde el 4 de noviembre ninguna variante se elige por el número del
 slice ni del banco; el slice se reporta como comprobación. (2) La temperatura se sustituye por una
 constante estructural y, si se recalibra, se hace en DFL: no mueve etiquetas. (3) El prior de 355 se
-cambia por un valor redondo o se retira con #35. (4) La rejilla de 27 configuraciones de D29 se corre
-por `tools/external.py` sobre DFL y Metrica para ver si 1,5 / 5 / 1 sobrevive fuera del slice; si no
-sobrevive, se reporta el conflicto y se decide antes del freeze, sin cambiar el número en silencio.
+cambia por un valor redondo o se retira con #35. (4) La rejilla de 27 configuraciones de D29 **no** se corre sobre el corpus externo: DFL tiene otra
+definición de posesión (4,58 cambios por minuto frente a 3,4) y un balón sin el ruido del nuestro, así
+que premiaría fragmentar y no responde la pregunta de los umbrales. Se documenta el conflicto en vez
+de usarlo para elegir. Lo que sí se mide sin ground truth es la **estabilidad** de 1,5 / 5 / 1 frente
+al ruido del balón (σ = 0,85 m) sobre las 199.319 filas, y se elige el centro de la meseta.
 
 Sobre el método: no hay pesos aprendidos en la cadena —el camino que genera el archivo es numpy y
 pandas—, pero el detector de balón muerto entregado es la regla W1, con umbrales fijados en DFL
 (D36), y el modelo logístico de `D` no entró. Es aprendizaje externo, no ajuste sobre este partido.
+
+**Licencias de los corpus externos.** DFL/IDSSE es CC BY 4.0 (figshare 28196177) y se usa con
+atribución. Los partidos de muestra de Metrica **no declaran licencia** en su repositorio: el README
+solo pide atribución y uso responsable, así que no hay derechos concedidos de forma explícita. Se
+usaron como juez en la ronda 5 —un resultado negativo que no cambió la entrega— y sus cifras se citan
+con esa salvedad; si se retoman como evidencia, primero hay que obtener permiso por escrito.
 
 ## Referencias
 
