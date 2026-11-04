@@ -19,7 +19,15 @@ calcula rasgos y control, y el build convierte etiquetas con `onehot`: no llama 
 Una prueba sintética modifica la temperatura y hace fallar una llamada a `emit`, y comprueba la
 salida del motor en ambos casos. Eso no sustituye la reproducción del CSV real. B5 sí usa esa
 temperatura en probabilidades y confianza: no se debe afirmar que cambiarla deja inalterado un
-ensemble. La sustitución o recalibración de B5 sigue pendiente de prior y evidencia admisibles.
+ensemble. Se reemplazó por `2,864606845062 m` conforme al protocolo externo pre-registrado de
+`docs/proposals/b5-external-calibration.md`. Resultados reproducibles en `b5-external.json`:
+log-loss condicional en el segundo partido DFL 0,5347 frente a 0,7437 con el prior de 1 m.
+Esto demuestra la compuerta DFL especificada, no calibración en el partido de competición.
+El manifiesto histórico B6 fija el hash del artefacto con la temperatura anterior: generar B5 con
+la nueva temperatura cambia sus probabilidades y no puede satisfacer ese hash. `make verify-b6`
+solo puede comprobar esa evidencia con el artefacto histórico correspondiente; queda por preparar
+una ruta reproducible para conservarla sin devolver la temperatura anterior al flujo actual. No se
+actualiza el manifiesto sin regeneración y auditoría con el bundle.
 
 ## Constantes activas identificadas en la ruta del motor
 
@@ -91,7 +99,7 @@ ELASTIC es MPL-2.0 y es distinta de la licencia de las anotaciones; este proyect
 
 ## Pendiente para cerrar #63
 
-1. Resolver la temperatura de B5 con procedencia admisible y documentar sus consumidores.
+1. Reproducir y revisar la calibración externa B5 y verificar sus consumidores reales.
 2. Para 1,5 m / 5 m/s / `dwell` 1 y la regla del duelo, producir una decisión justificada por
    corpus externo adecuado y prior escrito antes de medir; declarar un conflicto no es por sí solo
    una justificación de los valores actuales. Inventariar además el resto de constantes activas.

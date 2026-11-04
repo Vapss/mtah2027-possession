@@ -37,8 +37,8 @@ SIGMA_M = 1.84
 NEAREST_K = 5
 CONTEXT_RADIUS_M = 10.0
 VOTE_MIX = (0.80, 0.10, 0.10)  # nearest-player vote, team centroid, nearby-player count
-# Frozen in-sample H/A log-loss calibration on the 5,640 public live frames with observed ball.
-EMISSION_TEMPERATURE_M = 2.857386876102962
+# External DFL calibration, fixed by the pre-registered #63 procedure; not calibrated on this match.
+EMISSION_TEMPERATURE_M = 2.864606845062
 P_DEAD_FLOOR = 0.02
 P_DEAD_OUT_OF_BOUNDS = 0.15
 
@@ -171,7 +171,7 @@ def emit(tracking: atd.Tracking, teams: TeamSlots) -> Emission:
             centroids[has_players & present, side] - ball_xy_m[has_players & present], axis=1
         )
     # The preregistered soft-vote/context hypothesis lost to argmin. The delivered emission is
-    # the same nearest-track classifier with its in-sample calibrated softmax temperature.
+    # the same nearest-track classifier with its externally calibrated softmax temperature.
     team_distances = np.column_stack(
         (
             np.min(np.where(teams.codes[None, :] == 0, distances, np.inf), axis=1),
@@ -439,7 +439,7 @@ def generate(output: str | Path, metadata: str | Path | None = None) -> dict[str
         "public_metrics": public_metrics(result.artifact, result.ball_present),
         "smart_tagging_anchor": smart_tagging_anchor(result, teams),
         "profile": {
-            "method": "nearest-track argmin with in-sample calibrated softmax temperature",
+            "method": "nearest-track argmin with DFL-calibrated softmax temperature",
             "temperature_m": EMISSION_TEMPERATURE_M,
             "ball_present_fraction": float(result.ball_present.mean()),
             "median_nearest_player_distance_m": float(np.nanmedian(result.nearest_distance_m)),

@@ -55,6 +55,21 @@ def test_emission_sums_to_one_and_dead_probability_is_weak() -> None:
     assert result.ball_out_of_bounds.tolist() == [False, False, False, True]
 
 
+def test_temperature_preserves_h_a_order_but_changes_confidence(monkeypatch) -> None:
+    players = np.zeros((1, 2, 3))
+    players[0, 0, :2] = (0.50, 0.50)
+    players[0, 1, :2] = (0.55, 0.50)
+    ball = np.array([[0.51, 0.50, 0.0]])
+    tracking = atd.Tracking(players, ball)
+    teams = emision.TeamSlots(np.array([0, 1]), "Home", "Away", 1, 1)
+    monkeypatch.setattr(emision, "EMISSION_TEMPERATURE_M", 1.0)
+    cold = emision.emit(tracking, teams).artifact.iloc[0]
+    monkeypatch.setattr(emision, "EMISSION_TEMPERATURE_M", 4.0)
+    warm = emision.emit(tracking, teams).artifact.iloc[0]
+    assert cold.p_home > cold.p_away and warm.p_home > warm.p_away
+    assert cold.confidence > warm.confidence
+
+
 def test_metadata_team_and_smart_tagging_anchor_are_consistent() -> None:
     metadata = Path(games.asset_paths(source="tactical")["atd_meta"])
     tagging_path = smart_tagging.path()
@@ -78,7 +93,7 @@ def test_metadata_team_and_smart_tagging_anchor_are_consistent() -> None:
 def test_fixed_emission_constants_are_not_a_search_grid() -> None:
     assert emision.SIGMA_M == 1.84
     assert emision.NEAREST_K == 5
-    assert pytest.approx(2.857386876102962) == emision.EMISSION_TEMPERATURE_M
+    assert emision.EMISSION_TEMPERATURE_M == 2.864606845062
     assert emision.P_DEAD_FLOOR < 0.05
     assert emision.P_DEAD_OUT_OF_BOUNDS < 0.25
 

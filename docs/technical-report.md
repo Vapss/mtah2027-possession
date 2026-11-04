@@ -361,7 +361,7 @@ documentación anterior. Esta sección audita dos cosas distintas: **el archivo 
 
 | parámetro | dónde | qué se hizo | ¿se entrega? |
 |---|---|---|---|
-| temperatura `2,857386876 m` | `tools/emision.py`, D18 | calibrada *in-sample* por log-loss H/A sobre los 5.640 frames públicos vivos con balón | pendiente de verificar para cada consumidor: el motor usa `team_slots` y velocidad, y construye un artefacto one-hot; B5 sí usa la temperatura |
+| temperatura histórica `2,857386876 m` | `tools/emision.py`, D18 | calibrada *in-sample* por log-loss H/A sobre los 5.640 frames públicos vivos con balón | reemplazada en B5 por `2,864606845062 m` calibrada en DFL según el protocolo de #63; no demuestra calibración en el partido. El motor one-hot no usa `emit` en la prueba sintética; falta la reproducción real |
 | umbrales `1,5 m` / `5 m/s` / `dwell = 1` | D29 | elegidos entre 5 configuraciones comparadas por `spellF1` del slice | **sí** |
 | regla del duelo | D34 | adoptada tras medir 0,4585 → 0,5189 en el slice | **sí** |
 | prior de duración `355` frames | `tools/postprocess.py`, D20 | media de 14,2 s del slice | no: #35 no está en `make repro` |
@@ -377,8 +377,8 @@ público. Las señales que quedan fuera de esa muestra son el acuerdo con el Sma
 siete partidos de DFL y los invariantes sobre las 199.319 filas.
 
 **Qué hacemos con esto.** Ninguna variante ni parámetro se elige por el slice ni por el
-banco. La temperatura y el prior siguen pendientes en #63: se comprobarán sus consumidores y se
-decidirá una alternativa de procedencia admisible. La rejilla de D29 no se usará como árbitro sin
+banco. En #63 se sustituyó la temperatura B5 con una calibración externa DFL y se retiró el prior
+redundante; sus efectos reales y consumidores aún requieren verificación. La rejilla de D29 no se usará como árbitro sin
 un protocolo previo que justifique cada corpus y su adecuación. DFL difiere en definición de
 posesión y calidad del balón; ello limita su aplicabilidad y puede sesgar comparaciones, sin demostrar
 por sí solo el sentido del sesgo. La tasa del slice es diagnóstico, no objetivo.

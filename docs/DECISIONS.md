@@ -379,6 +379,16 @@ las pérdidas H/A solo se interpretan en frames vivos con balón observado. Sin 
 uniforme y `confidence=0`; el campo es `max(p_home,p_away) × ball_present` e incluye el suelo D.
 Las métricas del slice público son diagnóstico, no evidencia de generalización al partido completo.
 
+**Corrección #63.** Se reemplaza la temperatura histórica ajustada al slice por
+`2,864606845062 m`, obtenida con el protocolo previo `docs/proposals/b5-external-calibration.md`.
+El ajuste usa `J03WMX` y la comprobación `J03WN1` del corpus externo DFL; los resultados y hashes
+se regeneran con `tools/calibrate_b5_external.py` y están en `docs/analysis/b5-external.json`.
+En la comprobación, log-loss condicional fue 0,5347 frente a 0,7437 del prior de 1 m. Los DFL ya
+se habían explorado en otras decisiones, su balón es más limpio y su propietario no necesariamente
+equivale a control: esto no demuestra calibración en el partido del reto ni mejora de `spellF1`.
+En B5 cambian probabilidades y confianza; una mezcla podría cambiar etiquetas. El motor one-hot no
+llama a esta emisión en la prueba sintética, pero falta reproducir el CSV real con el bundle.
+
 ---
 
 ## 19. Ablación B5 preregistrada: voto, vecinos y confianza
