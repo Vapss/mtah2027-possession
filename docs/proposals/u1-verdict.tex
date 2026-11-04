@@ -1,0 +1,168 @@
+\documentclass[11pt,a4paper]{article}
+
+% Compilar con: pdflatex u1-verdict.tex (dos pasadas)
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{microtype}
+
+\newcommand{\code}[1]{\texttt{\small #1}}
+
+\title{El experimento que queda para el contrato final\\[2pt]
+\large Re-decisión del inicio de la parada (\texttt{onset}) sin ground truth}
+\author{Equipo de posesión --- More than a Hack 2027, Fase 1}
+\date{4 de noviembre de 2026}
+
+\begin{document}
+\maketitle
+
+\section{Veredicto}
+
+De todos los experimentos que quedaban abiertos, uno solo puede cambiar el archivo que se envía y
+a la vez sostenerse con evidencia admisible bajo la aclaración de reglas del 3 de noviembre:
+\textbf{adoptar la regla de inicio \texttt{onset} (U1)} para el balón muerto.
+
+El cambio añade \textbf{5.646 frames de \code{D}} (3,55\% de los medios tiempos) en 83 segmentos
+cortos, sin fusionar dos paradas, y gana el árbitro externo en 7 de 7 partidos. No se aplica por
+defecto en este documento: mueve el CSV entregado y el SHA de la cadena, así que queda a una
+aprobación del lead.
+
+\section{Cómo se llegó aquí: qué se descartó y por qué}
+
+El orden de revisión fue de arriba abajo: primero el contrato completo, después cada palanca que
+llega al CSV, y solo al final las mediciones nuevas.
+
+\begin{enumerate}[leftmargin=1.2em]
+  \item \textbf{Más modelado.} Seis rondas de investigación cerraron con cinco negativos
+        (D39--D43). Con 17 posesiones de verdad pública, una variante nueva no se puede ordenar
+        contra otra: cualquier elección sería sorteo con apariencia de método.
+  \item \textbf{La rejilla de 27 configuraciones del motor sobre DFL.} Descartada: DFL marca 4,58
+        cambios de posesión por minuto frente a 3,4 de nuestra cadena. Un corpus con 27\% más
+        cambios premia fragmentar, y su ganador (2,0 / 7 / 1) cae a 0,4585 en el slice. No mide la
+        pregunta: los umbrales de radio y velocidad existen por el ruido de \emph{nuestro} balón.
+  \item \textbf{Metrica como segundo juez.} Descartado por licencia: el repositorio de datos de
+        muestra no declara ninguna, y la regla exige comprobar la licencia antes de usar un dataset.
+  \item \textbf{Vídeo e imputación de huecos.} Cerrados por D24 y D38, y el banco de trasplante ya
+        no puede readmitirlos: son las mismas 17 posesiones.
+  \item \textbf{U2 \texttt{first-control} y U3.} Descartadas por una compuerta admisible: U2 baja
+        el acuerdo con el Smart Tagging de 77,1\% a 75,9\%, y U3 arrastra ese mecanismo.
+\end{enumerate}
+
+Queda U1, que no es un modelo nuevo sino la corrección de un umbral que ya se entrega.
+
+\section{La regla, y por qué el inicio de W1 llega tarde}
+
+La cadena entregada marca \code{D} donde el Smart Tagging etiqueta una parada o donde el campo
+completo se detiene: W1 exige que el percentil 90 de la velocidad de los jugadores en $\pm 1$~s
+quede por debajo de 2~m/s durante al menos 4~s. Por construcción, esa regla solo puede dispararse
+\emph{después} de que los jugadores hayan dejado de correr: el retraso no es un rasgo de DFL, es el
+precio del umbral.
+
+\texttt{onset} camina el inicio de cada tramo W1 hacia atrás mientras el mismo percentil 90 siga por
+debajo de 3,25~m/s, y solo extiende si el camino termina en un frame donde el campo \emph{se vio} más
+rápido. Las dos constantes (3,25~m/s, tope 40~s) se eligieron en DFL con una regla declarada antes de
+medir: entre los umbrales que mantienen precisión de frame $\geq 0{,}90$, el de menor error mediano
+de inicio.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrrrrr}
+\toprule
+regla & precisión & recall & F1 & inicio $\pm$ (s) & \%\code{D} \\
+\midrule
+W1 (entregado) & 0,954 & 0,682 & 0,796 & $+5{,}36$ & 32,0\% \\
+\texttt{onset} & 0,919 & 0,790 & \textbf{0,849} & $+0{,}52$ & 38,5\% \\
+\bottomrule
+\end{tabular}
+\caption{DFL, 7 partidos, 645 tramos emparejados. Muerto verdadero: 44,8\% de los frames. El final de
+las paradas no se toca: ya termina 0,7~s antes de que el balón vuelva.}
+\end{table}
+
+\section{El experimento: ponerle precio al tiempo añadido}
+
+La objeción razonable a U1 es que invente balón muerto en medio del juego. Eso se puede medir sin
+ground truth, con el nuevo \code{tools/dead\_price.py}, que compara los dos CSV y responde tres
+preguntas: cuánto se añade, si fusiona paradas y cómo es el balón en esos frames.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrrrrr}
+\toprule
+ & frames & \% medios tiempos & segmentos & mediana & máximo \\
+\midrule
+\texttt{onset} $-$ \texttt{engine} & 5.646 & 3,55\% & 83 & 41 frames (1,6~s) & 322 (12,9~s) \\
+\bottomrule
+\end{tabular}
+\caption{Fusiones: \textbf{0}. Ningún tramo de \texttt{onset} contiene dos paradas de la cadena, que
+era el motivo por el que se descartó la primera versión de la regla.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+conjunto & balón presente & velocidad mediana (m/s) \\
+\midrule
+frames añadidos & 0,46 & 3,07 \\
+\code{D} de \texttt{engine} & 0,29 & 2,13 \\
+todo el juego & 0,59 & 5,08 \\
+\bottomrule
+\end{tabular}
+\caption{Los frames añadidos son de trote: el balón se ve menos que en juego y rueda más despacio.
+No es prueba de que sean muerto ---el balón está presente en la mayoría de los frames \code{D}
+reales (D16)--- pero tampoco es el perfil de un ataque.}
+\end{table}
+
+\section{Regla de decisión, escrita con las compuertas admisibles}
+
+De la §6 del carril quedan fuera G2 (delta del slice) y G3 (banco): las dos leen la verdad del
+partido, y con la aclaración rechazar con ella también es elegir con ella. G1 pasa a línea de
+reporte. Las compuertas que quedan no leen ground truth:
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{llrr}
+\toprule
+compuerta & criterio & \texttt{engine} & U1 \\
+\midrule
+E1 & DFL: gana 7/7; constantes fijadas allí & 0,796 & \textbf{0,849} \\
+E2 & bloques: $\leq 70\%$ de \code{D}, $3{,}4 \pm 0{,}5$ pos/min & 65,5\% / 3,62 & \textbf{66,3\% / 3,51} \\
+E3 & Smart Tagging $\geq$ cadena $-$ 1 punto & 77,1\% & \textbf{77,8\%} \\
+E4 & precio: cero fusiones, segmentos cortos & --- & \textbf{0 / 41} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+U1 pasa las cuatro. La evidencia local es nula, no negativa: $\Delta$\code{spellF1} del slice
+$-0{,}0105$ con \textbf{0} posesiones discordantes a IoU 0,5, y 54 de los 80 frames que añade al
+slice eran \code{D} verdadero. Se adopta por el árbitro externo y se reporta una sola vez.
+
+\section{Entrega y riesgo residual}
+
+El cambio no está aplicado por defecto. La secuencia, con aprobación del lead, es:
+
+\begin{verbatim}
+export MTAH_DATA_DIR=...            # bundle licenciado
+python tools/dead_ball_v3.py --variant onset --labels submissions/engine.csv
+make repro                          # dos builds desde cero, byte a byte
+python evaluation/validate_submission.py submissions/engine.csv
+python tools/score.py --results submissions --note "u1"   # una vez, in-sample
+\end{verbatim}
+
+\textbf{Riesgo que queda.} El precio del tiempo añadido no demuestra que esos frames sean \code{D}:
+el balón se ve en casi la mitad y la proximidad a un \code{SET PIECES} (37\% de los segmentos a
+$\leq 30$~s, frente a una tasa base de $\sim$28\%) apenas distingue. Lo que sostiene la decisión es
+el corpus externo ---donde el inicio llega 5,4~s tarde y \texttt{onset} lo lleva a 0,5~s--- y la
+física del umbral. Está escrito así en D45 para que un auditor lo encuentre antes de encontrarlo
+solo.
+
+\end{document}

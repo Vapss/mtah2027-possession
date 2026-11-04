@@ -313,3 +313,48 @@ Lo que queda como resultado, y vale más que la recomendación:
 - **Deuda aceptada (8).** `speed_quantiles` se calcula dos veces por segmento y `floor_at` es un
   bucle O(n × barreras): rendimiento de un módulo de investigación.
 - **Deuda aceptada (9).** Constantes y formateadores duplicados entre los módulos de la ronda 2.
+
+## 10. Re-decisión bajo la aclaración del 3 de noviembre
+
+La organización precisó el 3-nov-2026 que el ajuste debe hacerse con datos externos y que el ground
+truth público no puede usarse para elegir (D44, regla 11 de AGENTS.md). Las compuertas **G2** (Δ del
+slice) y **G3** (banco, que son las mismas 17 posesiones) de la §6 dejan de vetar: leer el slice para
+rechazar también es elegir con el ground truth. **G1** se degrada a línea de reporte por la misma
+razón. Quedan como compuertas las que no leen verdad del partido:
+
+| compuerta admisible | qué exige | `engine` | U1 `onset` |
+|---|---|---:|---:|
+| **E1** DFL (CC-BY, 7 partidos) | gana 7/7 en F1 de `D`; constantes fijadas allí | 0,796 | **0,849** |
+| **E2** estructura de bloques, sin GT | ningún bloque > 70% de `D`, 3,4 ± 0,5 pos/min | 65,5% / 3,62 | **66,3% / 3,51** |
+| **E3** Smart Tagging (dato generado, no GT) | acuerdo ≥ `engine` − 1 punto | 77,1% | **77,8%** |
+| **E4** precio del tiempo añadido, sin GT | cero fusiones; segmentos cortos | — | **0 fusiones, mediana 41 frames** |
+
+Las tres primeras venían del carril; la cuarta es nueva (`tools/dead_price.py`,
+`docs/analysis/dead-price.md`). U1 añade **5.646 frames** (3,55% de los medios tiempos) en **83
+segmentos**, mediana **41 frames** (1,6 s), máximo 322 (12,9 s), y **ninguna fusión**: no borra la
+posesión entre dos paradas, que era el motivo por el que la §2.1 descartó la primera versión de la
+regla. En esos frames el balón se ve en el 46% (29% en el `D` de `engine`, 59% en juego) y rueda a
+3,07 m/s de mediana (2,13 en `D`, 5,08 en juego): son frames de trote, no de juego.
+
+**Veredicto.** Se recomienda **adoptar U1**, no U3. U2 falla E3 por sí sola (75,9%, por debajo de
+`engine` − 1) y U3 la arrastra: su mitad de reanudación no está corroborada por ningún juez
+admissible. U1 es la única variante que gana el árbitro externo (7/7), pasa las tres compuertas sin
+ground truth y no tiene evidencia local en contra (Δ del slice −0,0105 con **0** posesiones
+discordantes a IoU 0,5; 54 de los 80 frames añadidos al slice eran `D` verdadero).
+
+**Cómo se entrega.** El cambio no se aplica por defecto en este documento: mueve el CSV enviado
+(5.646 frames) y el SHA de la cadena. La secuencia, con la aprobación del lead:
+
+```bash
+export MTAH_DATA_DIR=...                   # bundle licenciado
+python tools/dead_ball_v3.py --variant onset --labels submissions/engine.csv
+make repro                                 # dos builds desde cero, byte a byte
+python evaluation/validate_submission.py submissions/engine.csv
+python tools/score.py --results submissions --note "u1"   # una sola vez, in-sample
+```
+
+**Riesgo que queda.** El precio del tiempo añadido no demuestra que esos frames sean `D`: el balón
+se ve en casi la mitad y la proximidad a un `SET PIECES` (37% de los segmentos a ≤ 30 s, frente a una
+tasa base de ~28%) apenas distingue. Lo que sostiene la decisión es el corpus externo —donde el
+inicio de W1 llega 5,4 s tarde y `onset` lo lleva a 0,5 s— y la física: W1 solo puede dispararse
+después de que el campo haya dejado de correr.

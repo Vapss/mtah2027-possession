@@ -1357,3 +1357,32 @@ los invariantes sobre las 199.319 filas. Declararlo es más barato que dejar que
 el sentido estricto; gana una sección que admite el riesgo y dice qué se está haciendo. Cambiar la
 temperatura no altera ninguna etiqueta entregada. Si la rejilla no sobrevive en el corpus externo, el
 freeze se decide con un conflicto sobre la mesa, no con un número que ya no se puede justificar.
+
+---
+
+## 45. La regla del inicio de la parada se re-decide sin ground truth: entra `onset`
+
+**Decidido.** Bajo la aclaración del 3-nov-2026 (D44) y la regla 11, la selección de la lane
+dead-v3 se rehace con las únicas compuertas que no leen la verdad del partido: **DFL** (7 partidos
+CC-BY, F1 de `D` 0,796 → 0,849, gana 7/7), **estructura de bloques** (sin bloque > 70% de `D`, 3,62
+→ 3,51 pos/min), **acuerdo con el Smart Tagging** (77,1% → 77,8%) y **precio del tiempo añadido**
+(`tools/dead_price.py`: 5.646 frames en 83 segmentos, mediana 41, máximo 322, **0 fusiones**). Las
+compuertas G2 (Δ del slice) y G3 (banco) del carril dejan de vetar: rechazar con ground truth también
+es elegir con ground truth; G1 pasa a línea de reporte.
+
+Se recomienda **U1 `onset`** y no U3: U2 falla el acuerdo con el Smart Tagging por sí sola (75,9%,
+por debajo de la cadena menos un punto) y U3 arrastra ese mecanismo, que ningún juez admisible
+corrobora.
+
+**Por qué.** El inicio de W1 llega tarde por construcción: la regla se dispara cuando el campo ya se
+detuvo, así que el retraso no es un rasgo del corpus sino del umbral. En DFL ese retraso es de 5,4 s
+de mediana y `onset` lo lleva a 0,5 s, con recall de `D` 0,682 → 0,790. La evidencia local es nula,
+no negativa: Δ del slice −0,0105 con **0** posesiones discordantes a IoU 0,5, y 54 de los 80 frames
+añadidos al slice eran `D` verdadero (68%).
+
+**Coste y límite.** El cambio mueve el CSV enviado: +5.646 frames de `D` (39,99% → 43,55% de los
+medios tiempos) y el SHA de la cadena. No se aplica por defecto hasta que el lead lo apruebe; la
+secuencia está en `lane-dead-v3.md` §10 y exige `make repro` byte a byte, validador oficial y **una
+sola** medición del slice, reportada como in-sample. El precio del tiempo añadido no demuestra que
+esos frames sean `D` —el balón se ve en el 46% y la proximidad a un set piece apenas supera la tasa
+base—, así que la decisión descansa en el corpus externo y en la física, y así queda escrito.
