@@ -75,10 +75,10 @@ possessions, recorded with the ball detected in 88% of its frames, against 59% o
   needs tuning is tuned on external data. Scoring a chain that is already decided is an automatic check. Choosing between
   variants with that score is not.</li>
   <li><b>No human labels for this match.</b> No human-produced data about this match is used, not even to validate.</li>
-  <li><b>No output checked against the video.</b> We never checked an output against the video, and the delivered chain does
-  not read it.</li>
-  <li><b>No match data in hosted AI services.</b> No match file, tracking row, video frame or image was given to a hosted
-  model (§9).</li>
+  <li><b>No output checked against the video.</b> The delivered chain does not read the video, and no constant was chosen
+  by looking at it.</li>
+  <li><b>No match data in hosted AI services.</b> Provided data must never reach a hosted model. §9 states what the
+  repository can show and what it cannot.</li>
 </ul>
 <p>Every decision is logged in <code>docs/DECISIONS.md</code> (cited as <i>Dnn</i>), with its rule committed before the
 measurement it depends on.</p>
@@ -92,10 +92,10 @@ measurement it depends on.</p>
 <tr><td>Smart Tagging <code>SET PIECES</code></td><td><b>Used</b>: restart time and team</td><td>59 tagged restarts. The restart is estimated at tag start + 5 s (+3.5 s for kick-offs).</td></tr>
 <tr><td>Smart Tagging phases</td><td><b>Check only</b></td><td>Team votes, used for an agreement check. They never enter the chain, so the check is not circular.</td></tr>
 <tr><td>DFL/IDSSE open data (7 matches)</td><td><b>Used</b>: trains the dead-ball detector; external judge</td><td>CC-BY 4.0 (Bassek et al., 2025). Per-frame live/dead state and team in possession.</td></tr>
-<tr><td>Metrica open games g1, g2</td><td><b>Used</b>: external judge of whether possession changes</td><td>Tracking plus a synchronised event log. The repository has no licence file. Its README asks for responsible use and an acknowledgement of Metrica Sports, which we give.</td></tr>
+<tr><td>Metrica open games g1, g2</td><td><b>Research only; no weight</b></td><td>Explored in two research rounds. The repository declares no licence; its README asks for responsible use and attribution. Until written permission is obtained, no decision in this document rests on it.</td></tr>
 <tr><td>Tactical video, homography</td><td><b>Explored, dropped</b></td><td>A pretrained COCO ball detector was not precise enough (precision ≤ 0.75 at 2 m, recall ≤ 0.46 against the tracking ball). A detector fine-tuned on the video is excluded by the rules, and its code was removed.</td></tr>
 <tr><td>Broadcast video and tracking</td><td><b>Not used</b></td><td>Not synchronised with the tactical feed. Its homography is usable in only 65.8% of frames.</td></tr>
-<tr><td>Public 5-minute ground truth</td><td><b>Diagnostics only</b></td><td>Reported after deciding (§5.3). It decides nothing.</td></tr>
+<tr><td>Public 5-minute ground truth</td><td><b>Diagnostics only</b></td><td>Reported after deciding (§5.2). It decides nothing.</td></tr>
 </tbody></table>
 
 <h2>3. Method</h2>
@@ -117,15 +117,16 @@ which the scorer back-fills.</p>
 
 <h3>3.2 The duel rule</h3>
 <p>A rival control changes possession only if the team in possession has nobody within 1.5 m of the ball. When both teams can
-play the ball it is a duel, and possession stays where it was (Fig. 2b). This is the contested-ball rule of Vidal-Codina et
-al. (2022), with the radius the engine already uses and no new constant (D34).</p>
+play the ball it is a duel, and possession stays where it was (Fig. 2b). This is the challenge's own definition: "in phases
+where the ball is contested or loose, possession stays with the last team that had it". It is also the contested-ball rule
+of Vidal-Codina et al. (2022). It uses the radius the engine already has and adds no constant (D34, D45).</p>
 
 <h3>3.3 Dead ball: tagged stoppages ∪ players' stoppages</h3>
 <p><b>Tagged stoppages</b> (D30). Each tagged restart closes a stoppage. The stoppage opens at the last episode of the ball
 seen outside the pitch in the preceding 40 s (120 s after a goal). Otherwise it covers the tag window only. Short episodes
 count: 69% of the stoppages opened by an episode shorter than 1 s end in a throw-in, corner or goal kick, so they are real
-outs (D44, test B).</p>
-<p><b>Players' stoppages</b> (D36, D44). When the referee stops play, nobody runs. A ridge logistic regression on 29
+outs (D45, test B).</p>
+<p><b>Players' stoppages</b> (D36, D45). When the referee stops play, nobody runs. A ridge logistic regression on 29
 order-invariant features flags dead frames. The features are the median and 90th-percentile speed of all tracked
 players over windows from ±1 s to 30 s before and after the frame, the distance to the nearest corner, the number of
 players on a touchline and in the boxes, and the spread of the field. It never reads the ball or player identities, so it survives
@@ -140,7 +141,7 @@ detector abstains: losing players is not evidence that they stopped.</p>
 team's possession, unless the tracking has already seen an accepted, non-duel control inside the tag window. An observation
 beats an estimated restart frame (D30, D32, D35); 17 restarts are forced this way. If two restarts on one frame name
 different teams, neither is forced. A stoppage that no tag closes ends with the team of the first accepted control after it
-(D44); this happens 37 times in the match.</p>
+(D45); this happens 37 times in the match.</p>
 
 <figure>{{FIG:rules.svg}}
 <figcaption><b>Figure 2.</b> The rules on synthetic positions (no match data is shown). (a) A control. (b) A duel: the
@@ -175,13 +176,14 @@ Tagging and from a video detector. None had admissible evidence in favour (§6).
 <h3>5.1 Protocol</h3>
 <p>Each research lane committed its variants, gates and a prior order before measuring, and results were appended without
 editing the rule. Our earlier gates included the public window, and a "bench" that transplants missing-ball patterns onto
-that window. Both read the ground truth. After the clarification, an independent read-only audit traced the provenance of
-every constant and inclusion decision (D44).</p>
+that window. Both read the ground truth. After the clarification the team decided that the window and the bench may check
+but never choose (D44). An independent read-only audit then traced the provenance of every constant and inclusion decision
+(D45).</p>
 <p>We then re-applied every written selection rule, deleting each gate that reads the ground truth or a figure derived from
 it, such as its 3.4 possessions per minute. A component stays only with admissible evidence in favour:</p>
 <ul>
-  <li>physics, the laws of the game or the literature;</li>
-  <li>external data: DFL, and Metrica's event truth for whether possession changes;</li>
+  <li>the challenge's own definition of possession, the laws of the game, physics or the literature;</li>
+  <li>external data whose rights are verified: DFL/IDSSE (CC-BY 4.0);</li>
   <li>label-free checks: block structure, and agreement with Smart Tagging phases.</li>
 </ul>
 <p>Re-applying the rules changed one component and confirmed the rest (Table 3).</p>
@@ -191,10 +193,10 @@ it, such as its 3.4 possessions per minute. A component stays only with admissib
 <thead><tr><th>Component</th><th>Admissible evidence</th><th>Outcome</th></tr></thead>
 <tbody>
 <tr><td>Control thresholds</td><td>Physics, fixed before measuring. The rule's only replacement test was a ground-truth sign test, now deleted.</td><td>Kept</td></tr>
-<tr><td>Duel rule</td><td>Metrica g1+g2, ball degraded to our precision. Mean <code>spellF1</code> 0.4414 with the rule against 0.4067 without; it wins on both games (Fig. 4).</td><td>Kept</td></tr>
+<tr><td>Duel rule</td><td>The challenge's definition: "in phases where the ball is contested or loose, possession stays with the last team that had it". A duel is a contested ball. No constant is added.</td><td>Kept</td></tr>
 <tr><td>Tagged stoppages (<code>out</code>)</td><td>The lane's label-free block gate removes the two richer variants. Prior order then gives <code>out</code>.</td><td>Kept</td></tr>
 <tr><td>Short ball-out episodes</td><td>11 of 16 short-episode stoppages end in an out-of-play restart (test B).</td><td>Kept</td></tr>
-<tr><td>Players' stoppages</td><td>Only the DFL-limit block gate remains, and all four variants pass it. The prior order gives the logistic model with first-control forcing (W3). On DFL with our ball pattern: 0.3529 against 0.3216 for the earlier one-threshold rule (W1) and 0.2553 with no players' stoppages.</td><td><b>W3 replaces W1</b></td></tr>
+<tr><td>Players' stoppages</td><td>W1 had been chosen over the models by a ground-truth gate (dead-ball precision on the window). With it deleted, only the DFL-limit block gate remains, and all four variants pass it. The written prior order gives the logistic model with first-control forcing (W3), trained on DFL only. The first-control step is the challenge's "whenever play restarts after a stoppage, there is a clear possessor". On DFL with our ball pattern: 0.3529 against 0.3216 for W1 and 0.2553 with no players' stoppages.</td><td><b>W3 replaces W1</b></td></tr>
 <tr><td>Restarts</td><td>Laws of the game. A ground-truth veto that never fired was dropped.</td><td>Kept</td></tr>
 </tbody></table>
 
@@ -202,21 +204,12 @@ it, such as its 3.4 possessions per minute. A component stays only with admissib
 busiest block reaches 70.8%, against 88.6%, and no block is left without possessions. The chain gives 3.11 possessions per
 minute, and agreement with Smart Tagging rises from 77.1% to 77.7%.</p>
 
-<div class="two">
-<figure>{{FIG:readjudication.svg}}
-<figcaption><b>Figure 4.</b> The duel rule on Metrica's open games against their event truth. With a clean ball the rule
-costs a little (−0.008). With the ball degraded to our noise and missing-ball pattern, the condition fixed in advance, it
-gains 0.035.</figcaption></figure>
-<div>
-<h3>5.2 Why the external judges disagree</h3>
-<p>DFL and Metrica events give possession to whoever <i>touches</i> a loose ball, while the challenge gives it to whoever
-<i>controls</i> it. A touch-based truth rewards extra changes. With a clean ball the duel rule therefore looks slightly
-worse, and on DFL it loses. With a ball as noisy as ours, accepting duels invents changes: on g1, spurious changes rise
-from 48 to 110. We fixed the degraded condition as the decisive one before measuring, because that is our regime.</p>
-</div>
-</div>
+<p><b>Declared exposure.</b> We knew before this review that the logistic variants scored higher on the public window. The
+switch to W3 follows mechanically from deleting the ground-truth gate and applying the written prior, not from that number.
+Even so, that exposure means the window's score for W3 is not independent evidence. The external justification of 1.5 m /
+5 m/s / one frame beyond physics is still open and tracked by the team (issue #63).</p>
 
-<h3>5.3 Diagnostics on the public window (after deciding, no weight)</h3>
+<h3>5.2 Diagnostics on the public window (after deciding, no weight)</h3>
 <table>
 <caption><b>Table 4.</b> Reported only after the chain was fixed. The window has 17 possessions, so one possession moves
 <code>spellF1</code> by about six points.</caption>
@@ -238,14 +231,14 @@ not dead ball, and our ball's precision at the touch limits it (D42, D43).</p>
 <thead><tr><th>Alternative</th><th>Why it is not delivered</th></tr></thead>
 <tbody>
 <tr><td>Smoothing windows (the official baselines)</td><td>No possession model: they fragment on a ball in flight. The engine beats <code>smooth50</code> on all 7 DFL matches, and our smoothed backup on Smart Tagging agreement (73.1% against 62.2%).</td></tr>
-<tr><td>Soft-vote and softmax emissions; segment post-processing</td><td>Their calibration and duration prior came from the public window. Removed from the repository (D44).</td></tr>
+<tr><td>Soft-vote and softmax emissions; segment post-processing</td><td>Their calibration and duration prior came from the public window. Removed from the repository (D45).</td></tr>
 <tr><td>Formation-based gap filling</td><td>Smart Tagging agreement in gaps rose by less than the +2 points required.</td></tr>
 <tr><td>Self-supervised imputation in gaps</td><td>Smart Tagging agrees with the imputed team in only 43% of the changed frames.</td></tr>
 <tr><td>Viterbi decoder; undoing short possessions</td><td>Viterbi used a ground-truth rate prior (removed). <code>touch</code> comes after the duel rule in its lane's prior order, V5 fails the label-free block gate, and both lose 7 of 7 on DFL.</td></tr>
 <tr><td>Re-dating changes (mid-point, first control, first touch, reception)</td><td><code>mid</code> came from inspecting the window. First touch lowers Smart Tagging agreement by 2.9 points. The others fail the DFL dating gate.</td></tr>
 <tr><td>Stoppage onset and end refinements</td><td>Defined on W1's spans, which are gone. <code>cut</code> fails DFL (3 of 7). For <code>kick</code>, no admissible judge exists.</td></tr>
 <tr><td>Team of untagged restarts</td><td>Accuracy on DFL 0.518 by law and 0.925 by position, against 0.95 required.</td></tr>
-<tr><td>Recovering missed changes (persist, settle, relay)</td><td>They fail on Metrica g2. <code>relay</code> lifts the rate to 4.11/min and lowers Smart Tagging agreement by 4.2 points.</td></tr>
+<tr><td>Recovering missed changes (persist, settle, relay)</td><td>No admissible evidence in favour: their external test used Metrica's data, now without weight. <code>relay</code> also lifts the rate to 4.11/min and lowers Smart Tagging agreement by 4.2 points.</td></tr>
 <tr><td>Ball from the tactical video</td><td>The COCO detector is imprecise. The fine-tuned detector trained on the video is excluded by the rules.</td></tr>
 </tbody></table>
 
@@ -257,8 +250,9 @@ not dead ball, and our ball's precision at the touch limits it (D42, D43).</p>
   a stoppage may be narrower, and we cannot check that without the ground truth.</li>
   <li><b>Long ball gaps.</b> In the worst blocks (under 30% ball), possession is carried through gaps of over a minute. Only
   a better ball detector that generalises across halves would help.</li>
-  <li><b>External truths are touch-based.</b> A Metrica truth built with the challenge's control definition would be the
-  missing judge for whether possession changes.</li>
+  <li><b>No admissible external judge for possession changes.</b> DFL's truth is touch-based and finer than the
+  challenge's, and Metrica's data has no declared licence. A licensed corpus with the challenge's control definition would be
+  the missing judge.</li>
 </ul>
 
 <h2>8. Reproduction</h2>
@@ -271,15 +265,22 @@ python evaluation/validate_submission.py submissions/engine.csv
 python tools/repro.py --against submissions/engine.csv                           # = make repro</pre>
 <p><code>repro.py</code> builds the chain twice from scratch and compares the bytes. The delivered file's SHA-256 is
 <code>{{SHA}}</code>. On an Intel i9-13980HX laptop (16 GB, Windows 11), one build takes 17.3–17.8 s and
-<code>make repro</code> 33.7 s. The external judges are reproduced by <code>tools/readjudicate.py</code> (Metrica) and
-<code>tools/dead_ball_v2.py dfl-bench</code> (DFL), from data downloaded outside the repository.</p>
+<code>make repro</code> 33.7 s. The label-free test B is reproduced by <code>tools/readjudicate.py</code>, and the DFL
+evidence by <code>tools/dead_ball_v2.py dfl-bench</code>, from data downloaded outside the repository.</p>
 
 <h2>9. Compliance and use of LLMs</h2>
-<p>The labels are produced by code alone, and no label was edited by hand. The private ground truth was never used. The
-public window decides nothing, and the video is not read by the delivered chain. Code and documentation were written with
-LLM coding agents. The agents ran the code locally, against data that never left the machine. Their inputs were derived
-aggregates (counts, shares, scores, and frame indices of a few events), never match files, tracking rows, video frames or
-images. Agents also proposed variants. Each one was pre-registered and judged by the protocol of §5.</p>
+<table>
+<caption><b>Table 6.</b> The clarified prohibitions and what we can show (D44, D45).</caption>
+<thead><tr><th>Prohibition</th><th>What we can show</th></tr></thead>
+<tbody>
+<tr><td>Checking the output against the video</td><td>A static review of the build path (<code>make engine</code>, <code>make repro</code>) finds no reading of the video or comparison with it. The video was tried as an input and dropped. This does not certify actions outside that path.</td></tr>
+<tr><td>Hand labels or human-made data on the match</td><td>No label of this match is written or corrected by hand. The only annotations used are external: DFL/IDSSE, CC-BY 4.0.</td></tr>
+<tr><td>Uploading provided data to AI services</td><td>The repository holds no trace of it, and <code>make guard</code> keeps licensed files out of Git. We cannot certify what happened outside the repository. Since 3 November a written rule forbids it (AGENTS.md, rule 10).</td></tr>
+<tr><td>Training, fitting or calibrating on the ground truth or the video</td><td>The delivered chain contains no value fitted on either, and no inclusion decision rests on them (§5). Code that was fitted on the ground truth or trained on the video has been removed from the repository. Our earlier selection did use the public window. It is declared in D44 and D45, and the window's scores are reported as in-sample diagnostics only.</td></tr>
+</tbody></table>
+<p>The labels are produced by code alone, and the private ground truth was never used. Code and documentation were written
+with LLM coding agents. They ran the code locally and worked from code and from published aggregates. Every variant they
+proposed was pre-registered and judged by the protocol of §5.</p>
 
 <h2>References</h2>
 <div class="refs">
@@ -289,7 +290,6 @@ soccer. <i>Scientific Data</i> 12:195. doi:10.1038/s41597-025-04505-y (data CC-B
 spatiotemporal player tracking data. <i>Scientific Reports</i> 12:16291. doi:10.1038/s41598-022-19948-1.</p>
 <p>Link, D., Hoernig, M. (2017). Individual ball possession in soccer. <i>PLOS ONE</i> 12(7):e0179953.
 doi:10.1371/journal.pone.0179953.</p>
-<p>Metrica Sports. Sample data (tracking and event data, games 1–2). github.com/metrica-sports/sample-data.</p>
 <p>Vidal-Codina, F., Evans, N., El Fakir, B., Billingham, J. (2022). Automatic event detection in football using tracking
 data. <i>Sports Engineering</i> 25:18. arXiv:2202.00804.</p>
 </div>

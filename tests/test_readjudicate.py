@@ -1,22 +1,10 @@
-"""DECISIONS 44: the re-adjudication's verdict rules, on synthetic inputs (no data needed)."""
+"""DECISIONS 45, test B: the verdict rule on synthetic evidence (no data needed)."""
 
 from __future__ import annotations
 
 import numpy as np
 
 from tools import dead_ball, engine, readjudicate
-
-
-def _row(condition: str, chain: str, spell: float) -> dict:
-    return {"game": "g", "condition": condition, "chain": chain, "spell_f1": spell}
-
-
-def test_the_duel_rule_stays_on_a_tie_and_leaves_when_it_loses_degraded() -> None:
-    w, wo = readjudicate.WITH, readjudicate.WITHOUT
-    tie = [_row("degradado", w, 0.4), _row("degradado", wo, 0.4), _row("limpio", w, 0.1)]
-    assert readjudicate.verdict(tie)
-    loses = [_row("degradado", w, 0.39), _row("degradado", wo, 0.40), _row("limpio", w, 0.9)]
-    assert not readjudicate.verdict(loses)  # the clean ball carries no weight
 
 
 def _evidence(restarts) -> dead_ball.Evidence:

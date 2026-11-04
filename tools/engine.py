@@ -65,20 +65,18 @@ class Params:
     # in possession has nobody within `radius_m` of the ball. False is the engine of DECISIONS 29.
     duel: bool = True
     # A stoppage the tags do not close restarts with the first control the decoder accepts after
-    # it (DECISIONS 44: W3 of DECISIONS 36, "after a stoppage there is a clear possessor"). It only
+    # it (DECISIONS 45: W3 of DECISIONS 36, "after a stoppage there is a clear possessor"). It only
     # acts when the chain is given its stoppages (`inputs(..., dead=...)`).
     first_control: bool = True
 
 
 DEFAULT = Params()
-# The players' stoppages: the logistic detector fitted on the seven DFL matches (DECISIONS 44,
+# The players' stoppages: the logistic detector fitted on the seven DFL matches (DECISIONS 45,
 # W3 of DECISIONS 36), not the one-threshold rule W1 that a ground-truth gate had chosen.
 KINEMATIC = "model"
 # The engine before the duel rule (DECISIONS 29-32): what the research lanes measured against and
 # archived. Their evidence stays reproducible against it; nothing delivered uses it.
 D31 = Params(duel=False, first_control=False)
-# The delivered chain without the duel rule: what DECISIONS 44 compares the duel rule against.
-NO_DUEL = Params(duel=False)
 # The chain of DECISIONS 36 (W1, no first-control forcing): what rounds 2-6 measured against. With
 # `detector="rule"` it reproduces their reference, SHA-256 72c98ed4bb4a; nothing delivered uses it.
 D36 = Params(first_control=False)
@@ -255,7 +253,7 @@ def restart_forcing(
 ) -> dict[int, int]:
     """`{frame: team}` the decoder forces: the tagged restarts (`restart_controls`) and, with the
     stoppages (`dead`) and `params.first_control`, the first accepted control after each stoppage
-    no tagged restart closes (DECISIONS 44), inside `runs` (default: this match's halves). A tag
+    no tagged restart closes (DECISIONS 45), inside `runs` (default: this match's halves). A tag
     always wins a shared frame. `accepted` is the controls the decoder accepts (`switch`)."""
     from tools import dead_ball_v2
 
@@ -300,7 +298,7 @@ def _players_stoppages(detector: str = KINEMATIC) -> np.ndarray:
 
 def delivered_dead(evidence, kinematic: bool = True, detector: str = KINEMATIC) -> np.ndarray:
     """The delivered `D`: tagged stoppages (ball out -> restart, DECISIONS 30), united with the
-    stoppages the players' speeds show when `kinematic`: the DFL detector since DECISIONS 44
+    stoppages the players' speeds show when `kinematic`: the DFL detector since DECISIONS 45
     (`detector="model"`, W3); `"rule"` is the one-threshold W1 of DECISIONS 36.
 
     The one definition `run`, the bench and the sweep all use, so they measure what is delivered.

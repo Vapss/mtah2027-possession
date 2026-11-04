@@ -15,7 +15,7 @@ The instrument, fixed before the first engine output on Metrica
   duel rule, restarts) and `engine.decode`, the events' set pieces and goal kicks as tagged
   restarts (team known, Smart Tagging's window), and the delivered `D`: tagged stoppages
   (`dead_ball.dead_mask`, "out") united with the players' stoppages (`metrica_kinematic`: the
-  delivered detector, W3 since DECISIONS 44; the lanes of rounds 5-6 measured W1, "rule").
+  delivered detector, W3 since DECISIONS 45; the lanes of rounds 5-6 measured W1, "rule").
 - **A chain change** is a frame where the decoded state goes from one team to the other inside a
   half (the state, before `D` is written over it: `D` is not a dating rule).
 - **Matching.** Each open-play truth change (E5) is paired with at most one chain change to the

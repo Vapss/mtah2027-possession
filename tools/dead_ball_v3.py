@@ -184,7 +184,7 @@ def chain(
     variant: str,
     params: engine.Params = engine.D36,
 ) -> np.ndarray:
-    """The W1 chain (`engine.D36`: what this lane measured against; DECISIONS 44 replaced it) with
+    """The W1 chain (`engine.D36`: what this lane measured against; DECISIONS 45 replaced it) with
     this variant's change: H/A/D/X per frame for the whole match.
 
     `kinematic` is the players' `D` for the variant (`kinematic_for`): W1 as delivered, or W1 with
@@ -210,7 +210,7 @@ def chain(
 def match_kinematic(onset: bool, params: Params = DEFAULT) -> np.ndarray:
     """The players' `D` over the delivered match: W1 exactly as delivered, or with its onsets."""
     if not onset:
-        return np.array(engine._players_stoppages("rule"))  # W1: the lane's object (DECISIONS 44)
+        return np.array(engine._players_stoppages("rule"))  # W1: the lane's object (DECISIONS 45)
     from tools import atd
     from tools.ball_gaps import half_runs
 

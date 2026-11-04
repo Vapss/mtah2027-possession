@@ -228,5 +228,5 @@ def test_the_engine_variant_reproduces_the_delivered_run() -> None:
     f = engine.features(atd.load("tactical"), emision.team_slots())
     ev = dead_ball.load_evidence()
     labels = dead_ball_edges.chain(f, ev, dead_ball_edges.kinematic_for("engine"), "engine")
-    # The lane is defined on W1's stoppages (DECISIONS 44): its reference is the D36 chain.
+    # The lane is defined on W1's stoppages (DECISIONS 45): its reference is the D36 chain.
     assert np.array_equal(labels, engine.run(engine.D36, detector="rule")[0]["label"].to_numpy())

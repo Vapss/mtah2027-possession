@@ -3,7 +3,7 @@ that the possession engine uses.
 
 The emission artifact this module once wrote (a softmax over each team's nearest player) had a
 temperature calibrated on the public ground truth. Under the organisers' clarified rules nothing
-may be calibrated on it, so the artifact and its calibration left the repository (DECISIONS 44;
+may be calibrated on it, so the artifact and its calibration left the repository (DECISIONS 45;
 the last version is on `dev` at `8ec43a8`). What stays reads only the ATD metadata and tracking.
 """
 

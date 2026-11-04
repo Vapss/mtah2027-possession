@@ -194,7 +194,7 @@ def _stoppage_scene():
 
 
 def test_an_untagged_stoppage_restarts_with_its_first_accepted_control() -> None:
-    """DECISIONS 44 (W3): after the stoppage the ball is away's from its first live frame."""
+    """DECISIONS 45 (W3): after the stoppage the ball is away's from its first live frame."""
     f, dead, runs = _stoppage_scene()
     ctrl, switch, forced = engine.inputs(f, engine.DEFAULT, (), dead, runs)
     assert forced == {10: 1}

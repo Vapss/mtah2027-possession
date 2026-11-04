@@ -1,6 +1,6 @@
 # Tiempo de ejecución de la cadena entregada
 
-Medido a mano el 3 de noviembre de 2026 sobre la cadena entregada (SHA-256 `7a7f70b68d39…`, decisión 44), con el
+Medido a mano el 3 de noviembre de 2026 sobre la cadena entregada (SHA-256 `7a7f70b68d39…`, decisión 45), con el
 bundle licenciado en `MTAH_DATA_DIR`. Máquina: portátil con Intel Core i9-13980HX (32 hilos),
 16 GB de RAM, Windows 11, Python 3.12.3 del entorno fijado (`uv.lock`). Son tiempos de pared; otra
 máquina dará otros.

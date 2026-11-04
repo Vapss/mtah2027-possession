@@ -493,7 +493,7 @@ def noisy_features(game: metrica_open.Game, sigma: float, seed: int) -> engine.F
     return features_from(game.players_m, home_slots(game), game.ball_m + noise)
 
 
-# Round 6 fitted the noise with W1's stoppages marking the dead frames (DECISIONS 43); DECISIONS 44
+# Round 6 fitted the noise with W1's stoppages marking the dead frames (DECISIONS 43); DECISIONS 45
 # keeps that sigma, so the fit and its target are pinned to the same detector.
 SIGMA_DETECTOR = "rule"
 
@@ -648,7 +648,7 @@ def variant_chain(
     if "relay" in parts:
         ctrl, switch = relayed(ctrl, switch, f, runs, frames("relay"))
     # A restart is cancelled only by a control the decoder accepts (DECISIONS 35): the variant's.
-    # The first-control forcing of DECISIONS 44 reads the same accepted controls, as the reference.
+    # The first-control forcing of DECISIONS 45 reads the same accepted controls, as the reference.
     dead = np.asarray(dead, dtype=bool)
     forced = engine.restart_forcing(ev.restarts, switch, engine.DEFAULT, dead, runs)
     state = engine.decode(ctrl, runs, engine.DEFAULT.dwell, forced, switch)

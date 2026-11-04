@@ -186,7 +186,7 @@ def chain(
     params: engine.Params = engine.D36,
     edges: Params = DEFAULT,
 ) -> np.ndarray:
-    """The W1 chain (DECISIONS 36, `engine.D36`: what this lane measured against; DECISIONS 44
+    """The W1 chain (DECISIONS 36, `engine.D36`: what this lane measured against; DECISIONS 45
     replaced it) with this variant's end of a stoppage: H/A/D/X for the whole match.
 
     `kinematic` is the players' `D` for the variant (W1, or W1 with its onsets). `engine` unites it

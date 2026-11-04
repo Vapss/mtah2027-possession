@@ -2,15 +2,12 @@
 
     python docs/paper/figures.py
 
-Every figure is either a synthetic illustration (made-up positions, no match data: the licensed
-data must not be published, RULES.md) or a chart of external data (Metrica's open games). The
-numbers of the external chart are read from `docs/analysis/readjudication.md`, the generated report
-of DECISIONS 44, so the figure cannot drift from it.
+Every figure is a synthetic illustration: made-up positions and no match data, because the licensed
+data must not be published (RULES.md).
 """
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import matplotlib
@@ -20,7 +17,6 @@ import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.patches import Circle, FancyArrowPatch, FancyBboxPatch, Rectangle  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parent.parent
 HOME, AWAY, BALL, DEAD, GREY = "#1f5fa8", "#c0392b", "#111111", "#8a8a8a", "#bdbdbd"
 plt.rcParams.update(
     {
@@ -237,37 +233,7 @@ def pipeline() -> None:
     _save(fig, "pipeline.svg")
 
 
-def readjudication() -> None:
-    """DECISIONS 44 on Metrica g1 and g2: spellF1 with and without the duel rule."""
-    text = (REPO / "docs/analysis/readjudication.md").read_text(encoding="utf-8")
-    pattern = re.compile(
-        r"^\| (g\d) \| (limpio|degradado) \| (con|sin) duelo[^|]*\| ([\d,]+) \|", re.M
-    )
-    values = {(g, c, w): float(v.replace(",", ".")) for g, c, w, v in pattern.findall(text)}
-    if len(values) != 8:
-        raise ValueError(f"expected 8 rows in readjudication.md, found {len(values)}")
-    fig, ax = plt.subplots(figsize=(3.4, 2.0))
-    groups = [("g1", "limpio"), ("g2", "limpio"), ("g1", "degradado"), ("g2", "degradado")]
-    for i, (g, c) in enumerate(groups):
-        for j, (w, colour) in enumerate([("con", HOME), ("sin", GREY)]):
-            v = values[(g, c, w)]
-            ax.bar(
-                i + (j - 0.5) * 0.36,
-                v,
-                0.34,
-                color=colour,
-                label=("with duel rule" if w == "con" else "without (D31)") if i == 0 else None,
-            )
-            ax.text(i + (j - 0.5) * 0.36, v + 0.01, f"{v:.3f}", ha="center", fontsize=5.8)
-    ax.set_xticks(range(4), [f"{g}\n{'clean' if c == 'limpio' else 'degraded'}" for g, c in groups])
-    ax.set_ylabel("spellF1 vs. event truth")
-    ax.set_ylim(0, 0.85)
-    ax.legend(frameon=False, fontsize=6.5, loc="upper center", ncol=2, bbox_to_anchor=(0.5, 1.16))
-    _save(fig, "readjudication.svg")
-
-
 if __name__ == "__main__":
     rules()
     timeline()
     pipeline()
-    readjudication()

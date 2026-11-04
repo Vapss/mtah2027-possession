@@ -1328,7 +1328,41 @@ equipo vuelve a jugar el balón antes que el rival).
 
 ---
 
-## 44. Las reglas aclaradas: nada de la entrega descansa en el ground truth (pre-registro)
+## 44. La aclaración de reglas del 3 de noviembre: el slice comprueba, no elige
+
+**Decidido.** La aclaración de la organización del 3-nov-2026 manda sobre `CHALLENGE.md` y sobre
+cualquier respuesta anterior. Se auditó la entrega y, por separado, cómo se eligió. El archivo que se
+entrega, según la revisión estática de la ruta `make engine`/`make repro`, no lee el ground truth
+ni el vídeo; consume tracking, XML, Smart Tagging y homografía. Falta la garantía mecánica de #63
+que impida la lectura de GT también en procesos hijos. La exposición está en la **selección**: la temperatura de emisión se calibró *in-sample*
+sobre 5.640 frames públicos (D18), y los umbrales 1,5 m / 5 m/s / `dwell` 1 (D29) y la regla del
+duelo (D34) se adoptaron midiendo en el slice.
+
+Desde hoy ninguna variante ni parámetro se elige por el slice público ni por el banco de
+trasplante; ambos son comprobación. La temperatura y el prior se revisan según sus consumidores
+reales (#63). La rejilla DFL/Metrica propuesta inicialmente no se usa para decidir sin un protocolo
+previo y una evaluación de derechos y adecuación al dominio. DFL difiere en definición y ruido;
+Metrica no declara una licencia normalizada con alcance suficientemente claro. La estabilidad
+en el partido puede ser diagnóstico, pero no puede elegir una configuración bajo la regla 11.
+El pre-registro no convierte resultados ya vistos en independientes: hay que separar desarrollo de
+la evaluación externa o declarar la exposición. Retirar la rejilla no justifica mantener los valores.
+La justificación externa de 1,5 / 5 / 1 y la regla del duelo sigue abierta en #63; si no hay
+evidencia admisible suficiente, se declara el conflicto antes del freeze sin afirmar cumplimiento.
+
+**Por qué.** El pre-registro evita el p-hacking, no cambia la fuente del dato: una compuerta escrita
+antes de medir cuyo criterio es «≥6 posesiones discordantes en el slice» sigue siendo ajuste sobre el
+ground truth. Con 17 posesiones y seis decisiones sobre la misma muestra, 0,5368 es *in-sample*. Las
+señales fuera de esa muestra son el acuerdo con el Smart Tagging (77,1%), los siete partidos de DFL y
+los invariantes sobre las 199.319 filas. Declararlo es más barato que dejar que un auditor encuentre
+`in-sample calibrated` en el código.
+
+**Coste.** El informe técnico pierde la frase «el slice no dirigió las decisiones», que era falsa en
+el sentido estricto; gana una sección que admite el riesgo y dice qué se está haciendo. El efecto de cambiar la temperatura depende de la cadena y sus consumidores; se verificará en #63.
+El freeze requiere una decisión trazable y no convierte la falta de evidencia en justificación.
+
+---
+
+## 45. Las reglas aclaradas, en su lectura más estricta: reaplicar sin el ground truth (pre-registro)
 
 **Contexto.** Los organizadores enviaron a todos los equipos una aclaración que **prevalece** sobre la
 documentación, los correos anteriores y las respuestas individuales. No está permitido comprobar la
@@ -1475,14 +1509,14 @@ Ninguna de estas filas decidió nada: la cadena es la que da la reaplicación de
 con la cadena W3 y este protocolo; `docs/technical-report.md` apunta a él. `bench.md`, `blocks.md`,
 `headroom.md` y `runtime.md` se regeneraron con W3. `engine-sensitivity.md` queda como el mapa
 histórico de la decisión 29 sobre W1: un barrido puntuado con el ground truth ya no puede elegir
-nada (`AGENTS.md`, regla 9).
+nada (`AGENTS.md`, regla 11).
 
 **Revisión de código (PR #70).** `/code-review` encontró 10 puntos; todos se corrigieron:
 
 - **Primer control coherente.** Las variantes de la ronda 6 ya aplican el mismo primer control que su
   referencia, a través de `engine.restart_forcing`, que también usa `engine.inputs`.
 - **Referencias separadas.** `engine.D31` vuelve a ser histórico (sin primer control) y
-  `engine.NO_DUEL` es "la cadena entregada sin duelo", con la que la 44 compara. Los números de la
+  `engine.NO_DUEL` es "la cadena entregada sin duelo", con la que la 45 compara. Los números de la
   prueba C no cambian.
 - **σ fijada a W1.** El ajuste de σ de la ronda 6 y su objetivo quedan fijados a W1
   (`SIGMA_DETECTOR`), así que regenerar ese informe vuelve a dar 0,85.
@@ -1495,3 +1529,33 @@ nada (`AGENTS.md`, regla 9).
   los valores.
 - **Metrica.** La regla 5 dice ya en qué términos se usan sus datos: el editor, que es el organizador,
   los ofrece para su uso con reconocimiento de la fuente.
+
+### Adenda B: integración con la decisión 44 del equipo; Metrica no decide nada
+
+Esta decisión se escribió en paralelo a la 44, que el equipo mergeó antes (#62, #64), y se numera 45
+al integrarse. Las dos dicen lo mismo en lo esencial: el slice y el banco comprueban, no eligen. La
+44 es más estricta en un punto, y manda la versión más estricta:
+
+- **Metrica no es evidencia admisible.** Su repositorio no declara licencia, y la 44 exige permiso
+  escrito antes de volver a usar sus datos como evidencia. La prueba del duelo en Metrica (punto 2 y
+  C) usó esos datos, así que **se retira sin peso**: se quita de `tools/readjudicate.py` y del
+  documento técnico, y sus cifras de arriba quedan solo como registro de lo que se midió. Lo mismo
+  para la fila "Metrica degradado" de la tabla de resultados y para la línea sobre Metrica de la
+  revisión de código: la regla 5 de `AGENTS.md` es la del equipo.
+- **Se declara la desviación del pre-registro.** El punto 2 nombraba a Metrica como juez. Retirado el
+  juez, la regla del duelo se queda por la definición del reto, que es una justificación admisible
+  sin datos: «In phases where the ball is contested or loose, possession stays with the last team
+  that had it» (`CHALLENGE.md`). Un duelo es un balón disputado. Esa debió ser su justificación desde
+  el principio; el resultado no cambia, porque la medición retirada iba en el mismo sentido.
+- **El primer control de W3** también es la definición del reto («whenever play restarts after a
+  stoppage, there is a clear possessor»).
+- **W1 cae por la regla de la propia 44.** La 44 no lo lista, pero W1 se eligió sobre W2/W3 con la
+  precisión de `D` del slice, que la 44 prohíbe como criterio. W3 no depende de Metrica: se entrenó en
+  DFL (CC-BY 4.0, datos externos con derechos, como exige la aclaración para entrenar) y entra por
+  el orden de prior escrito antes de medir y por la compuerta G4 (límites de DFL).
+- **Exposición declarada.** Ya sabíamos que W2/W3 puntuaban más en el slice (0,5026 frente a 0,4762,
+  `lane-dead-v2.md` §9). El cambio a W3 no se eligió por eso, sino al borrar la compuerta del ground
+  truth y aplicar el prior escrito; pero con esa exposición la cifra del slice de W3 no es evidencia
+  independiente, como dice la 44 de toda cifra del slice.
+- **Sigue abierto en #63**: la justificación externa de 1,5 m / 5 m/s / `dwell` 1 más allá de la
+  física. Esta decisión no la da por cerrada.
