@@ -21,10 +21,10 @@ import argparse
 import json
 import sys
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import dataclass
 from math import comb
 from pathlib import Path
-from typing import Sequence
 
 import numpy as np
 
@@ -59,7 +59,9 @@ class MatchStats:
     starts: dict[str, np.ndarray]
 
 
-def match_stats(match: str, cands: dict[str, dead_ball_v3.Params | None] | None = None) -> MatchStats:
+def match_stats(
+    match: str, cands: dict[str, dead_ball_v3.Params | None] | None = None
+) -> MatchStats:
     """Measure every candidate on one DFL match. The expensive part; runs once per match."""
     from tools import external
 
@@ -74,7 +76,9 @@ def match_stats(match: str, cands: dict[str, dead_ball_v3.Params | None] | None 
         known, window = dead_ball_v3.p90_window(players)
         dead, graded = section.status == 0, section.status >= 0
         for name, params in cands.items():
-            mask = w1 if params is None else dead_ball_v3.extend_onsets(w1, known, window, (), params)
+            mask = (
+                w1 if params is None else dead_ball_v3.extend_onsets(w1, known, window, (), params)
+            )
             for key, value in dead_ball_v3.frame_counts(mask, dead, graded).items():
                 counts[name][key] += value
             a, _ = dead_ball_v3.edge_offsets(mask, dead)
@@ -115,7 +119,9 @@ def select(rows: Sequence[MatchStats], names: Sequence[str] | None = None) -> st
             eligible.append((name, stats))
     if not eligible:
         raise ValueError("no candidate keeps the frame precision floor")
-    best = min(eligible, key=lambda item: (item[1]["start_abs_median_s"], -item[1]["f1"], _cap(item[0])))
+    best = min(
+        eligible, key=lambda item: (item[1]["start_abs_median_s"], -item[1]["f1"], _cap(item[0]))
+    )
     return best[0]
 
 
@@ -133,7 +139,11 @@ def _sign_p(wins: int, n: int) -> float:
     if n == 0:
         return 1.0
     tail = sum(comb(n, k) for k in range(wins, n + 1)) / 2**n
-    return min(1.0, 2 * tail) if wins > n / 2 else min(1.0, 2 * sum(comb(n, k) for k in range(0, wins + 1)) / 2**n)
+    return (
+        min(1.0, 2 * tail)
+        if wins > n / 2
+        else min(1.0, 2 * sum(comb(n, k) for k in range(0, wins + 1)) / 2**n)
+    )
 
 
 def run(matches: Sequence[str] | None = None) -> dict:
@@ -183,11 +193,12 @@ def report(result: dict, command: str = "") -> str:
     lines = [
         "# Dead-ball onset: leave-one-match-out on DFL",
         "",
-        f"Generado por `{command}`. No lee ground truth ni vídeo: solo el corpus DFL/IDSSE (CC-BY 4.0).",
-        "Regla de selección, métricas y criterio de decisión: `docs/proposals/lane-loo-dead-v3.md`,",
-        "commiteado antes de la primera corrida.",
+        f"Generado por `{command}`. No lee ground truth ni vídeo: solo el corpus",
+        "DFL/IDSSE (CC-BY 4.0). Regla de selección, métricas y criterio de decisión:",
+        "`docs/proposals/lane-loo-dead-v3.md`, commiteado antes de la primera corrida.",
         "",
-        "| partido fuera | constante elegida en los otros 6 | precisión | recall | F1 | \\|inicio\\| (s) | F1 de W1 | \\|inicio\\| de W1 (s) | ΔF1 |",
+        "| partido fuera | constante elegida en los otros 6 | precisión | recall | F1 "
+        "| \\|inicio\\| (s) | F1 de W1 | \\|inicio\\| de W1 (s) | ΔF1 |",
         "|---|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for f in result["folds"]:
@@ -198,7 +209,8 @@ def report(result: dict, command: str = "") -> str:
         )
     lines += [
         "",
-        f"- Constante elegida con los 7 partidos (lo que ya estaba publicado): **{result['full_fit']}**.",
+        "- Constante elegida con los 7 partidos (lo que ya estaba publicado): "
+        f"**{result['full_fit']}**.",
         f"- Estabilidad de la elección entre pliegues: {result['stability']}.",
         f"- Gana a W1 en F1 fuera de muestra: **{result['wins']}/{len(result['folds'])}** "
         f"(test de signos bilateral p = {result['sign_p']:.3f}).",
@@ -207,9 +219,10 @@ def report(result: dict, command: str = "") -> str:
         "",
         "## Cómo se lee",
         "",
-        "Criterio escrito antes de correr: la evidencia de DFL para `onset` es **fuera de muestra** si",
-        "gana a W1 en al menos 6 de 7 pliegues y la constante elegida es la misma en al menos 5. Si no,",
-        "el 7/7 publicado es un ajuste sobre los mismos siete partidos y así hay que declararlo.",
+        "Criterio escrito antes de correr: la evidencia de DFL para `onset` es **fuera de",
+        "muestra** si gana a W1 en al menos 6 de 7 pliegues y la constante elegida es la misma en",
+        "al menos 5. Si no, el 7/7 publicado es un ajuste sobre los mismos siete partidos y así",
+        "hay que declararlo.",
         "",
     ]
     return "\n".join(lines)
@@ -225,7 +238,9 @@ def main(argv: list[str] | None = None) -> int:
     text = report(result, "python tools/loo_dead_ball.py --write docs/analysis/loo-dead-ball.md")
     if args.json:
         args.json.parent.mkdir(parents=True, exist_ok=True)
-        args.json.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        args.json.write_text(
+            json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
     if args.write:
         args.write.parent.mkdir(parents=True, exist_ok=True)
         args.write.write_text(text + "\n", encoding="utf-8")

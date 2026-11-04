@@ -24,7 +24,7 @@ BACKUP_DIR ?= runs/backup
 BLOCKS_INPUTS ?= evaluation/results/baseline_smooth50.csv $(SUBMISSIONS)/backup.csv $(SUBMISSIONS)/engine.csv
 BLOCKS_DOC ?= docs/analysis/blocks.md
 
-.PHONY: help install dev starter test lint fmt guard ingest demo submission validate score score-baselines graph graph-check postprocess verify-b6 f0a backup repro engine engine-sweep blocks ci clean
+.PHONY: help install dev starter test lint fmt guard ingest demo submission validate score score-baselines graph graph-check postprocess verify-b6 f0a backup repro engine engine-sweep loo blocks ci clean
 
 help:  ## list the targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sed 's/:.*## /\t/' | expand -t22
@@ -70,6 +70,9 @@ engine:  ## #6 possession engine (DECISIONS 29): artifact -> assemble -> $(SUBMI
 
 engine-sweep:  ## #6 the pre-registered sensitivity sweep -> docs/analysis/engine-sensitivity.md
 	$(PY) tools/engine_sweep.py --write docs/analysis/engine-sensitivity.md
+
+loo:  ## #63 leave-one-match-out of the DFL dead-ball constants -> docs/analysis/loo-dead-ball.md (needs MTAH_EXTERNAL_DIR, not in CI)
+	$(PY) tools/loo_dead_ball.py --json runs/loo_dead_ball/result.json --write docs/analysis/loo-dead-ball.md
 
 blocks:  ## #36 structural report of $(BLOCKS_INPUTS) in 22 blocks -> $(BLOCKS_DOC) (run `make backup engine` first)
 	$(PY) tools/blocks.py $(BLOCKS_INPUTS) --write $(BLOCKS_DOC)

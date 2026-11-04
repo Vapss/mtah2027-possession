@@ -1,0 +1,192 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{amsmath}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=black,urlcolor=blue}
+
+\title{El experimento que vale la pena para el contrato final\\
+\large Validación \emph{leave-one-match-out} de las constantes de balón muerto fijadas en DFL}
+\author{Nadia --- Integración y entrega}
+\date{4 de noviembre de 2026}
+
+\begin{document}
+\maketitle
+
+\section{Resumen}
+
+La entrega tiene un solo problema que pueda costar la participación: las constantes que se
+entregan se eligieron con el \emph{ground truth} público. La aclaración del 3 de noviembre exige
+ajustar en datos externos, así que la pregunta útil no es ``qué variante sube el número'' sino
+``qué evidencia externa aguanta una prueba que no la vio''.
+
+La respuesta es una validación \emph{leave-one-match-out} sobre los siete partidos DFL/IDSSE
+(CC-BY 4.0) de la regla que fijó las constantes de inicio de las paradas. Se entrenó con seis
+partidos y se evaluó en el séptimo, rotando. El resultado: la constante elegida es la misma en
+\textbf{7 de 7} pliegues y gana a W1 en el partido que no vio en \textbf{7 de 7} ($p=0{,}016$),
+con $\Delta$F1 mediano $+0{,}052$ y una ganancia mediana de $3{,}28$~s en el error de inicio.
+
+Eso convierte el ``7/7'' publicado ---que era \emph{in-sample} sobre los mismos siete
+partidos--- en una estimación fuera de muestra, y es la primera pieza de evidencia del proyecto
+que puede citarse sin la etiqueta de ajuste. No cambia el CSV por sí sola: habilita la decisión
+sobre U1 y da soporte externo al $D$ entregado.
+
+\section{Cómo se eligió, de arriba hacia abajo}
+
+\subsection*{El objetivo y sus amenazas}
+
+El contrato final es \texttt{artifact} $\rightarrow$ \texttt{submission} $\rightarrow$
+\texttt{validate} $\rightarrow$ \texttt{score}, reproducible en una corrida y desde un clon
+limpio. Ordenadas por pérdida esperada, las amenazas son: (1)~descalificación por ajuste sobre
+el \emph{ground truth}, que lleva la puntuación a cero; (2)~no reproducibilidad, que también la
+lleva a cero; (3)~no llegar a la fecha; (4)~perder unas centésimas de \texttt{spellF1}. Por eso
+el experimento que vale la pena es el que ataca (1), no el que persigue (4).
+
+\subsection*{Qué llega realmente al CSV}
+
+Solo cuatro cosas del repositorio pueden mover el archivo entregado. Todo lo demás que se
+propuso es una edición de una línea o una decisión que ya tiene el dato medido.
+
+\begin{center}
+\begin{tabular}{@{}p{4.1cm}p{2.3cm}p{7.2cm}@{}}
+\hline
+Componente & ¿Llega al CSV? & Por qué \\
+\hline
+\texttt{radius\_m}, \texttt{speed\_mps}, \texttt{dwell} & sí & \texttt{engine.Params}, en cada frame \\
+\texttt{duel} & sí & \texttt{Params.duel}, cambia etiquetas \\
+temperatura $2{,}857\ldots$ & no & con un artefacto, el \texttt{argmax} es invariante a $T$ \\
+prior 355 & no & \texttt{postprocess} no está en \texttt{make repro} \\
+W1 / reanudaciones & sí & ya fijados en DFL y en el reglamento \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection*{Los candidatos que se descartaron}
+
+\begin{center}
+\begin{tabular}{@{}p{4.6cm}p{10.2cm}@{}}
+\hline
+Candidato & Por qué no \\
+\hline
+Rejilla de 27 configuraciones en DFL & Sesgo de escala: DFL tiene 4,58 posesiones/min frente a
+3,62 nuestras; premia fragmentar (D37) y empujaría a $(2{,}0/7/1)$, que en el slice vale
+$0{,}4585$ con un acuerdo de Smart Tagging de $75{,}7\,\%$. \\
+Re-arbitrar el duelo en DFL & No identificable: DFL da la posesión a quien \emph{toca} y el reto
+a quien \emph{controla}. \\
+U1 \texttt{onset} ``tal cual'' & Su evidencia era 7/7 \emph{in-sample}: las constantes se
+eligieron en los mismos siete partidos. Es el defecto que este trabajo mide. \\
+Umbrales del motor sin GT & Correcto en principio, pero necesita el bundle licenciado, que no
+está en este clon; queda como el siguiente experimento. \\
+Temperatura y prior 355 & No son experimentos: no cambian el CSV. \\
+Ronda 7 de modelado & Seis rondas, quince variantes pre-registradas, ninguna pasó. \\
+\hline
+\end{tabular}
+\end{center}
+
+\section{El defecto que motiva el experimento}
+
+\texttt{lane-dead-v3} eligió \texttt{onset\_mps} $=3{,}25$ y \texttt{onset\_cap\_s} $=40$ con una
+regla escrita: entre los candidatos que mantienen precisión de frame $\geq 0{,}90$, la menor
+mediana de $|$error de inicio$|$. La rejilla se corrió sobre los siete partidos DFL. Después se
+reportó, sobre \emph{esos mismos siete partidos}, precisión $0{,}919$, recall $0{,}790$,
+F1 $0{,}849$ y ``gana 7 de 7''.
+
+Eso no es un error de método: la aclaración permite ajustar en datos externos. Pero el 7/7 es
+\emph{in-sample} sobre el corpus externo, exactamente como $0{,}5368$ lo es sobre el slice. La
+pregunta que faltaba es si la \emph{regla de selección} sobrevive a un partido que no vio.
+
+\section{Protocolo, escrito antes de correr}
+
+\begin{itemize}
+\item \textbf{Datos:} los siete partidos DFL/IDSSE, estado vivo/muerto por frame. Ni
+\emph{ground truth} público, ni vídeo, ni el bundle licenciado.
+\item \textbf{Unidad:} el partido. Siete pliegues; se entrena con seis y se evalúa con el que
+quedó fuera.
+\item \textbf{Candidatos:} los mismos doce del pre-registro original,
+$\{3{,}0;3{,}25;3{,}5;3{,}75\}\,\text{m/s}\times\{10;20;40\}\,\text{s}$. W1 es la referencia,
+no un candidato.
+\item \textbf{Selección:} idéntica a la publicada (precisión $\geq 0{,}90$, menor mediana de
+$|$inicio$|$, empate a F1, empate al tope más corto).
+\item \textbf{Decisión, antes de ver el resultado:} la evidencia es \emph{fuera de muestra} si
+gana a W1 en F1 en $\geq 6$ de 7 pliegues \emph{y} la constante elegida se repite en $\geq 5$ de
+7. Si no, el 7/7 se declara ajuste \emph{in-sample}.
+\end{itemize}
+
+\section{Resultado}
+
+Cifras tal como las emite \texttt{tools/loo\_dead\_ball.py} (punto decimal, para no
+transcribir a mano).
+
+\begin{center}
+\begin{tabular}{@{}lrrrrrrr@{}}
+\hline
+Partido fuera & Precisión & Recall & F1 & $|$inicio$|$ (s) & F1 de W1 & $|$inicio$|$ W1 (s) & $\Delta$F1 \\
+\hline
+J03WMX & 0.916 & 0.812 & 0.861 & 2.04 & 0.823 & 4.86 & +0.0378 \\
+J03WN1 & 0.913 & 0.828 & 0.868 & 1.40 & 0.828 & 4.52 & +0.0406 \\
+J03WOH & 0.934 & 0.771 & 0.845 & 2.36 & 0.793 & 5.88 & +0.0522 \\
+J03WOY & 0.926 & 0.734 & 0.819 & 2.04 & 0.775 & 4.08 & +0.0443 \\
+J03WPY & 0.930 & 0.819 & 0.871 & 1.44 & 0.813 & 4.72 & +0.0577 \\
+J03WQQ & 0.906 & 0.746 & 0.818 & 1.52 & 0.732 & 6.64 & +0.0861 \\
+J03WR9 & 0.906 & 0.812 & 0.857 & 1.80 & 0.792 & 7.36 & +0.0644 \\
+\hline
+\end{tabular}
+\end{center}
+
+\begin{itemize}
+\item Constante elegida con los siete partidos (lo ya publicado): \texttt{onset<3.25/40s}.
+\item Estabilidad entre pliegues: \textbf{7 de 7} eligen la misma constante.
+\item Gana a W1 fuera de muestra: \textbf{7 de 7}, test de signos bilateral $p=0{,}016$.
+\item $\Delta$F1 mediano: $+0{,}052$; ganancia mediana de $|$inicio$|$: $3{,}28$~s.
+\end{itemize}
+
+\textbf{Control de sanidad.} El mismo arnés reproduce los números publicados con los siete
+partidos juntos: W1 $0{,}954/0{,}682/0{,}796$ y \texttt{onset} $0{,}919/0{,}790/0{,}849$, con
+$645$ tramos y un error de inicio de $5{,}44 \rightarrow 1{,}68$~s. Si el arnés estuviera mal,
+estos dos números no coincidirían.
+
+\section{Qué cambia en la entrega}
+
+\begin{enumerate}
+\item \textbf{La evidencia de U1 pasa a ser fuera de muestra.} La decisión de adoptarlo deja de
+apoyarse en un ajuste sobre siete partidos. Sigue siendo una decisión del lead, no mía: es un
+cambio de modelo y el CSV no se toca hasta que se decida.
+\item \textbf{El $D$ entregado gana soporte externo.} W1 ---el $40\,\%$ de los frames--- también
+se fijó en DFL con el mismo procedimiento. Que el procedimiento generalice a un partido no visto
+es lo que permite decir ``fijado fuera del partido'' sin que sea una declaración vacía.
+\item \textbf{Los umbrales del motor siguen como prior declarado.} $1{,}5$~m y $5$~m/s dependen
+del ruido de \emph{nuestro} balón; DFL y Metrica tienen balón limpio o sintético y no pueden
+identificarlos. Queda pendiente el chequeo sin GT sobre las 199.319 filas, que necesita el bundle.
+\item \textbf{El CSV no cambia.} Este trabajo no adopta U1 ni toca constantes. Si el lead adopta
+U1, la entrega se re-corre con \texttt{make repro}, el validador oficial y una única medición del
+slice, reportada como \emph{in-sample}.
+\end{enumerate}
+
+\section{Lo que no prueba}
+
+\begin{itemize}
+\item $n=7$. El test de signos no baja de $p=0{,}016$ con siete pliegues: es dirección fuerte,
+no prueba estadística en sentido estricto.
+\item Mide F1 de estado vivo/muerto, no \texttt{spellF1}. La traducción a la métrica del reto
+pasa por el motor y el slice, y ahí el efecto local es neutro ($-0{,}0105$, $0$ discordancias).
+\item La definición de $D$ de DFL no es la del reto (D37); solo se usa el estado por frame, que
+es físico.
+\item No cubre la política de huecos de balón ni los umbrales del motor.
+\end{itemize}
+
+\section{Reproducción}
+
+\begin{verbatim}
+export MTAH_EXTERNAL_DIR=...   # idsse/ con los 21 ficheros del espejo
+python tools/loo_dead_ball.py --json runs/loo_dead_ball/result.json \
+    --write docs/analysis/loo-dead-ball.md
+\end{verbatim}
+
+El pre-registro está en \texttt{docs/proposals/lane-loo-dead-v3.md} y se commiteó antes de la
+primera corrida. La tabla vive en \texttt{docs/analysis/loo-dead-ball.md}; el JSON, en
+\texttt{runs/loo-dead-ball/} (ignorado por Git).
+
+\end{document}

@@ -1,7 +1,7 @@
 """Lane loo-dead-v3: the leave-one-match-out rule, pinned on synthetic match statistics.
 
-No DFL file is read here: `MatchStats` is built by hand, so the selection rule, the fold rotation and
-the decision arithmetic are testable in CI without the external corpus.
+No DFL file is read here: `MatchStats` is built by hand, so the selection rule, the fold
+rotation and the decision arithmetic are testable in CI without the external corpus.
 """
 
 from __future__ import annotations
