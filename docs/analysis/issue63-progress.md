@@ -83,9 +83,10 @@ para tres partidos DFL (`J03WMX`, `J03WN1`, `J03WPY`). El [artículo](https://ar
 indica que tres analistas fijaron los tiempos observando animaciones del tracking. Es una posible
 referencia externa para estudiar contactos y recepciones, no una verdad completa de spells: el
 origen en el mismo tracking introduce dependencia, los tres partidos DFL ya se exploraron en el
-proyecto y el balón es más limpio que el de la competición. Un protocolo tendría que declarar esas
-limitaciones, evaluar qué acciones implican realmente control y reservar una evaluación no vista.
-No se han abierto las anotaciones ni medido variantes con este benchmark. La licencia del código
+proyecto y el balón es más limpio que el de la competición. Se registró primero el protocolo de
+factibilidad y después se auditaron dos partidos de desarrollo; el resultado agregado está en
+`docs/analysis/elastic-feasibility.md`. No se ha medido ninguna variante ni abierto el partido
+reservado. Sigue pendiente distinguir las acciones que implican control. La licencia del código
 ELASTIC es MPL-2.0 y es distinta de la licencia de las anotaciones; este proyecto no lo incorpora.
 
 ## Pendiente para cerrar #63
