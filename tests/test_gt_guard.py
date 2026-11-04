@@ -22,11 +22,16 @@ def guarded(code: str, *args: str, synthetic: bool = False) -> subprocess.Comple
     env["PYTHONPATH"] = os.pathsep.join((str(GUARD), str(ROOT), env.get("PYTHONPATH", "")))
     with tempfile.TemporaryDirectory(prefix="gt-audit-") as directory:
         log = Path(directory) / "attempts.log"
+        started = Path(directory) / "started.log"
         env["POSSESSION_GT_GUARD_LOG"] = str(log)
+        env["POSSESSION_GT_GUARD_STARTED"] = str(started)
         result = subprocess.run(
             [sys.executable, "-c", code, *args], cwd=ROOT, env=env, capture_output=True, text=True
         )
         result.gt_attempted = log.exists()
+        result.guarded_processes = (
+            len(set(started.read_text().splitlines())) if started.exists() else 0
+        )
         return result
 
 
@@ -66,6 +71,8 @@ def test_repro_build_runs_with_synthetic_inputs_and_gt_guard() -> None:
         result = guarded(code, workdir, synthetic=True)
     assert result.returncode == 0, result.stderr
     assert not result.gt_attempted
+    # repro + 2 builds * (engine, assembler, validator): a dropped hook must not pass silently.
+    assert result.guarded_processes >= 7
 
 
 @requires_bundle
@@ -80,3 +87,4 @@ def test_repro_build_with_real_inputs_never_opens_ground_truth() -> None:
         result = guarded(code, workdir)
     assert result.returncode == 0, result.stderr
     assert not result.gt_attempted
+    assert result.guarded_processes >= 7

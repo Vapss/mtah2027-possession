@@ -48,7 +48,8 @@ cada constante de bibliotecas o validadores; faltan auditorías de dependencias 
 Los controles negativos comprueban que un acceso prohibido deja evidencia incluso si se captura la
 excepción. La prueba sintética ejecuta la cadena de reproducción real sustituyendo los lectores y
 detectores cuyos datos licenciados no están disponibles. Una prueba separada, marcada para cuando
-exista el bundle, ejecuta la reproducción con entradas reales y la misma vigilancia.
+exista el bundle, ejecuta la reproducción con entradas reales y la misma vigilancia. Se exige que
+el hook se haya iniciado en al menos siete procesos: `repro` y los tres pasos de cada build.
 
 Alcance: los hooks de auditoría no son un sandbox del sistema operativo. Cubren eventos `open` de
 procesos Python que heredan el entorno; no demuestran ausencia de lecturas mediante procesos nativos,
@@ -66,6 +67,15 @@ La diferencia de dominio, la interpolación y una posible dependencia entre etiq
 sesgar la evaluación: no se acepta todavía como verdad ni se han medido variantes. Antes de cualquier
 evaluación se necesita verificar derechos y definición, fijar un prior y protocolo de separación
 desarrollo/evaluación, y dejar constancia de qué evidencia externa ya se había observado.
+
+Otro candidato es [SoccerTrack v2](https://huggingface.co/datasets/atomscott/soccertrack-v2): la
+[licencia de datos CC BY 4.0](https://github.com/AtomScott/SoccerTrack-v2/blob/main/LICENSE-DATA)
+cubre las anotaciones y exige atribución. Su ficha describe acciones de balón con equipo y jugador,
+pero el propio balón se reconstruye interpolando entre eventos anotados: usa la fecha de la etiqueta.
+No es un árbitro independiente del error de fecha o de distancia balón-jugador sin estudiar esa
+dependencia. Además, los partidos son universitarios y el acceso a los archivos exige aceptar sus
+condiciones en Hugging Face. No se descargó ni midió; su posible uso requiere fijar versión, permiso
+y un protocolo acorde con esos límites antes de observar resultados.
 
 ## Pendiente para cerrar #63
 

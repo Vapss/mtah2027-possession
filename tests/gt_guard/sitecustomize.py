@@ -24,6 +24,10 @@ if root:
             raise PermissionError("GT access forbidden during submission build")
 
     sys.addaudithook(audit)
+    started = os.environ.get("POSSESSION_GT_GUARD_STARTED")
+    if started:
+        with open(started, "a", encoding="utf-8") as marker:
+            marker.write(f"{os.getpid()}\n")
 
     if os.environ.get("POSSESSION_SYNTHETIC_BUILD") == "1":
         # Replace only unavailable licensed inputs; the actual build and its subprocesses run.
