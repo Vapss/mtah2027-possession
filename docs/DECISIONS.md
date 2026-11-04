@@ -1325,3 +1325,54 @@ la regla, y el vídeo ya no entra (decisión 38). Lo que queda hasta la entrega 
 congelarla (#26) y reproducirla. Una ronda nueva solo se abre con un juez o un dato nuevo, por
 ejemplo una verdad de Metrica con la definición del reto (un `RECOVERY` abre posesión solo si su
 equipo vuelve a jugar el balón antes que el rival).
+
+---
+
+## 44. Las reglas aclaradas: nada de la entrega descansa en el ground truth (pre-registro)
+
+**Contexto.** Los organizadores enviaron a todos los equipos una aclaración que **prevalece** sobre la
+documentación, los correos anteriores y las respuestas individuales. No está permitido comprobar la
+salida contra el vídeo; usar etiquetas a mano o cualquier dato creado manualmente sobre el partido
+dado; subir los datos a servicios de IA; ni entrenar, ajustar o calibrar el algoritmo con el ground
+truth de posesión o con el vídeo. Si hay parámetros que ajustar, **solo con datos externos**. Está
+permitido: comprobaciones automáticas con los datos dados, inspeccionar datos y vídeo para entender
+qué es posesión, usar vídeo, tracking y Smart Tagging como entrada (si nada se entrenó con el ground
+truth ni con el vídeo), entregar ficheros intermedios y usar datasets con derechos de uso. El equipo
+decide **no consultar** a los organizadores y aplicar la lectura más estricta.
+
+La cadena entregada no tiene ningún valor ajustado con el ground truth, pero varias piezas entraron
+con el slice público (o el banco, que puntúa contra ese mismo ground truth) entre sus compuertas.
+Elegir con el ground truth qué pieza entra es, en la lectura estricta, calibrar con él.
+
+**Decidido, antes de medir.**
+
+1. **Principio.** Ninguna constante, regla o decisión de incluir una pieza en la cadena entregada
+   puede apoyarse en el ground truth público ni en un instrumento que puntúe contra él (slice,
+   banco, auditoría del margen). Justificaciones válidas: el reglamento, la física o la literatura
+   sin constante ajustada; datos externos con derechos de uso (DFL/IDSSE, CC-BY 4.0; los partidos de
+   muestra de Metrica, publicados por el propio organizador para su uso con reconocimiento de la
+   fuente); y el tracking y el Smart Tagging como comprobaciones automáticas, que no son ground truth.
+   Las cifras del slice y del banco se siguen informando, solo como diagnóstico y después de decidir.
+2. **Cada pieza, otra vez:**
+   - **Control** (1,5 m, 5 m/s, `dwell` 1): física, fijados antes de medir (decisión 29). Se queda;
+     el barrido de la 29 fue un mapa de sensibilidad y no eligió nada.
+   - **Reanudaciones** que fuerzan la posesión y su cancelación (decisiones 32 y 35): el reglamento
+     da el balón al equipo que saca y el Smart Tagging es la entrada. Se quedan por principio; el
+     veto del slice de la 32 sale de la justificación (nunca se activó).
+   - **Paradas etiquetadas** (`out`, decisiones 30-31): Smart Tagging y balón fuera del campo, con
+     constantes fijadas desde el tracking y el etiquetado. Se quedan si la auditoría de procedencia
+     no encuentra ground truth en ellas.
+   - **Paradas de los jugadores** (W1, decisión 36): constantes fijadas en los 7 partidos de DFL y
+     7 de 7 a favor allí. Se quedan.
+   - **Regla del duelo** (decisión 34): viene de la literatura y no añade constante, pero entró con
+     el slice y el banco como compuertas. Se vuelve a decidir con el juez que la decisión 42 fijó
+     para las reglas de *si* cambia la posesión: la verdad de eventos de Metrica en g1 **y** g2 (la
+     37 descarta DFL para reglas de número de posesiones). Métrica: el `spellF1` oficial contra esa
+     verdad, media de g1 y g2, con el balón degradado de la ronda 6 (σ = 0,85 m fijada sin etiquetas
+     y nuestro patrón de balón visto), que reproduce nuestras condiciones. **Regla: la regla del
+     duelo se queda si su media degradada es ≥ la de `engine.D31` (la misma cadena sin ella); si no,
+     sale de la entrega, diga lo que diga el slice.** El balón limpio, los errores de cambio, DFL y
+     el acuerdo con el Smart Tagging se informan como contexto, sin peso.
+3. **El código que ajusta algo con el ground truth sale del repositorio**, esté o no en la entrega.
+4. **`AGENTS.md` incorpora la aclaración**: ningún dato producido por personas sobre este partido,
+   tampoco para validar, y nada derivado de los datos en servicios de IA salvo agregados.
