@@ -1376,3 +1376,74 @@ Elegir con el ground truth qué pieza entra es, en la lectura estricta, calibrar
 3. **El código que ajusta algo con el ground truth sale del repositorio**, esté o no en la entrega.
 4. **`AGENTS.md` incorpora la aclaración**: ningún dato producido por personas sobre este partido,
    tampoco para validar, y nada derivado de los datos en servicios de IA salvo agregados.
+
+**Medido (punto 2, regla del duelo).** `python tools/readjudicate.py --write
+docs/analysis/readjudication.md`: con el balón degradado, la regla del duelo da 0,4743 frente a 0,4357
+en g1 y 0,4430 frente a 0,4020 en g2 (media +0,0398); con el balón limpio pierde 0,0111 (contexto).
+**Se queda.** Se repite con la cadena final (adenda A).
+
+### Adenda A (escrita antes de medir lo que sigue, tras una auditoría de procedencia)
+
+Un agente revisó en solo lectura, sin ver datos y sin mis conclusiones, la procedencia de cada
+constante, regla e inclusión de la cadena entregada, y luego de cada alternativa descartada. Encontró
+que el ground truth decidió más de lo que suponía el punto 2:
+
+- **W1 frente a W2/W3** (decisión 36): solo la compuerta G2 del carril dead-v2 (precisión de `D` en
+  el slice ≥ 0,80) descartó W2 y W3. Su orden de prior era W3 > W2 > W1 > W4, y DFL (0,3529 frente a
+  0,3216 con nuestro balón) y el Smart Tagging (77,5% frente a 76,9%) iban con W3.
+- **La corrección 2 de la decisión 31** (un episodio de menos de 1 s fuera del campo no abre parada)
+  se revirtió con evidencia del slice, fuera de su regla escrita.
+- La decisión 29 declaró una exploración de 5 configuraciones en el slice antes de fijar el control;
+  el diseño del control se motivó inspeccionando el slice; la "referencia física" de 3,4
+  posesiones/min es la cifra del propio slice.
+
+**Procedimiento, mecánico y sin discreción.** Cada regla de selección escrita que dio forma a la
+entrega se vuelve a aplicar tal cual, **borrando toda compuerta que lea el ground truth** (slice,
+banco, precisión o recall de `D` públicos, auditoría) **o una cifra derivada de él** (3,4/min,
+14,2 s, 19,6% de `D`). Una pieza entra solo con evidencia admisible a favor bajo su propia regla; si
+al borrar las compuertas una decisión se queda sin base, vale el estado anterior a ella. Inspeccionar
+el ground truth para entender qué es posesión está permitido por la aclaración y no decide nada.
+
+**Resultado de reaplicar, por orden cronológico** (todo lo que no requiere medir):
+
+| decisión | sin compuertas del GT | efecto |
+|---|---|---|
+| 29 control | nada puede sustituir al default; valores de física | se queda |
+| 30 carril D | solo la compuerta de bloques: V3 y V4 la fallan (bloque 7 al 50,4%); el prior da V2 | se queda `out` |
+| 30, 31.1, 32, 35 reanudaciones | por principio; los vetos del slice desaparecen | se quedan |
+| 30 motor frente al respaldo | Smart Tagging 73,1% frente a 62,2%; DFL 7 de 7 | se queda el motor |
+| 31.2 episodios cortos | la regla escrita la adopta por principio; la reversión fue del GT | **prueba B** |
+| 34 duelo | punto 2: Metrica | se queda (se repite en C) |
+| 36 paradas de los jugadores | solo G4 (límites de DFL); pasan las cuatro; el prior da **W3** | **W3 sustituye a W1** |
+| 39 dead-v3 | sus variantes están definidas sobre los tramos de W1 ("los inicios W1"), que ya no están; `first-control` ya va en W3 | no aplica |
+| 39 dating `first` | la rechaza la compuerta DFL de la 42 (el mismo fichero) | fuera |
+| 40 d-edges E2 `kick` | su propio §2.2 dice, antes de medir, que DFL no puede juzgarla; sin juez admisible | fuera |
+| 34 imputación, 39 st-gaps, 38 vídeo | sin evidencia admisible a favor (el Smart Tagging va en contra de la imputación) | fuera |
+| 34/37 V6 `mid` | `mid` salió de mirar latencias del slice | fuera |
+| F, decodificador V1/V3/V4/V5, U2, d-edges E1/E3/E4, 41, 42, 43 | fallan compuertas sin GT (Smart Tagging, bloques, DFL, Metrica) | fuera |
+
+**W3 en la cadena entregada.** El detector logístico de DFL (`dead_ball_v2.MODEL`, entrenado en los 7
+partidos, pesos en el código) se une a las paradas etiquetadas, y cada parada que no cierra una
+reanudación etiquetada da el balón al equipo del **primer control que el decodificador acepta** tras
+ella (un duelo no observa posesión, decisión 35).
+
+**Lo que falta medir, en este orden, y cómo decide:**
+
+- **B. Premisa de la corrección 2, sin etiquetas.** Entre las paradas etiquetadas que abre un
+  episodio fuera del campo de menos de 1 s, ¿cuántas terminan en un saque de banda, un córner o un
+  saque de puerta, reanudaciones que solo siguen a un balón fuera? **La corrección 2 sigue revertida
+  si son más de la mitad; si no, se adopta.**
+- **G4 sobre la cadena final** (límites de DFL, decisión 36): `%D` desde cada saque ≤ 51,7%, ningún
+  bloque > 88,6% y ningún bloque sin posesiones. Si W3 la falla, se baja en el prior (W2, W1).
+- **C. La regla del duelo otra vez**, con la regla del punto 2 sobre la cadena final (las paradas de
+  W3 y el primer control en Metrica). Si el veredicto cambia, se sigue, y G4 se repite.
+
+Las cifras del slice, el banco y el Smart Tagging se informan después, sin peso.
+
+**Código que sale (punto 3).** Lo que ajusta un valor con el ground truth o entrena con el vídeo:
+la temperatura calibrada en el slice y el artefacto de emisión (`tools/emision.py`, que la cadena
+importa) y `tools/ablate_emision.py`; el posprocesado con el prior de 14,2 s (`tools/postprocess.py`,
+`tools/verify_b6.py`); la imputación con el prior de 3,4/min (`tools/impute.py`); el decodificador
+con `viterbi` (prior de 3,4/min) y `mid` (`tools/decoder.py`); y el carril de vídeo, que entrenó un
+detector con el vídeo (`tools/video_ball.py`). Su última versión está en `dev` `8ec43a8`; la
+evidencia que generaron sigue en `docs/` como historia.
