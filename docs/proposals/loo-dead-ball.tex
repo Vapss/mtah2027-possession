@@ -101,8 +101,9 @@ pregunta que faltaba es si la \emph{regla de selección} sobrevive a un partido 
 \section{Protocolo, escrito antes de correr}
 
 \begin{itemize}
-\item \textbf{Datos:} los siete partidos DFL/IDSSE, estado vivo/muerto por frame. Ni
-\emph{ground truth} público, ni vídeo, ni el bundle licenciado.
+\item \textbf{Datos:} los siete partidos DFL/IDSSE, estado vivo/muerto por frame. La ficha
+del corpus declara \texttt{license: cc-by-4.0}. Ni \emph{ground truth} público, ni vídeo, ni el
+bundle licenciado.
 \item \textbf{Unidad:} el partido. Siete pliegues; se entrena con seis y se evalúa con el que
 quedó fuera.
 \item \textbf{Candidatos:} los mismos doce del pre-registro original,
@@ -142,6 +143,11 @@ J03WR9 & 0.906 & 0.812 & 0.857 & 1.80 & 0.792 & 7.36 & +0.0644 \\
 \item Gana a W1 fuera de muestra: \textbf{7 de 7}, test de signos bilateral $p=0{,}016$.
 \item $\Delta$F1 mediano: $+0{,}052$; ganancia mediana de $|$inicio$|$: $3{,}28$~s.
 \end{itemize}
+
+\textbf{El precio.} Está en la precisión: con los siete partidos juntos, W1 tiene $0{,}954$ y
+\texttt{onset} $0{,}919$. El F1 sube porque el recall sube mucho más ($0{,}682 \rightarrow
+0{,}790$). Fuera de muestra, la precisión se queda entre $0{,}906$ y $0{,}934$: la extensión no
+inventa frames muertos, pero tampoco es gratis.
 
 \textbf{Control de sanidad.} El mismo arnés reproduce los números publicados con los siete
 partidos juntos: W1 $0{,}954/0{,}682/0{,}796$ y \texttt{onset} $0{,}919/0{,}790/0{,}849$, con
