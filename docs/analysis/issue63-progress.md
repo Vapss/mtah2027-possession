@@ -21,6 +21,27 @@ salida del motor en ambos casos. Eso no sustituye la reproducción del CSV real.
 temperatura en probabilidades y confianza: no se debe afirmar que cambiarla deja inalterado un
 ensemble. La sustitución o recalibración de B5 sigue pendiente de prior y evidencia admisibles.
 
+## Constantes activas identificadas en la ruta del motor
+
+Inventario estático inicial; la fecha es la de incorporación del carril en la historia consultada,
+no necesariamente la fecha en que cada valor se eligió. Las fuentes son referencias, no una
+certificación de que la regla 11 se haya cumplido.
+
+| Elemento | Valores activos | Procedencia y estado |
+|---|---|---|
+| Control y duelo | 1,5 m; 5 m/s; `dwell=1`; `duel=True` | D29 y D34: adopción con comparación en el slice. Pendiente justificación externa. |
+| Fecha de reanudación | +3,5 s en saques de centro; +5 s en otros tags | `lane-d.md` §2–3, incorporado el 29-oct: se eligieron usando agregados del tracking y tags del partido. Bajo la regla 11 actual no basta con que no usaran GT; necesitan procedencia externa y prior admisible. |
+| Episodios fuera | fusión de huecos de hasta 1 s; retrospección de 40 s, o 120 s tras gol | `lane-d.md` §3, 29-oct; prior físico descrito allí. La selección de la variante `out` y los criterios de D30–D31 también consultaron el slice; evaluar la cadena y su procedencia completa. |
+| Fuera breve | sin mínimo para episodios vinculados a una reanudación | D31: regla física, con referencia además al slice. Pendiente separar justificación del uso histórico de GT. |
+| Parada W1 | velocidad ±12 frames, máximo 12 m/s, al menos 8 jugadores, p90 en ±1 s < 2 m/s; cerrar huecos vivos < 1 s y descartar paradas < 4 s | `lane-dead-v2.md` §2–3, 29-oct; DFL y prior físico, con selección del decodificador usando DFL y patrón de huecos del partido. Auditar independencia y selección de W1 antes de afirmar cumplimiento. |
+| Reanudación | forzar equipo conocido salvo control previo aceptado; empate entre equipos se ignora | D30, D32 y D35; reglas de estado. Auditar si la elección entre variantes y sus límites dependió del slice. |
+| Geometría y reloj | FPS, dimensiones y mitades proceden de `games.py` | Metadatos de alineación del organizador, no umbrales elegidos para optimizar; verificar versión de las entradas al reproducir. |
+
+`still_mps`, `still_window_s` y el mínimo de salida sin tag se calculan o existen en `dead_ball`,
+pero la variante final `out` no consulta esas señales para decidir sus paradas. El modelo logístico
+de `dead_ball_v2` y sus umbrales de modelo tampoco se usan en W1. Este inventario no pretende cubrir
+cada constante de bibliotecas o validadores; faltan auditorías de dependencias y fechas precisas.
+
 ## Control de acceso al GT
 
 `tests/test_gt_guard.py` activa un audit hook de Python en el proceso y en procesos Python hijos.
