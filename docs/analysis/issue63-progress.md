@@ -23,6 +23,12 @@ ensemble. Se reemplazó por `2,864606845062 m` conforme al protocolo externo pre
 `docs/proposals/b5-external-calibration.md`. Resultados reproducibles en `b5-external.json`:
 log-loss condicional en el segundo partido DFL 0,5347 frente a 0,7437 con el prior de 1 m.
 Esto demuestra la compuerta DFL especificada, no calibración en el partido de competición.
+Además, `tools/emision.py` ya no consulta automáticamente el GT público al generar el artefacto;
+los diagnósticos quedan disponibles solo con `--diagnostics` y no pueden decidir la selección.
+Ese modo imprime también agregados del partido: debe ejecutarse localmente sin enviarlos a un
+servicio de IA, salvo que ya estén publicados en las fuentes permitidas por AGENTS.md.
+La generación predeterminada se prueba con entradas sintéticas y el GT bloqueado; la prueba con
+el bundle real queda pendiente. El cambio afecta al informe impreso, no a la tabla del artefacto.
 El manifiesto histórico B6 fija el hash del artefacto con la temperatura anterior: generar B5 con
 la nueva temperatura cambia sus probabilidades y no puede satisfacer ese hash. `make verify-b6`
 solo puede comprobar esa evidencia con el artefacto histórico correspondiente; queda por preparar

@@ -388,6 +388,8 @@ se habían explorado en otras decisiones, su balón es más limpio y su propieta
 equivale a control: esto no demuestra calibración en el partido del reto ni mejora de `spellF1`.
 En B5 cambian probabilidades y confianza; una mezcla podría cambiar etiquetas. El motor one-hot no
 llama a esta emisión en la prueba sintética, pero falta reproducir el CSV real con el bundle.
+La generación B5 no consulta el GT por defecto; `--diagnostics` habilita expresamente la medición
+retrospectiva, que no se usa para seleccionar parámetros ni variantes.
 
 ---
 

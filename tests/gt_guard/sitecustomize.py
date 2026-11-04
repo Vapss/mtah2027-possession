@@ -50,7 +50,7 @@ if root:
             restarts = ()
 
         atd.load = tracking
-        emision.team_slots = lambda: emision.TeamSlots(np.array([0, 1]), "H", "A", 1, 1)
+        emision.team_slots = lambda *_args: emision.TeamSlots(np.array([0, 1]), "H", "A", 1, 1)
         dead_ball.load_evidence = lambda: Evidence()
         dead_ball.dead_mask = lambda *args: np.zeros(n, dtype=bool)
         dead_ball_v2.match_kinematic = lambda *args: np.zeros(n, dtype=bool)

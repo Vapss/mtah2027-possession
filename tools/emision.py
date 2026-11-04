@@ -415,8 +415,10 @@ def smart_tagging_anchor(
     }
 
 
-def generate(output: str | Path, metadata: str | Path | None = None) -> dict[str, Any]:
-    """Load the tactical bundle, write the artifact, and print only aggregate diagnostics."""
+def generate(
+    output: str | Path, metadata: str | Path | None = None, *, diagnostics: bool = False
+) -> dict[str, Any]:
+    """Write an artifact; public-GT diagnostics require an explicit opt-in."""
     teams = team_slots(metadata)
     tracking = atd.load("tactical")
     result = emit(tracking, teams)
@@ -427,27 +429,34 @@ def generate(output: str | Path, metadata: str | Path | None = None) -> dict[str
     from tools.contract import read_artifact
 
     read_artifact(target)
-    return {
+    report = {
         "output": str(target),
         "frames": len(result.artifact),
-        "team_identity": {
+        "profile": {
+            "method": "nearest-track argmin with DFL-calibrated softmax temperature",
+            "temperature_m": EMISSION_TEMPERATURE_M,
+        },
+    }
+    if diagnostics:
+        # These are retrospective diagnostics only. D44 prohibits selecting by the public slice.
+        report["public_metrics"] = public_metrics(result.artifact, result.ball_present)
+        report["smart_tagging_anchor"] = smart_tagging_anchor(result, teams)
+        report["team_identity"] = {
             "home": teams.home_name,
             "away": teams.away_name,
             "home_slots": teams.home_slots,
             "away_slots": teams.away_slots,
-        },
-        "public_metrics": public_metrics(result.artifact, result.ball_present),
-        "smart_tagging_anchor": smart_tagging_anchor(result, teams),
-        "profile": {
-            "method": "nearest-track argmin with DFL-calibrated softmax temperature",
-            "temperature_m": EMISSION_TEMPERATURE_M,
-            "ball_present_fraction": float(result.ball_present.mean()),
-            "median_nearest_player_distance_m": float(np.nanmedian(result.nearest_distance_m)),
-            "median_ball_speed_mps": float(np.nanmedian(result.ball_speed_mps)),
-            "ball_speed_missing_fraction": float(np.isnan(result.ball_speed_mps).mean()),
-            "ball_out_of_bounds_frames": int(result.ball_out_of_bounds.sum()),
-        },
-    }
+        }
+        report["profile"].update(
+            {
+                "ball_present_fraction": float(result.ball_present.mean()),
+                "median_nearest_player_distance_m": float(np.nanmedian(result.nearest_distance_m)),
+                "median_ball_speed_mps": float(np.nanmedian(result.ball_speed_mps)),
+                "ball_speed_missing_fraction": float(np.isnan(result.ball_speed_mps).mean()),
+                "ball_out_of_bounds_frames": int(result.ball_out_of_bounds.sum()),
+            }
+        )
+    return report
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -458,9 +467,14 @@ def main(argv: list[str] | None = None) -> int:
         "--output", default=str(REPO_ROOT / "artifacts/possession.csv"), help="artifact CSV path"
     )
     parser.add_argument("--metadata", default=None, help="ATD metadata XML override")
+    parser.add_argument(
+        "--diagnostics",
+        action="store_true",
+        help="explicitly read public GT and Smart Tagging for retrospective diagnostics",
+    )
     args = parser.parse_args(argv)
     try:
-        report = generate(args.output, args.metadata)
+        report = generate(args.output, args.metadata, diagnostics=args.diagnostics)
     except (OSError, ValueError, ET.ParseError) as error:
         print(f"emission failed: {error}", file=sys.stderr)
         return 1

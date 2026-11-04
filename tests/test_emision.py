@@ -70,6 +70,41 @@ def test_temperature_preserves_h_a_order_but_changes_confidence(monkeypatch) -> 
     assert cold.confidence > warm.confidence
 
 
+def test_generate_reads_public_gt_only_when_diagnostics_are_requested(
+    tmp_path, monkeypatch
+) -> None:
+    from types import SimpleNamespace
+
+    from tools import contract
+
+    teams = emision.TeamSlots(np.array([0, 1]), "Home", "Away", 1, 1)
+    result = SimpleNamespace(
+        artifact=pd.DataFrame(
+            {"frame": [0], "p_home": [0.8], "p_away": [0.1], "p_dead": [0.1], "confidence": [0.8]}
+        ),
+        ball_present=np.array([True]),
+        nearest_distance_m=np.array([1.0]),
+        ball_speed_mps=np.array([1.0]),
+        ball_out_of_bounds=np.array([False]),
+    )
+    calls = []
+    monkeypatch.setattr(emision, "team_slots", lambda *_: teams)
+    monkeypatch.setattr(emision.atd, "load", lambda *_: None)
+    monkeypatch.setattr(emision, "emit", lambda *_: result)
+    monkeypatch.setattr(contract, "read_artifact", lambda *_: None)
+    monkeypatch.setattr(emision, "public_metrics", lambda *_: calls.append("gt") or {})
+    monkeypatch.setattr(emision, "smart_tagging_anchor", lambda *_: calls.append("tag") or {})
+
+    default = emision.generate(tmp_path / "default.csv")
+    assert calls == []
+    assert "public_metrics" not in default
+    assert "ball_present_fraction" not in default["profile"]
+    diagnostic = emision.generate(tmp_path / "diagnostic.csv", diagnostics=True)
+    assert calls == ["gt", "tag"]
+    assert "public_metrics" in diagnostic
+    assert diagnostic["profile"]["ball_present_fraction"] == 1.0
+
+
 def test_metadata_team_and_smart_tagging_anchor_are_consistent() -> None:
     metadata = Path(games.asset_paths(source="tactical")["atd_meta"])
     tagging_path = smart_tagging.path()
