@@ -353,19 +353,19 @@ documentación anterior. Esta sección audita dos cosas distintas: **el archivo 
 | prohibición | el archivo entregado |
 |---|---|
 | Comprobar la salida contra el vídeo | **cumple.** La cadena no lee el vídeo: entran el tracking automático, el Smart Tagging y la homografía. El vídeo se probó como entrada y quedó fuera (D38); no existe ningún procedimiento que compare la salida contra él. |
-| Etiquetas a mano sobre el partido | **cumple.** Ninguna etiqueta del partido se escribe ni se corrige a mano. Las anotaciones que usamos son de corpus externos: DFL/IDSSE, CC-BY 4.0, y los partidos de muestra de Metrica. |
-| Subir los datos provistos a servicios de IA | **no hay rastro en el repositorio.** `data/` solo trae el README, `make guard` lo bloquea y ninguna herramienta abre red. No podemos certificar lo que ocurrió fuera del repositorio; la regla 10 de AGENTS.md lo prohíbe desde hoy. |
+| Etiquetas a mano sobre el partido | **cumple.** Ninguna etiqueta del partido se escribe ni se corrige a mano. Las anotaciones que usamos son de corpus externos (DFL/IDSSE, CC-BY 4.0, y los partidos de muestra de Metrica). |
+| Subir los datos provistos a servicios de IA | **no hay rastro en el repositorio.** `make guard` protege frente a ciertos archivos licenciados en Git; el repositorio también contiene herramientas de descarga, por lo que no se afirma que todas funcionen sin red. No podemos certificar lo que ocurrió fuera del repositorio; la regla 10 de AGENTS.md lo prohíbe desde hoy. |
 | Entrenar o ajustar sobre la verdad o el vídeo | **no cumple del todo.** Ver la tabla siguiente. |
 
 ### 9.1 Parámetros que se eligieron con el ground truth público
 
 | parámetro | dónde | qué se hizo | ¿se entrega? |
 |---|---|---|---|
-| temperatura `2,857386876 m` | `tools/emision.py`, D18 | calibrada *in-sample* por log-loss H/A sobre los 5.640 frames públicos vivos con balón | sí, pero no mueve la etiqueta: el `argmax` es invariante a la temperatura, solo cambia la probabilidad y la confianza |
+| temperatura `2,857386876 m` | `tools/emision.py`, D18 | calibrada *in-sample* por log-loss H/A sobre los 5.640 frames públicos vivos con balón | pendiente de verificar para cada consumidor: el motor usa `team_slots` y velocidad, y construye un artefacto one-hot; B5 sí usa la temperatura |
 | umbrales `1,5 m` / `5 m/s` / `dwell = 1` | D29 | elegidos entre 5 configuraciones comparadas por `spellF1` del slice | **sí** |
 | regla del duelo | D34 | adoptada tras medir 0,4585 → 0,5189 en el slice | **sí** |
 | prior de duración `355` frames | `tools/postprocess.py`, D20 | media de 14,2 s del slice | no: #35 no está en `make repro` |
-| 15 variantes rechazadas | D30, D31, D38, D39–D43 | compuertas con Δ del slice y del banco | no: rechazar solo puede costar puntos |
+| 15 variantes rechazadas | D30, D31, D38, D39–D43 | compuertas con Δ del slice y del banco | no: el rechazo basado en el slice también forma parte de la selección |
 
 **Qué significa.** El archivo entregado no lee la verdad ni el vídeo en ningún punto de la cadena:
 `make engine` consume tracking, XML, Smart Tagging y homografía, y los únicos lectores de
@@ -375,24 +375,34 @@ y no evidencia. El banco de trasplante tampoco es independiente, porque se punt�
 público. Las señales que quedan fuera de esa muestra son el acuerdo con el Smart Tagging (77,1%), los
 siete partidos de DFL y los invariantes sobre las 199.319 filas.
 
-**Qué hacemos con esto.** (1) Desde el 4 de noviembre ninguna variante se elige por el número del
-slice ni del banco; el slice se reporta como comprobación. (2) La temperatura se sustituye por una
-constante estructural y, si se recalibra, se hace en DFL: no mueve etiquetas. (3) El prior de 355 se
-cambia por un valor redondo o se retira con #35. (4) La rejilla de 27 configuraciones de D29 **no** se corre sobre el corpus externo: DFL tiene otra
-definición de posesión (4,58 cambios por minuto frente a 3,4) y un balón sin el ruido del nuestro, así
-que premiaría fragmentar y no responde la pregunta de los umbrales. Se documenta el conflicto en vez
-de usarlo para elegir. Lo que sí se mide sin ground truth es la **estabilidad** de 1,5 / 5 / 1 frente
-al ruido del balón (σ = 0,85 m) sobre las 199.319 filas, y se elige el centro de la meseta.
+**Qué hacemos con esto.** Ninguna variante ni parámetro se elige por el slice ni por el
+banco. La temperatura y el prior siguen pendientes en #63: se comprobarán sus consumidores y se
+decidirá una alternativa de procedencia admisible. La rejilla de D29 no se usará como árbitro sin
+un protocolo previo que justifique cada corpus y su adecuación. DFL difiere en definición de
+posesión y calidad del balón; ello limita su aplicabilidad y puede sesgar comparaciones, sin demostrar
+por sí solo el sentido del sesgo. La tasa del slice es diagnóstico, no objetivo.
+
+La estabilidad frente al ruido puede describir sensibilidad sin ground truth, pero no demuestra
+exactitud ni sirve para escoger el centro de una meseta sobre el partido: la regla 11 exige corpus
+externo y prior escrito antes de medir. #63 documentará una decisión fundada en evidencia admisible
+o el conflicto pendiente; declararlo no demuestra cumplimiento. No se atribuye al PR una medición
+de estabilidad ni un protocolo ya realizado. Un nuevo pre-registro no vuelve independiente la evidencia ya
+observada: se separará desarrollo de evaluación externa o se declarará esa exposición. Retirar la
+rejilla no justifica por sí mismo mantener los parámetros actuales.
+
+**Licencias de los corpus externos.** El artículo de los autores declara IDSSE/DFL bajo
+[CC BY 4.0](https://www.nature.com/articles/s41597-025-04505-y), con autorización de DFL y
+atribución. El [README de Metrica](https://github.com/metrica-sports/sample-data) ofrece muestras
+para explorar, solicita uso responsable y atribución, pero no especifica una licencia normalizada
+ni un alcance de derechos suficientemente claro para este uso. Antes de volver a usar sus datos
+como evidencia se solicitará permiso escrito o se verificará una autorización aplicable; las
+observaciones históricas se mantienen identificadas con esa limitación. Cada corpus externo nuevo
+requiere comprobar y registrar fuente, licencia, alcance del uso, fecha de comprobación y atribución antes de utilizarlo; esta
+revisión es manual, no una garantía automatizada.
 
 Sobre el método: no hay pesos aprendidos en la cadena —el camino que genera el archivo es numpy y
 pandas—, pero el detector de balón muerto entregado es la regla W1, con umbrales fijados en DFL
 (D36), y el modelo logístico de `D` no entró. Es aprendizaje externo, no ajuste sobre este partido.
-
-**Licencias de los corpus externos.** DFL/IDSSE es CC BY 4.0 (figshare 28196177) y se usa con
-atribución. Los partidos de muestra de Metrica **no declaran licencia** en su repositorio: el README
-solo pide atribución y uso responsable, así que no hay derechos concedidos de forma explícita. Se
-usaron como juez en la ronda 5 —un resultado negativo que no cambió la entrega— y sus cifras se citan
-con esa salvedad; si se retoman como evidencia, primero hay que obtener permiso por escrito.
 
 ## Referencias
 

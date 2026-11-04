@@ -1338,13 +1338,16 @@ tracking, XML, Smart Tagging y homografía, y los únicos lectores de `evaluatio
 sobre 5.640 frames públicos (D18), y los umbrales 1,5 m / 5 m/s / `dwell` 1 (D29) y la regla del
 duelo (D34) se adoptaron midiendo en el slice.
 
-Desde hoy ninguna variante ni parámetro se elige por el número del slice ni por el banco de
-trasplante; el slice es comprobación, igual que el banco. La temperatura se sustituye por una
-constante estructural —no mueve el `argmax`, solo la columna de probabilidad—; el prior de 355
-frames de `postprocess.py` (#35, fuera de `make repro`) pasa a un valor redondo; y la rejilla de 27
-configuraciones de D29 se corre por `tools/external.py` sobre DFL y Metrica. Si 1,5 / 5 / 1 no
-sobrevive fuera del slice, se reporta el conflicto antes del freeze y se decide, sin cambiar el
-número en silencio.
+Desde hoy ninguna variante ni parámetro se elige por el slice público ni por el banco de
+trasplante; ambos son comprobación. La temperatura y el prior se revisan según sus consumidores
+reales (#63). La rejilla DFL/Metrica propuesta inicialmente no se usa para decidir sin un protocolo
+previo y una evaluación de derechos y adecuación al dominio. DFL difiere en definición y ruido;
+Metrica no declara una licencia normalizada con alcance suficientemente claro. La estabilidad
+en el partido puede ser diagnóstico, pero no puede elegir una configuración bajo la regla 11.
+El pre-registro no convierte resultados ya vistos en independientes: hay que separar desarrollo de
+la evaluación externa o declarar la exposición. Retirar la rejilla no justifica mantener los valores.
+La justificación externa de 1,5 / 5 / 1 y la regla del duelo sigue abierta en #63; si no hay
+evidencia admisible suficiente, se declara el conflicto antes del freeze sin afirmar cumplimiento.
 
 **Por qué.** El pre-registro evita el p-hacking, no cambia la fuente del dato: una compuerta escrita
 antes de medir cuyo criterio es «≥6 posesiones discordantes en el slice» sigue siendo ajuste sobre el
@@ -1354,6 +1357,5 @@ los invariantes sobre las 199.319 filas. Declararlo es más barato que dejar que
 `in-sample calibrated` en el código.
 
 **Coste.** El informe técnico pierde la frase «el slice no dirigió las decisiones», que era falsa en
-el sentido estricto; gana una sección que admite el riesgo y dice qué se está haciendo. Cambiar la
-temperatura no altera ninguna etiqueta entregada. Si la rejilla no sobrevive en el corpus externo, el
-freeze se decide con un conflicto sobre la mesa, no con un número que ya no se puede justificar.
+el sentido estricto; gana una sección que admite el riesgo y dice qué se está haciendo. El efecto de cambiar la temperatura depende de la cadena y sus consumidores; se verificará en #63.
+El freeze requiere una decisión trazable y no convierte la falta de evidencia en justificación.
