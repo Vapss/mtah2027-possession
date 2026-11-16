@@ -110,6 +110,24 @@ def test_a_restart_already_seen_resuming_is_not_forced() -> None:
     assert engine.restart_controls(restarts, ctrl) == {18: 1}
 
 
+def test_cancelling_the_tagged_team_assignment_does_not_shorten_dead_ball(monkeypatch) -> None:
+    # The paper must distinguish cancellation of the team forcing from the final D override.
+    n = 20
+    home, away = np.full(n, 5.0), np.full(n, 5.0)
+    home[2], away[7] = 0.5, 0.5
+    f = feats(home, away, np.ones(n))
+    dead = np.zeros(n, dtype=bool)
+    dead[5:10] = True
+    restarts = (_restart(10, 5, 0),)
+    monkeypatch.setattr(engine, "halves", lambda: [(0, n)])
+
+    assert 10 not in engine.inputs(f, engine.DEFAULT, restarts, dead)[2]
+    _ctrl, state, labels = engine.chain(f, engine.DEFAULT, restarts, dead)
+    assert state[7] == 1
+    assert np.all(labels[7:10] == "D")
+    assert labels[10] == "A"
+
+
 def test_two_restarts_on_one_frame_for_different_teams_are_not_forced() -> None:
     restarts = [_restart(10, 5, 0), _restart(10, 5, 1), _restart(30, 25, 0), _restart(30, 26, 0)]
     assert engine.restart_controls(restarts) == {30: 0}

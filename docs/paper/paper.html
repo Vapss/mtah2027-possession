@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Possession as the Last Controlled Ball</title>
+<title>Team Possession from Incomplete Football Tracking: A Last-Controlled-Ball Approach</title>
 <style>
   @page { size: A4; margin: 17mm 17mm 18mm 17mm; }
   :root { --ink: #161616; --muted: #555; --rule: #c9c9c9; --home: #1f5fa8; --bg: #ffffff; }
@@ -19,6 +19,10 @@
   h2 { font-size: 11.6pt; margin: 11pt 0 3pt; break-after: avoid; }
   h3 { font-size: 10.2pt; margin: 8pt 0 2pt; font-style: italic; font-weight: 600; break-after: avoid; }
   p { margin: 0 0 5pt; text-align: justify; hyphens: auto; }
+  .keep-with-next { break-inside: avoid; page-break-inside: avoid;
+                    break-after: avoid; page-break-after: avoid; }
+  .repro-details { text-align: left; }
+  .repro-details .sha256 { white-space: nowrap; hyphens: none; }
   ul { margin: 0 0 5pt 0; padding-left: 15pt; }
   li { margin: 0 0 2pt; text-align: justify; }
   code { font-family: "Consolas", "Courier New", monospace; font-size: 8.6pt; }
@@ -46,174 +50,198 @@
 </head>
 <body>
 
-<h1>Possession as the Last Controlled Ball:<br>a Rule-Based Chain for BAR–ATH, Decided Without the Ground Truth</h1>
+<h1>Team Possession from Incomplete Football Tracking:<br>A Last-Controlled-Ball Approach</h1>
 <p class="sub">More than a Hack 2027 — Phase 1: Ball Possession (Metrica Sports × FC Barcelona) · Technical document</p>
-<p class="meta">Team <b>{{TEAM}}</b> · Repository: {{REPO}} · Submission SHA-256 <code>{{SHA}}</code> · {{DATE}}</p>
+<p class="meta">Team: <b>{{TEAM}}</b> · Repository: {{REPO}} · Submission SHA-256 <code>{{SHA}}</code> · {{DATE}}</p>
 
-<div class="abstract"><b>Abstract.</b> We label each of the 199,319 frames of the tactical video with the team of the
-<i>last controlled ball</i>. A frame is a control when the ball is seen inside the pitch, moves no faster than 5 m/s and has a
-player within 1.5 m with no rival as close. A rival control does not change possession while the team in possession can
-also reach the ball (a duel), and between controls the state is carried. Dead ball is the union of stoppages tagged by
-Smart Tagging (ball out → restart) and stoppages read from the players' speeds by a logistic detector trained only on
-seven open DFL matches. A tagged restart hands the ball to the team that takes it; an untagged stoppage ends with the first
-accepted control. Every threshold comes from physics, from the laws of the game, or from external data. After the
-organisers clarified the rules, we went back over every past selection. We deleted every gate that read the public ground
-truth, re-applied our own written rules, and accepted only what external or label-free evidence still supported. The chain
-is deterministic numpy/pandas code that rebuilds the submitted file byte for byte in about 18 s.</div>
+<div class="abstract"><b>Abstract.</b> Incomplete football tracking leaves long intervals in which the ball is unobserved,
+while proximity alone can mistake a passing ball for a change of possession. We infer team possession from the last
+accepted control: an observed ball inside the pitch, moving at no more than 5 m/s, with a player within 1.5 m and no rival
+as close. A carried team state preserves continuity between controls and during duels. Organiser-provided Smart Tagging
+and a logistic stoppage classifier trained on seven separately licensed DFL matches identify dead-ball intervals;
+restart rules establish the subsequent team state. The deterministic pipeline labels all 199,319 frames in approximately 18 s, with byte-identical outputs verified across local builds. External experiments support the stoppage component, while public-window
+scores provide descriptive diagnostics rather than independent validation of the complete pipeline. Missing ball
+observations and uncertain control timing remain the principal limitations.</div>
 
-<h2>1. Task, metric and the rules we hold ourselves to</h2>
+<h2>1. Task and evaluation objective</h2>
+<p>Team possession must remain defined between observed touches, including passes, loose balls and tracking gaps. Our
+last-controlled-ball approach represents this continuity explicitly: accepted controls update a carried team state,
+while stoppage and restart rules determine when play ends and which team resumes it.</p>
 <p>Each frame gets <code>H</code> (home in possession), <code>A</code> (away), <code>D</code> (dead ball) or <code>X</code>
 (no answer). The ranking metric, <code>spellF1</code>, matches whole possessions (maximal <code>H</code>/<code>A</code> runs) one
-to one with the truth by temporal IoU, averaged over thresholds 0.3–0.7. <code>macroF1</code> only breaks ties. A method that
-flickers between teams can be right on most frames and still score near zero, so every design choice below is about
-possession structure, not per-frame accuracy. The only labelled data for this match is a public 5-minute window: 17
-possessions, recorded with the ball detected in 88% of its frames, against 59% over the whole match.</p>
-<p>The organisers' clarification takes precedence over all other documents, and <b>we apply its strictest reading</b>:</p>
-<ul>
-  <li><b>No choice rests on the ground truth or the video.</b> No constant, rule or decision to include a component of the
-  submitted chain may rest on the public ground truth, on any instrument scored against it, or on the video. Anything that
-  needs tuning is tuned on external data. Scoring a chain that is already decided is an automatic check. Choosing between
-  variants with that score is not.</li>
-  <li><b>No human labels for this match.</b> No human-produced data about this match is used, not even to validate.</li>
-  <li><b>No output checked against the video.</b> The delivered chain does not read the video, and no constant was chosen
-  by looking at it.</li>
-  <li><b>No match data in hosted AI services.</b> Provided data must never reach a hosted model. §9 states what the
-  repository can show and what it cannot.</li>
-</ul>
-<p>Every decision is logged in <code>docs/DECISIONS.md</code> (cited as <i>Dnn</i>), with its rule committed before the
-measurement it depends on.</p>
+to one with the ground truth by temporal IoU, averaged over thresholds 0.3–0.7. <code>macroF1</code> only breaks ties.
+Frequent team switches can fragment otherwise accurate predictions into possessions that do not match the reference
+intervals. We therefore prioritise possession structure over per-frame accuracy. The available ground-truth labels for
+this match cover a public 5-minute window: 17
+possessions, with the ball detected in approximately 88% of its frames, compared with 59.3% across the two playing-half
+video intervals. These intervals include stoppages; coverage over the entire tactical recording is reported in Table 1.</p>
+<p>Section 3 defines the inference rules, Section 4 describes their behaviour under missing observations, and Section 5
+separates external component evidence from match-level diagnostics. Decision provenance is recorded in
+<code>docs/DECISIONS.md</code>, cited below as <i>Dnn</i>.</p>
 
-<h2>2. Assets: what we used, how, and what we dropped</h2>
+<h2>2. Data sources and their roles</h2>
+<p>The submitted pipeline uses tactical tracking and organiser-supplied restart tags. External DFL data provides the
+training labels for stoppage detection and evidence for component-level comparisons. Table 1 distinguishes these inputs
+from resources used only in exploratory work or diagnostics.</p>
 <table>
 <caption><b>Table 1.</b> Provided and external assets.</caption>
 <thead><tr><th>Asset</th><th>Role</th><th>Notes</th></tr></thead>
 <tbody>
-<tr><td>Tactical tracking (ATD)</td><td><b>Used</b>: control, duels, players' stoppages</td><td>Team per slot from the XML (24 home, 22 away). The ball is present in 56.9% of frames.</td></tr>
+<tr><td>Tactical tracking (ATD)</td><td><b>Used</b>: control, duels, players' stoppages</td><td>XML metadata maps 24 tracking slots to the home team and 22 to the away team. The ball is present in 56.9% of all 199,319 frames in the tactical recording.</td></tr>
 <tr><td>Smart Tagging <code>SET PIECES</code></td><td><b>Used</b>: restart time and team</td><td>59 tagged restarts. The restart is estimated at tag start + 5 s (+3.5 s for kick-offs).</td></tr>
-<tr><td>Smart Tagging phases</td><td><b>Check only</b></td><td>Team votes, used for an agreement check. They never enter the chain, so the check is not circular.</td></tr>
-<tr><td>DFL/IDSSE open data (7 matches)</td><td><b>Used</b>: trains the dead-ball detector; external judge</td><td>CC-BY 4.0 (Bassek et al., 2025). Per-frame live/dead state and team in possession.</td></tr>
-<tr><td>Metrica open games g1, g2</td><td><b>Research only; no weight</b></td><td>Explored in two research rounds. The repository declares no licence; its README asks for responsible use and attribution. Until written permission is obtained, no decision in this document rests on it.</td></tr>
-<tr><td>Tactical video, homography</td><td><b>Explored, dropped</b></td><td>A pretrained COCO ball detector was not precise enough (precision ≤ 0.75 at 2 m, recall ≤ 0.46 against the tracking ball). A detector fine-tuned on the video is excluded by the rules, and its code was removed.</td></tr>
+<tr><td>Smart Tagging phases</td><td><b>Check only</b></td><td>Team votes provide an auxiliary agreement check. Phase tags do not enter the pipeline, but share their source with the restart tags; agreement is not independent validation.</td></tr>
+<tr><td>DFL/IDSSE open data (7 matches)</td><td><b>Used</b>: stoppage training and component evaluation</td><td>CC-BY 4.0 (Bassek et al., 2025). Per-frame live/dead state and team in possession; the possession definition differs from the challenge's.</td></tr>
+<tr><td>Metrica open games g1, g2</td><td><b>Research only; no weight</b></td><td>Explored in two research rounds. The repository declares no licence; its README asks for responsible use and attribution. Pending written permission, these experiments are excluded from the revised selection evidence.</td></tr>
+<tr><td>Tactical video, homography</td><td><b>Explored, dropped</b></td><td>The reported pretrained COCO ball detector results were precision ≤ 0.75 at 2 m and recall ≤ 0.46 against the tracking ball. Video recovery is not used in the submitted pipeline; fine-tuning on the supplied video is excluded under the clarified rules.</td></tr>
 <tr><td>Broadcast video and tracking</td><td><b>Not used</b></td><td>Not synchronised with the tactical feed. Its homography is usable in only 65.8% of frames.</td></tr>
-<tr><td>Public 5-minute ground truth</td><td><b>Diagnostics only</b></td><td>Reported after deciding (§5.2). It decides nothing.</td></tr>
+<tr><td>Public 5-minute ground truth</td><td><b>Diagnostics in the revised protocol</b></td><td>Descriptive, in-sample diagnostics (Section 5.2); selection-history limitations are documented in Section 5.1.</td></tr>
 </tbody></table>
 
 <h2>3. Method</h2>
 <figure>{{FIG:pipeline.svg}}
-<figcaption><b>Figure 1.</b> The delivered chain. Two provided inputs feed four rule stages. One artifact is assembled into the
-submission and passes the official validator.</figcaption></figure>
+<figcaption><b>Figure 1.</b> The submitted pipeline. Two provided inputs feed four rule stages. The resulting artifact is
+converted to the submission format by the assembler and checked by the official validator.</figcaption></figure>
 
-<h3>3.1 Control and carrying</h3>
+<h3>3.1 Candidate control and possession continuity</h3>
 <p>The challenge defines a change of possession as the other team gaining <i>controlled</i> possession. While the ball is
-contested or loose, it stays with the last team. We encode that sentence directly. With <math><msub><mi>d</mi><mi>T</mi></msub><mo>(</mo><mi>t</mi><mo>)</mo></math>
+contested or loose, it stays with the last team. We operationalise this definition through candidate control frames and a
+carried team state. With <math><msub><mi>d</mi><mi>T</mi></msub><mo>(</mo><mi>t</mi><mo>)</mo></math>
 the distance from the ball to team <i>T</i>'s nearest player and <math><mi>v</mi><mo>(</mo><mi>t</mi><mo>)</mo></math> the
-ball's speed, frame <i>t</i> is a control of team <i>T</i> when</p>
+ball's speed, frame <i>t</i> is a candidate control for team <i>T</i> when</p>
 <div class="eq"><math display="block"><mi>ball seen in pitch</mi><mo>∧</mo><msub><mi>d</mi><mi>T</mi></msub><mo>≤</mo><mn>1.5</mn><mtext> m</mtext><mo>∧</mo><msub><mi>d</mi><mi>T</mi></msub><mo>&lt;</mo><msub><mi>d</mi><mover><mi>T</mi><mo>‾</mo></mover></msub><mo>∧</mo><mi>v</mi><mo>≤</mo><mn>5</mn><mtext> m/s</mtext><mo>.</mo></math></div>
-<p>The constants are physical and were fixed before any sweep (D29). 1.5 m is a player's reach plus tracking noise. 5 m/s is a
-fast dribble, while a pass travels at 10 m/s or more. An unknown speed, a tie or a ball outside the pitch never counts as a
-control: every uncertain case fails closed. Possession is the team of the last control, carried within each half. A change
-is dated to the rival's first control frame (<code>dwell</code> = 1). Frames before a half's first control are <code>X</code>,
-which the scorer back-fills.</p>
+<p>The control thresholds are physically motivated operational approximations (D29). The 1.5 m proximity radius accounts
+for player reach and tracking uncertainty, while the 5 m/s speed constraint helps distinguish controlled touches from
+faster ball movement. Possession changes at the first accepted rival control (<code>dwell</code> = 1 frame), without an
+additional persistence delay. Parameter provenance is discussed in Section 5.1.</p>
+<p>Unknown speed, equal nearest-player distances and observations outside the pitch cannot establish a candidate control.
+Otherwise, the last accepted team state is carried within each half, subject to the duel and restart rules below.
+Without an earlier forced restart, frames before the first control are <code>X</code>; the scorer back-fills leading
+abstentions within its evaluation intervals.</p>
 
 <h3>3.2 The duel rule</h3>
-<p>A rival control changes possession only if the team in possession has nobody within 1.5 m of the ball. When both teams can
-play the ball it is a duel, and possession stays where it was (Fig. 2b). This is the challenge's own definition: "in phases
-where the ball is contested or loose, possession stays with the last team that had it". It is also the contested-ball rule
-of Vidal-Codina et al. (2022). It uses the radius the engine already has and adds no constant (D34, D45).</p>
+<p>A rival candidate control changes possession only when the team currently in possession has nobody within 1.5 m of the
+ball. Simultaneous proximity approximates contested possession, so the current state is retained (Fig. 2b). This operational rule follows our interpretation
+of the challenge's definition: "in phases where the ball is contested or loose, possession stays with the last team that
+had it". Our rule reuses the control radius rather than introducing a separate duel threshold (D34, D45).</p>
 
-<h3>3.3 Dead ball: tagged stoppages ∪ players' stoppages</h3>
+<h3>3.3 Dead ball: tagged stoppages ∪ player-based stoppages</h3>
 <p><b>Tagged stoppages</b> (D30). Each tagged restart closes a stoppage. The stoppage opens at the last episode of the ball
 seen outside the pitch in the preceding 40 s (120 s after a goal). Otherwise it covers the tag window only. Short episodes
-count: 69% of the stoppages opened by an episode shorter than 1 s end in a throw-in, corner or goal kick, so they are real
-outs (D45, test B).</p>
-<p><b>Players' stoppages</b> (D36, D45). When the referee stops play, nobody runs. A ridge logistic regression on 29
-order-invariant features flags dead frames. The features are the median and 90th-percentile speed of all tracked
-players over windows from ±1 s to 30 s before and after the frame, the distance to the nearest corner, the number of
-players on a touchline and in the boxes, and the spread of the field. It never reads the ball or player identities, so it survives
-ball gaps and slot swaps. It was trained only on the seven DFL matches, and its weights are embedded in the code. Its
-decoder settings were chosen on DFL with our match's missing-ball pattern overlaid: probability above 0.5, live gaps under
-1 s closed, dead runs under 4 s dropped. Leave-one-match-out on DFL gives precision / recall / accuracy 0.885 / 0.884 /
-0.895, close to the 92% that Lang et al. (2022) report with player identities. Where fewer than 8 players are tracked the
-detector abstains: losing players is not evidence that they stopped.</p>
+count: 69% of the stoppages opened by an episode shorter than 1 s end in a throw-in, corner or goal kick. This supports
+retaining short episodes, although the restart type does not verify each observed exit or its timing (D45, test B).</p>
+<p><b>Player-based stoppages</b> (D36, D45). Stoppages often reduce collective player speed and produce characteristic
+restart formations. A ridge logistic regression uses 29 order-invariant features to identify this pattern. They describe
+the median and 90th-percentile player speed over windows from ±1 s to 30 s before and after the frame, proximity to a
+corner, counts of players near touchlines and in the boxes, and spatial spread. The classifier uses neither ball
+observations nor player identities. Aggregation removes dependence on slot order, although identity swaps can still
+distort displacement-based speeds; the implementation filters implausible speeds before aggregation.</p>
+<p>The model was trained only on the seven DFL matches, with standardised features and missing values replaced by training
+means. Its weights are embedded in the code. Decoder settings were selected on DFL with this match's missing-ball pattern
+overlaid: probability above 0.5, live gaps under 1 s closed, and dead runs under 4 s dropped. These temporal features use
+future as well as past observations, so inference is offline. Leave-one-match-out evaluation on DFL reports precision /
+recall / accuracy of 0.885 / 0.884 / 0.895. Lang et al. (2022) report 92% accuracy with player identities, but the different
+experimental settings preclude a direct performance comparison. Where fewer than 8 players have usable speed estimates, the detector
+withholds raw dead-frame evidence; temporal gap closing may still bridge such frames. Missing players alone do not
+establish a stoppage.</p>
 
 <h3>3.4 Restarts</h3>
-<p>After a stoppage there is always a clear possessor. At each tagged restart whose team is known, the decoder forces that
-team's possession, unless the tracking has already seen an accepted, non-duel control inside the tag window. An observation
-beats an estimated restart frame (D30, D32, D35); 17 restarts are forced this way. If two restarts on one frame name
-different teams, neither is forced. A stoppage that no tag closes ends with the team of the first accepted control after it
-(D45); this happens 37 times in the match.</p>
+<p>The challenge defines a restart as having a clear possessor; our task is to infer that team and the restart time. At a
+tagged restart with a known team, the decoder forces the corresponding state unless an accepted, non-duel control has
+already occurred in the tag window before the estimated restart frame. An earlier accepted control cancels the forced
+team assignment (D30, D32, D35); 17 restarts are forced this way. Conflicting team tags on the same frame produce no forced
+state. Cancelling this forced team assignment does not shorten the dead-ball mask: the output remains
+<code>D</code> until the estimated end of the tagged stoppage, even if control was observed earlier.</p>
+<p>For a stoppage without a closing restart tag, the decoder finds the first subsequent accepted control and assigns its
+team retrospectively from the first live frame. It does so only within the same half and without crossing another
+stoppage (D45); this rule applies 37 times in the match. The team assignment therefore uses later evidence rather than
+claiming that control was observed at the inferred restart.</p>
 
 <figure>{{FIG:rules.svg}}
-<figcaption><b>Figure 2.</b> The rules on synthetic positions (no match data is shown). (a) A control. (b) A duel: the
+<figcaption><b>Figure 2.</b> Rules illustrated with synthetic positions (no match data is shown). (a) A candidate control. (b) A duel: the
 rival is nearest, but the team in possession is within 1.5 m, so nothing changes. (c) A pass in flight is nobody's control,
-so the passing team keeps possession. (d) A restart hands the ball to the team taking it.</figcaption></figure>
+so the passing team retains possession. (d) A tagged restart establishes the restarting team's state.</figcaption></figure>
 
 <figure>{{FIG:timeline.svg}}
-<figcaption><b>Figure 3.</b> How evidence becomes labels (synthetic 40 s). Controls set the carried state, and the hatched
-duel changes nothing. A stoppage overrides with <code>D</code>, and the throw-in after it forces the restarting team.</figcaption></figure>
+<figcaption><b>Figure 3.</b> From observations to labels in a synthetic 40 s sequence. Accepted controls establish the carried
+state; the hatched duel preserves it. Stoppages override the output with <code>D</code>, and the subsequent throw-in forces
+the restarting team's state.</figcaption></figure>
 
 <table>
-<caption><b>Table 2.</b> Where we drew the line.</caption>
+<caption><b>Table 2.</b> Decision rules for ambiguous play and restarts.</caption>
 <thead><tr><th>Situation</th><th>Rule</th></tr></thead>
 <tbody>
 <tr><td>Loose ball, pass in flight, deflection</td><td>Possession stays with the last team until a rival <i>control</i> (slow ball, rival within 1.5 m and nearest).</td></tr>
 <tr><td>Challenge or duel</td><td>No change while the team in possession also has a player within 1.5 m.</td></tr>
-<tr><td>Ball out of play</td><td><code>D</code> from the ball's exit to the tagged restart. A ball outside the pitch is never controlled.</td></tr>
-<tr><td>Foul or other stoppage without an exit</td><td><code>D</code> where the players' detector sees play stop, for at least 4 s.</td></tr>
-<tr><td>Restart</td><td>The tagged team gets the ball, unless the tracking already saw play resume. An untagged stoppage ends with the first accepted control.</td></tr>
+<tr><td>Ball out of play</td><td><code>D</code> from the selected observed exit within the search window to the tagged restart; otherwise the tag interval is used. An observed ball outside the pitch cannot establish control.</td></tr>
+<tr><td>Foul or other stoppage without an exit</td><td><code>D</code> for player-based detections retained by the minimum-duration rule of 4 s.</td></tr>
+<tr><td>Restart</td><td>A known tagged team is forced unless an earlier accepted, non-duel control cancels that team assignment. The tagged dead-ball interval keeps its estimated end. Without a closing tag, the first later accepted control supplies the team retrospectively.</td></tr>
 <tr><td>Before a half's kick-off</td><td><code>D</code>, by the laws of the game.</td></tr>
-<tr><td>Ball not detected</td><td>No new evidence: the state is carried. The players' detector still runs.</td></tr>
+<tr><td>Ball not detected</td><td>No new ball-based control evidence: the state is carried unless a restart rule intervenes. Player-based stoppage detection remains available.</td></tr>
 </tbody></table>
 
 <h2>4. Handling missing and noisy tracking</h2>
-<p>The ball is absent in 41% of graded frames, and in 19.9–36.9% of some 5-minute blocks. We never infer possession from an
-absent ball, and gaps carry the last state. Speed is never computed across a gap. Controls fail closed under any doubt.
-Dead ball is read from the 22 players, who are tracked far more reliably than the ball. The restarts come from Smart
-Tagging, not from the ball. We tried filling ball gaps from formation, from a self-supervised imputation, from Smart
-Tagging and from a video detector. None had admissible evidence in favour (§6).</p>
+<p>The ball is absent in approximately 41% of frames across the two playing-half video intervals. Ball presence falls to
+19.9–36.9% in the least-observed analysis blocks, which last at most five minutes. Ball absence supplies no new
+control evidence, and speed is not computed across a gap. Carrying the previous state preserves continuity but can miss
+an unobserved change of team, especially during a long gap. Rejecting ambiguous control observations reduces unsupported
+switches without ensuring that the retained state is correct.</p>
+<p>Player-based stoppage detection and tagged restarts provide evidence that does not require the ball to be observed.
+The 22 players are tracked more consistently than the ball, although missing players and slot swaps also affect this
+evidence. Section 6 summarises the investigated recovery methods and the evidence available for each.</p>
 
-<h2>5. Deciding without the ground truth</h2>
-<h3>5.1 Protocol</h3>
-<p>Each research lane committed its variants, gates and a prior order before measuring, and results were appended without
-editing the rule. Our earlier gates included the public window, and a "bench" that transplants missing-ball patterns onto
-that window. Both read the ground truth. After the clarification the team decided that the window and the bench may check
-but never choose (D44). An independent read-only audit then traced the provenance of every constant and inclusion decision
-(D45).</p>
-<p>We then re-applied every written selection rule, deleting each gate that reads the ground truth or a figure derived from
-it, such as its 3.4 possessions per minute. A component stays only with admissible evidence in favour:</p>
+<h2>5. Selection protocol and evaluation evidence</h2>
+<h3>5.1 Selection methodology and external evidence</h3>
+<p class="keep-with-next">The submitted components draw on three distinct forms of support:</p>
 <ul>
-  <li>the challenge's own definition of possession, the laws of the game, physics or the literature;</li>
-  <li>external data whose rights are verified: DFL/IDSSE (CC-BY 4.0);</li>
-  <li>label-free checks: block structure, and agreement with Smart Tagging phases.</li>
+  <li>the challenge's possession definition, physical reasoning and the laws of the game;</li>
+  <li>component experiments on separately licensed DFL/IDSSE data (CC-BY 4.0);</li>
+  <li>label-free structural checks and agreement with organiser-provided Smart Tagging phases.</li>
 </ul>
-<p>Re-applying the rules changed one component and confirmed the rest (Table 3).</p>
+<p>The revised selection procedure applies the recorded preference order and criteria after excluding public-score
+criteria and public-window-derived quantities, including its 3.4 possessions per minute (D44, D45). Table 3 summarises the
+support for each component. DFL comparisons assess component behaviour; structural checks and tag agreement assess
+plausibility rather than accuracy.</p>
 
 <table>
-<caption><b>Table 3.</b> Each delivered component and the evidence that keeps it, with no ground truth involved.</caption>
-<thead><tr><th>Component</th><th>Admissible evidence</th><th>Outcome</th></tr></thead>
+<caption><b>Table 3.</b> Documented basis for component retention under the revised selection procedure.</caption>
+<thead><tr><th>Component</th><th>Support and remaining limitations</th><th>Outcome</th></tr></thead>
 <tbody>
-<tr><td>Control thresholds</td><td>Physics, fixed before measuring. The rule's only replacement test was a ground-truth sign test, now deleted.</td><td>Kept</td></tr>
-<tr><td>Duel rule</td><td>The challenge's definition: "in phases where the ball is contested or loose, possession stays with the last team that had it". A duel is a contested ball. No constant is added.</td><td>Kept</td></tr>
-<tr><td>Tagged stoppages (<code>out</code>)</td><td>The lane's label-free block gate removes the two richer variants. Prior order then gives <code>out</code>.</td><td>Kept</td></tr>
+<tr><td>Control thresholds</td><td>Physically motivated operational defaults; their selection history and unresolved independent support are discussed below.</td><td>Kept</td></tr>
+<tr><td>Duel rule</td><td>The challenge's definition: "in phases where the ball is contested or loose, possession stays with the last team that had it". Simultaneous proximity approximates a contested ball; no separate duel-radius parameter is introduced.</td><td>Kept</td></tr>
+<tr><td>Tagged stoppages (<code>out</code>)</td><td>The block-structure criterion excludes the two richer variants. The recorded preference order then selects <code>out</code>.</td><td>Kept</td></tr>
 <tr><td>Short ball-out episodes</td><td>11 of 16 short-episode stoppages end in an out-of-play restart (test B).</td><td>Kept</td></tr>
-<tr><td>Players' stoppages</td><td>W1 had been chosen over the models by a ground-truth gate (dead-ball precision on the window). With it deleted, only the DFL-limit block gate remains, and all four variants pass it. The written prior order gives the logistic model with first-control forcing (W3), trained on DFL only. The first-control step is the challenge's "whenever play restarts after a stoppage, there is a clear possessor". On DFL with our ball pattern: 0.3529 against 0.3216 for W1 and 0.2553 with no players' stoppages.</td><td><b>W3 replaces W1</b></td></tr>
-<tr><td>Restarts</td><td>Laws of the game. A ground-truth veto that never fired was dropped.</td><td>Kept</td></tr>
+<tr><td>Player-based stoppages</td><td>W1 was originally selected by public-window dead-ball precision. The revised procedure selects the DFL-trained logistic model with first-control forcing (W3) through the recorded preference order and DFL-derived structural checks, which all four variants pass. The restart interpretation follows the challenge's "whenever play restarts after a stoppage, there is a clear possessor". Component experiments on DFL with our ball pattern report mean <code>spellF1</code> of 0.3529, against 0.3216 for W1 and 0.2553 without player-based stoppages.</td><td><b>W3 replaces W1</b></td></tr>
+<tr><td>Restarts</td><td>The laws of the game motivate assigning possession to the restarting team; observed accepted control takes precedence over the tagged time estimate.</td><td>Kept</td></tr>
 </tbody></table>
 
-<p>The new chain passes the DFL-derived block limits. Dead ball covers 48.2% of the halves, against a ceiling of 51.7%. The
-busiest block reaches 70.8%, against 88.6%, and no block is left without possessions. The chain gives 3.11 possessions per
-minute, and agreement with Smart Tagging rises from 77.1% to 77.7%.</p>
+<p>The DFL results in Table 3 evaluate stoppage variants within the external benchmark's control-and-carry engine. That
+benchmark has neither the supplied Smart Tagging restarts nor the submitted duel rule, and DFL possession labels follow a
+different definition. These are component-level comparisons, not an external score for the complete submission.
+Leave-one-match-out fitting separates each evaluated match from classifier training, but decoder settings were selected
+using DFL results; the reported performance is not a separate held-out assessment of all design choices.</p>
+<p>The submitted pipeline also satisfies the DFL-derived structural limits. Dead ball covers 48.2% of the halves, below
+the ceiling of 51.7%; the block with the highest dead-ball share reaches 70.8%, below 88.6%, and no block is left without
+possessions. The pipeline produces 3.11 possessions per minute, while agreement with Smart Tagging increases from 77.1%
+to 77.7%. These checks establish structural plausibility and auxiliary agreement, not prediction accuracy.</p>
 
-<p><b>Declared exposure.</b> We knew before this review that the logistic variants scored higher on the public window. The
-switch to W3 follows mechanically from deleting the ground-truth gate and applying the written prior, not from that number.
-Even so, that exposure means the window's score for W3 is not independent evidence. The external justification of 1.5 m /
-5 m/s / one frame beyond physics is still open and tracked by the team (issue #63).</p>
+<p><b>Selection history and remaining uncertainty.</b> The public reference window was examined during earlier exploration,
+and some component-selection procedures used its scores. Those procedures were subsequently revised or excluded from
+the submitted pipeline (D44, D45), but the exposure may have influenced retained design decisions. W3 replaced W1 under
+the revised procedure after W3's higher public scores were already known. The retained control thresholds have documented physical and decoding motivations, although their independent selection provenance remains unresolved. Subsequent external experiments used this combination without independently validating it.
+Removing ground-truth-dependent code or selection criteria does not retrospectively establish methodological independence.
+Public-window metrics are descriptive diagnostics, not independent validation; the competition-compliance interpretation
+remains unresolved.</p>
 
-<h3>5.2 Diagnostics on the public window (after deciding, no weight)</h3>
+<h3>5.2 Public-window diagnostics and interpretation</h3>
+<p>Table 4 reports the fixed pipeline alongside the previous version and the official baseline. The gap-pattern benchmark
+reuses the public labels and therefore does not supply an additional labelled test set. Neither diagnostic establishes
+performance on the private match.</p>
 <table>
-<caption><b>Table 4.</b> Reported only after the chain was fixed. The window has 17 possessions, so one possession moves
-<code>spellF1</code> by about six points.</caption>
-<thead><tr><th>Instrument</th><th class="n">Official floor <code>smooth50</code></th><th class="n">Previous chain (W1)</th><th class="n">Delivered (W3)</th></tr></thead>
+<caption><b>Table 4.</b> Descriptive diagnostics for the fixed pipeline (selection-history limitations in Section 5.1). The window contains 17 reference
+possessions; <code>spellF1</code> sensitivity to individual matching outcomes depends on the number of predicted possessions
+and the temporal IoU thresholds at which matches change. The full-match row is a separate official reference and is not
+comparable to the window scores.</caption>
+<thead><tr><th>Metric or diagnostic</th><th class="n">Official baseline <code>smooth50</code></th><th class="n">Previous pipeline (W1)</th><th class="n">Submitted (W3)</th></tr></thead>
 <tbody>
 <tr><td><code>spellF1</code>, public window</td><td class="n">0.3256</td><td class="n">0.5368</td><td class="n">0.5714</td></tr>
 <tr><td><code>macroF1</code>, public window</td><td class="n">0.6207</td><td class="n">0.8533</td><td class="n">0.8254</td></tr>
@@ -221,66 +249,108 @@ Even so, that exposure means the window's score for W3 is not independent eviden
 <tr><td>Bench: worst pattern</td><td class="n">0.0842</td><td class="n">0.2400</td><td class="n">0.2571</td></tr>
 <tr><td><code>spellF1</code>, full match (official)</td><td class="n">0.2433</td><td class="n">—</td><td class="n">private</td></tr>
 </tbody></table>
-<p>As a diagnostic, an oracle audit (D40, D41) swaps one component for the truth. A perfect dead ball lifts the window to
-0.6162. The correct team on every live frame lifts it to 0.9000. What remains is <i>when</i> the team changes near a touch,
-not dead ball, and our ball's precision at the touch limits it (D42, D43).</p>
+<p>W3 has a higher public-window <code>spellF1</code> than W1, but lower <code>macroF1</code> and lower mean performance across
+the transplanted gap patterns. Its worst-pattern score is higher. These mixed diagnostics do not establish an overall
+improvement, and the small public window cannot reliably rank closely performing methods. The recorded W3–W1
+leave-one-possession-out sensitivity range is +0.022 to +0.059 (D45); it is neither a confidence interval nor independent
+validation.</p>
+<p>An oracle diagnostic (D40, D41) replaces one component at a time with the ground truth. Perfect dead-ball labels yield
+0.6162 on the window; the correct team on every live frame yields 0.9000. The larger margin from correcting the team
+labels suggests that live-play assignment deserves attention. Further diagnostics implicate timing near touches and ball
+precision (D42, D43), but these substitutions do not isolate timing as the sole cause or rule out interactions with
+stoppage errors.</p>
 
-<h2>6. What we tried and dropped</h2>
+<h2>6. Alternatives investigated</h2>
+<p>Table 5 summarises approaches investigated to improve continuity, recover missing observations or refine transition
+timing. Their exclusion reflects the available evidence and selection constraints, not a general claim of ineffectiveness.
+Variant names link the comparisons to their research records.</p>
 <table>
-<caption><b>Table 5.</b> Alternatives, and the admissible reason each stays out (D19–D43).</caption>
+<caption><b>Table 5.</b> Investigated alternatives and reasons for exclusion under the revised protocol (D19–D43).</caption>
 <thead><tr><th>Alternative</th><th>Why it is not delivered</th></tr></thead>
 <tbody>
-<tr><td>Smoothing windows (the official baselines)</td><td>No possession model: they fragment on a ball in flight. The engine beats <code>smooth50</code> on all 7 DFL matches, and our smoothed backup on Smart Tagging agreement (73.1% against 62.2%).</td></tr>
-<tr><td>Soft-vote and softmax emissions; segment post-processing</td><td>Their calibration and duration prior came from the public window. Removed from the repository (D45).</td></tr>
-<tr><td>Formation-based gap filling</td><td>Smart Tagging agreement in gaps rose by less than the +2 points required.</td></tr>
-<tr><td>Self-supervised imputation in gaps</td><td>Smart Tagging agrees with the imputed team in only 43% of the changed frames.</td></tr>
-<tr><td>Viterbi decoder; undoing short possessions</td><td>Viterbi used a ground-truth rate prior (removed). <code>touch</code> comes after the duel rule in its lane's prior order, V5 fails the label-free block gate, and both lose 7 of 7 on DFL.</td></tr>
-<tr><td>Re-dating changes (mid-point, first control, first touch, reception)</td><td><code>mid</code> came from inspecting the window. First touch lowers Smart Tagging agreement by 2.9 points. The others fail the DFL dating gate.</td></tr>
-<tr><td>Stoppage onset and end refinements</td><td>Defined on W1's spans, which are gone. <code>cut</code> fails DFL (3 of 7). For <code>kick</code>, no admissible judge exists.</td></tr>
-<tr><td>Team of untagged restarts</td><td>Accuracy on DFL 0.518 by law and 0.925 by position, against 0.95 required.</td></tr>
-<tr><td>Recovering missed changes (persist, settle, relay)</td><td>No admissible evidence in favour: their external test used Metrica's data, now without weight. <code>relay</code> also lifts the rate to 4.11/min and lowers Smart Tagging agreement by 4.2 points.</td></tr>
-<tr><td>Ball from the tactical video</td><td>The COCO detector is imprecise. The fine-tuned detector trained on the video is excluded by the rules.</td></tr>
+<tr><td>Smoothing windows (the official baselines)</td><td>Temporal smoothing does not explicitly represent possession continuity during ball flight. In the recorded comparisons, the engine outperforms <code>smooth50</code> on all 7 DFL matches and the smoothed backup on Smart Tagging agreement (73.1% against 62.2%). These comparisons concern the evaluated engine configurations.</td></tr>
+<tr><td>Soft-vote and softmax emissions; segment post-processing</td><td>Excluded because their calibration and duration prior used the public window.</td></tr>
+<tr><td>Formation-based gap filling</td><td>The increase in Smart Tagging agreement within gaps fell below the required +2 points.</td></tr>
+<tr><td>Self-supervised imputation in gaps</td><td>The imputed team agrees with Smart Tagging on 43% of changed frames, providing little support from that auxiliary check.</td></tr>
+<tr><td>Viterbi decoder; undoing short possessions</td><td>The Viterbi decoder was excluded because its possession-rate prior came from the public ground truth. The <code>touch</code> variant ranks below the duel rule in the recorded preference order; V5 fails the block-structure criterion. Both <code>touch</code> and V5 underperform their reference in 7 of 7 DFL matches.</td></tr>
+<tr><td>Re-dating changes (mid-point, first control, first touch, reception)</td><td>The <code>mid</code> variant arose from inspecting the public window. First-touch dating reduces Smart Tagging agreement by 2.9 points; the other candidates fail the DFL timing criterion.</td></tr>
+<tr><td>Stoppage onset and end refinements</td><td>These variants were defined around W1's stoppage intervals, which the submitted pipeline no longer uses. The <code>cut</code> variant fails the DFL criterion (3 of 7); <code>kick</code> lacks an admissible evaluation source.</td></tr>
+<tr><td>Team of untagged restarts</td><td>DFL accuracy is 0.518 for inference from restart laws and 0.925 for position-based inference, below the recorded requirement of 0.95.</td></tr>
+<tr><td>Recovering missed changes (persist, settle, relay)</td><td>The external tests used Metrica data and are excluded from the revised evidence. The <code>relay</code> variant also raises the possession rate to 4.11/min and reduces Smart Tagging agreement by 4.2 points; neither quantity alone establishes its accuracy.</td></tr>
+<tr><td>Ball from the tactical video</td><td>The pretrained COCO detector had limited precision against tracking observations. Fine-tuning on the supplied video is excluded by the rules.</td></tr>
 </tbody></table>
 
-<h2>7. Limitations and what we would do with more time</h2>
+<h2>7. Limitations and further work</h2>
 <ul>
-  <li><b>Timing near a touch.</b> Our ball's noise, about 1 m at a slow ball, makes an early touch as often false as true.
-  This is where the remaining <code>spellF1</code> is, and no rule we tried recovers it without inventing changes.</li>
-  <li><b>Dead-ball share.</b> 48% of the halves is <code>D</code>, inside DFL's 41–52% per match. The organisers' definition of
-  a stoppage may be narrower, and we cannot check that without the ground truth.</li>
-  <li><b>Long ball gaps.</b> In the worst blocks (under 30% ball), possession is carried through gaps of over a minute. Only
-  a better ball detector that generalises across halves would help.</li>
-  <li><b>No admissible external judge for possession changes.</b> DFL's truth is touch-based and finer than the
-  challenge's, and Metrica's data has no declared licence. A licensed corpus with the challenge's control definition would be
-  the missing judge.</li>
+  <li><b>Timing near a touch.</b> Estimated ball noise of about 1 m at low speed makes early-touch detections unreliable.
+  The diagnostics suggest that control timing contributes to lost <code>spellF1</code>, but do not establish that it explains
+  all remaining error. The tested timing rules provided insufficient admissible evidence for a change.</li>
+  <li><b>Dead-ball share.</b> The pipeline labels 48% of the halves as <code>D</code>, within DFL's 41–52% per-match range.
+  This is a plausibility check, not validation: the challenge may define stoppages more narrowly, and the public window
+  cannot establish whether the full-match share is correct.</li>
+  <li><b>Long ball gaps.</b> In the least-observed blocks (under 30% ball presence), the state is carried through gaps of
+  over a minute. An unseen change can therefore propagate an incorrect team label. Better ball observations that transfer
+  across halves are a plausible direction, but their benefit remains unmeasured.</li>
+  <li><b>External evaluation mismatch.</b> DFL provides admissible component-level evidence, but its touch-based possession
+  labels are finer than the challenge's control definition. Metrica data has no declared licence and supplies no selection
+  evidence here. A licensed corpus aligned with the challenge's definition would allow a more appropriate assessment of
+  possession changes.</li>
 </ul>
+<p>The external training corpus is limited to seven matches, and transfer to this tracking export remains uncertain.
+Estimated tag-to-restart offsets introduce further timing uncertainty. Future observations in the stoppage features and
+retrospective restart assignment also make the current system unsuitable for causal, real-time inference without changes
+that would require separate evaluation.</p>
 
 <h2>8. Reproduction</h2>
-<p>Python 3.12.3 with numpy and pandas only in the labelling path, pinned in <code>uv.lock</code>. No network, no seeds, no
-training at run time.</p>
-<pre>uv sync --locked --no-dev --inexact                  # = make install
-export MTAH_DATA_DIR=/path/to/bundle                 # licensed data, never in the repository
-python tools/engine.py --build runs/engine --submission submissions/engine.csv   # = make engine
-python evaluation/validate_submission.py submissions/engine.csv
-python tools/repro.py --against submissions/engine.csv                           # = make repro</pre>
-<p><code>repro.py</code> builds the chain twice from scratch and compares the bytes. The delivered file's SHA-256 is
-<code>{{SHA}}</code>. On an Intel i9-13980HX laptop (16 GB, Windows 11), one build takes 17.3–17.8 s and
-<code>make repro</code> 33.7 s. The label-free test B is reproduced by <code>tools/readjudicate.py</code>, and the DFL
-evidence by <code>tools/dead_ball_v2.py dfl-bench</code>, from data downloaded outside the repository.</p>
+<p>The reported builds used Python 3.12.3. The labelling path depends only on numpy and pandas, with dependencies recorded
+in <code>uv.lock</code>. Inference requires no network access or training and uses no random sampling.</p>
+<p class="note repro-details">Run these Unix-shell commands using the separately obtained licensed match bundle.
+The checkout pins the source revision used to build this paper. PowerShell equivalents and PDF generation are
+documented in <code>docs/technical-report.md</code>.</p>
+<pre style="line-height: 1;">git clone https://github.com/Vapss/mtah2027-possession.git
+cd mtah2027-possession
+git checkout --detach {{REVISION}}
+uv sync --locked --no-dev --inexact
+export MTAH_DATA_DIR=/path/to/bundle
+.venv/bin/python tools/engine.py --build runs/evaluator \
+  --submission runs/evaluator/submission.csv
+.venv/bin/python evaluation/validate_submission.py runs/evaluator/submission.csv
+.venv/bin/python tools/repro.py
+.venv/bin/python - &lt;&lt;'PY'
+import hashlib
+from pathlib import Path
 
-<h2>9. Compliance and use of LLMs</h2>
-<table>
-<caption><b>Table 6.</b> The clarified prohibitions and what we can show (D44, D45).</caption>
-<thead><tr><th>Prohibition</th><th>What we can show</th></tr></thead>
-<tbody>
-<tr><td>Checking the output against the video</td><td>A static review of the build path (<code>make engine</code>, <code>make repro</code>) finds no reading of the video or comparison with it. The video was tried as an input and dropped. This does not certify actions outside that path.</td></tr>
-<tr><td>Hand labels or human-made data on the match</td><td>No label of this match is written or corrected by hand. The only annotations used are external: DFL/IDSSE, CC-BY 4.0.</td></tr>
-<tr><td>Uploading provided data to AI services</td><td>The repository holds no trace of it, and <code>make guard</code> keeps licensed files out of Git. We cannot certify what happened outside the repository. Since 3 November a written rule forbids it (AGENTS.md, rule 10).</td></tr>
-<tr><td>Training, fitting or calibrating on the ground truth or the video</td><td>The delivered chain contains no value fitted on either, and no inclusion decision rests on them (§5). Code that was fitted on the ground truth or trained on the video has been removed from the repository. Our earlier selection did use the public window. It is declared in D44 and D45, and the window's scores are reported as in-sample diagnostics only.</td></tr>
-</tbody></table>
-<p>The labels are produced by code alone, and the private ground truth was never used. Code and documentation were written
-with LLM coding agents. They ran the code locally and worked from code and from published aggregates. Every variant they
-proposed was pre-registered and judged by the protocol of §5.</p>
+candidate = Path("runs/evaluator/submission.csv")
+actual = hashlib.sha256(candidate.read_bytes()).hexdigest()
+expected = "{{EXPECTED_SHA}}"
+
+print(actual)
+assert actual == expected, "Submission SHA-256 mismatch"
+PY</pre>
+<p class="repro-details">The validator checks format, not predictive accuracy. <code>repro.py</code> performs two fresh builds
+and compares their SHA-256 hashes. Its optional <code>--against</code> argument requires a separately preserved delivery
+artifact; it is not needed for the primary workflow. The candidate's hash is checked against the recorded submission
+SHA-256, <code class="sha256">{{EXPECTED_SHA}}</code>, independently recorded in <code>configs/delivery.json</code>.
+The PDF builder rejects a candidate with a different digest. On an Intel i9-13980HX laptop (16 GB, Windows 11), one build takes 17.3–17.8 s and
+<code>make repro</code> takes 33.7 s. These are measured wall-clock times for that machine. The test B analysis, which does
+not use public ground-truth labels, is implemented in <code>tools/readjudicate.py</code>. External component experiments
+are implemented in <code>tools/dead_ball_v2.py dfl-bench</code>, using DFL data stored outside the repository; its directory
+argument and optional dropout mode are documented in that module.</p>
+<p class="note repro-details">To build the paper from the regenerated candidate (Chrome or Edge required):</p>
+<pre>.venv/bin/python docs/paper/build.py --team "Chilangorithms" \
+  --repo "Vapss/mtah2027-possession" --date "November 2026" \
+  --submission runs/evaluator/submission.csv \
+  --out runs/paper/Chilangorithms.pdf</pre>
+
+<h2>9. Methodological integrity and use of LLMs</h2>
+<p>Inference uses organiser-provided tactical tracking, XML metadata and Smart Tagging restart annotations, with stoppage
+weights trained on seven separately licensed DFL/IDSSE matches (CC-BY 4.0). It uses neither video nor public possession
+labels at run time and requires no retraining. Organiser-provided tags are distinct from team-created match annotations;
+the team reports no manual creation or correction of submission labels and no use of private ground truth.</p>
+<p>LLM coding assistants supported implementation and documentation using source code and published aggregate reports,
+with computation performed locally. Repository instructions prohibit sending provided tracking, labels or video to hosted
+AI services. Section 5.1 states the selection-history limitations. Public-window diagnostics do not establish independent
+predictive validity, and technical reproducibility does not certify compliance with competition rules.</p>
 
 <h2>References</h2>
 <div class="refs">
@@ -291,7 +361,7 @@ spatiotemporal player tracking data. <i>Scientific Reports</i> 12:16291. doi:10.
 <p>Link, D., Hoernig, M. (2017). Individual ball possession in soccer. <i>PLOS ONE</i> 12(7):e0179953.
 doi:10.1371/journal.pone.0179953.</p>
 <p>Metrica Sports. Sample data, games 1–2 (tracking and events). github.com/metrica-sports/sample-data. Explored in
-research rounds only and acknowledged as its README requests; no decision in this document rests on it.</p>
+research rounds only and acknowledged as its README requests; these experiments supply no evidence for revised selection decisions.</p>
 <p>Vidal-Codina, F., Evans, N., El Fakir, B., Billingham, J. (2022). Automatic event detection in football using tracking
 data. <i>Sports Engineering</i> 25:18. arXiv:2202.00804.</p>
 </div>

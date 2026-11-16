@@ -1578,3 +1578,23 @@ al integrarse. Las dos dicen lo mismo en lo esencial: el slice y el banco compru
   su atribución.
 - **Correcciones a lo de arriba.** En la primera revisión, la frase "con la que la 45 compara" ya no
   vale tras la adenda B, y de las "dos reglas de veredicto" queda una: la prueba B.
+
+---
+
+## 46. PR #71: referencia de entrega independiente y reproducción fijada
+
+**Decidido.** El SHA-256 completo ya registrado para la entrega se conserva en
+`configs/delivery.json`. El constructor del paper rechaza un CSV distinto antes de escribir HTML
+o lanzar el navegador. La receta del PDF usa esa referencia independiente y un checkout del commit
+que construye el documento; la guía fija una revisión reproducible en vez de ejecutar una rama móvil.
+La prueba de reproducción del motor compara el digest completo con el manifiesto.
+
+**Portabilidad.** `.gitattributes` fija LF para CSV: un checkout con `core.autocrlf=true` no puede
+invalidar una comparación byte a byte. Se verifica con un repositorio temporal y datos sintéticos,
+sin editar los archivos de referencia de los organizadores.
+
+**Alcance.** No cambia la inferencia ni se vuelve a medir o elegir con el slice. La prioridad del
+control observado cancela el forzado del equipo, pero no acorta la máscara `D`; el paper lo aclara.
+La ejecución completa con el bundle, la comparación con el CSV entregado, la maquetación final del
+PDF, el acceso público y la procedencia pendiente de D44–D45 siguen siendo condiciones de entrega,
+no resultados acreditados por esta corrección.
