@@ -50,6 +50,11 @@ valores y la aproximación al duelo. Una regla cualitativa no valida automática
 - El [informe ELASTIC ya versionado](elastic-feasibility.md) advierte que `receiver_id` incluye
   acciones de un toque y defensivas. No equivale a control sostenido; el protocolo anterior no
   autoriza elegir umbrales ni el duelo. No se abrió el partido reservado.
+- La [publicación primaria del corpus DFL, Position data](https://pmc.ncbi.nlm.nih.gov/articles/PMC11787359/)
+  define `BallPossession` por el jugador que controla el balón y declara los datos CC BY 4.0.
+  Es una referencia externa de equipo más pertinente que convertir automáticamente una recepción
+  ELASTIC en control. No documenta allí todos los casos de duelo; la equivalencia completa con la
+  definición del reto no queda demostrada por esa frase.
 
 **Resultado:** corregida en `engine.py` la afirmación demasiado fuerte «fixed before measuring».
 Se conserva D29 como registro histórico. La justificación independiente de los valores sigue
@@ -157,8 +162,11 @@ personal. No se ha enviado ningún mensaje a terceros durante esta auditoría.
 Los cambios de Python de esta auditoría solo afectan comentarios/docstrings. Se comprobó igualdad
 del AST ejecutable frente a la base, retirando únicamente docstrings para la comparación; lint,
 formato y el guard de datos pasaron. No se ha regenerado ni sustituido la candidata de `configs/delivery.json`.
-Las cinco suites existentes de motor y balón muerto pasaron: 103 pruebas. No se repitió la suite
-completa ni la reproducción real para estos cambios de comentarios/documentación.
+Las cinco suites existentes de motor y balón muerto pasaron: 103 pruebas. Después se ejecutó
+la suite completa desde un clon limpio de `b7cb6133d10f16a2c96dbfdc7a11cfb0db4efbbe`, usando
+el bundle local: 509 pruebas pasaron, 6 se omitieron y no hubo fallos ni errores. Pasó la prueba
+de reproducción real que exige dos builds idénticos al digest del manifiesto, sin intentos de
+acceso al GT dentro del alcance del hook. La CI de ese commit pasó `check` y `graph`.
 No hay nuevos números del partido ni evidencia externa de rendimiento en este documento.
 
 | Pendiente | Avance comprobado | Qué impide cerrarlo |
