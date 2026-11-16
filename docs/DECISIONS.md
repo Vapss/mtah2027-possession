@@ -1635,3 +1635,26 @@ los hooks no son un sandbox del sistema operativo ni acreditan la procedencia hi
 reanudación. La evidencia externa exploratoria no valida por sí sola control/duelo ni autoriza
 recalibrar con el slice. El cierre de #63 sigue requiriendo la reproducción real y una decisión
 trazable sobre las constantes y la exposición de selección de D44–D45.
+
+---
+
+## 48. Preparación de #72: reproducción real registrada y PDF verificado
+
+**Verificado.** En `4146b2453b2bd4618549077182bc640a8ae69cae`, con el bundle autorizado local,
+dos builds independientes produjeron candidatos byte-idénticos y con el digest completo ya fijado
+en el manifiesto; ambos pasaron el validador oficial. El hook registró siete procesos Python y
+ningún intento de acceso al GT. La suite desde un clon limpio pasó 509 pruebas, omitió 6 y no tuvo
+fallos ni errores. `acf1eb8` integra ese mismo árbol. El registro versionado contiene solo estado
+de comprobaciones, revisiones, versiones y hash; datos, candidatos y logs detallados quedan locales.
+
+**Documento.** El PDF se genera desde ese candidato verificado, se renderiza y se inspeccionan sus
+ocho páginas A4. La tabla larga puede continuar con cabecera repetida y sin partir filas; la
+numeración y los párrafos de reproducción evitan una página final casi vacía. Se comprueban título,
+equipo, URL, hash completo, marcadores y límites de página. La fuente conserva los límites
+metodológicos de D44–D45. El README apunta al flujo del equipo, distinguiéndolo del del organizador.
+
+**Alcance.** Solo cambian documentación y presentación del paper. No se vuelve a puntuar el slice,
+no cambia la inferencia ni se elige un candidato nuevo. La reproducción real queda acreditada dentro
+del alcance del hook; no equivale a una auditoría de sistema operativo. La comparación directa con
+el CSV realmente entregado, la procedencia pendiente en #63 y el acceso público siguen siendo
+condiciones de entrega independientes de promover `dev` a `main`.

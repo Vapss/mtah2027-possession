@@ -1,5 +1,17 @@
 # More than a Hack 2027 — Phase 1: Ball Possession
 
+## Chilangorithms submission
+
+The team's W3 possession engine, pinned reproduction commands and paper build instructions are in
+[`docs/technical-report.md`](docs/technical-report.md). The organizer documentation below describes
+the challenge and its baselines; it is not the command for regenerating the team's candidate.
+
+Local verification on 16 November 2026 produced two byte-identical candidates matching the complete
+SHA-256 in [`configs/delivery.json`](configs/delivery.json), with official format validation and no
+ground-truth access attempts observed by the Python audit hook. The clean-checkout suite passed
+509 tests with 6 skipped. See the technical report for the evidence, scope and remaining delivery
+gates, including selection provenance (#63) and public repository access.
+
 **Organised by [Metrica Sports](https://metrica-sports.com), [FC Barcelona](https://www.fcbarcelona.com)
 and the [Mobile World Capital Barcelona](https://www.mwcbarcelona.com)**, at the Talent Arena in Barcelona.
 

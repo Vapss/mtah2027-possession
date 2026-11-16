@@ -1,0 +1,34 @@
+{
+  "verified_revision": "4146b2453b2bd4618549077182bc640a8ae69cae",
+  "identical_tree_dev_merge": "acf1eb8a4c0ce8062098fdbf1ee21cf519c9126e",
+  "python_version": "3.12.3",
+  "candidate_sha256": "7a7f70b68d39cdd749b8f98fcc91d433cf23ff4faf05a27eb71a6e31ef1c2425",
+  "two_fresh_builds_byte_identical": true,
+  "official_validator_exit_codes": [
+    0,
+    0
+  ],
+  "python_gt_guard": {
+    "registered_processes": 7,
+    "forbidden_access_attempted": false
+  },
+  "clean_checkout_suite": {
+    "tests": 515,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 6,
+    "passed": 509
+  },
+  "separate_delivery_csv_compared": false,
+  "scope": "Local reproduction and observed Python file-open audit only; does not certify historical selection independence.",
+  "paper_verification": {
+    "pages": 8,
+    "page_size": "A4",
+    "all_pages_rendered_and_visually_reviewed": true,
+    "title_team_repository_url_and_complete_candidate_hash_checked": true,
+    "page_numbers_checked": true,
+    "no_unfilled_placeholders_or_local_profile_paths": true,
+    "characters_outside_page": 0,
+    "scope": "Generated from a verified candidate; final PDF remains local and is not byte-identical across metadata timestamps."
+  }
+}
