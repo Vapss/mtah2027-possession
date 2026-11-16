@@ -16,9 +16,10 @@ contested or loose it stays with the last team that had it. So the engine does t
    control frames of the other team, and when it happens it is dated to the first of them: the
    possession changed when control began, not when the engine became sure of it.
 
-No smoothing window, no duration prior, no learned weight: everything is a physical threshold fixed
-before measuring (DECISIONS 29), and frames before the first control of a half are `X` (the scorer
-back-fills them).
+The control thresholds have physical motivations, but DECISIONS 29 records five public-slice
+configurations explored before the sweep's pre-registration. Their independent provenance remains
+open in #63 (docs/analysis/issue63-provenance-audit.md). Frames before the first control of a half
+are `X` (the scorer back-fills them).
 
 The delivered chain (`run`, DECISIONS 30) adds two things from the dead-ball stream (#16,
 `tools/dead_ball.py`): each stoppage, from the ball leaving the pitch to the tagged restart, is `D`;
@@ -56,7 +57,7 @@ NONE = -1  # no team: no control on this frame, or no state yet
 
 @dataclass(frozen=True)
 class Params:
-    """The three thresholds. Defaults are physical, fixed before measuring (DECISIONS 29)."""
+    """Control defaults from DECISIONS 29; pre-registration followed slice exploration (#63)."""
 
     radius_m: float = 1.5  # reach plus tracking noise: closer than this, the player can play it
     speed_mps: float = 5.0  # a fast dribble; a pass travels at 10 m/s and more

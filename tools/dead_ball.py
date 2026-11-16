@@ -12,9 +12,9 @@ engine's labels.
 `D` is a state, not a ball threshold (DECISIONS 16): a stoppage begins at an out-of-play event and
 lasts until the restart. The restart comes from Smart Tagging, whose `SET PIECES` are fixed windows
 around it -- 35 s, or 5 s for a kick-off -- rather than the stoppage itself. The beginning comes
-from the tracking: the ball observed outside the pitch, else the whole field standing still. Every
-constant was fixed from tracking and tagging alone, before any variant met the ground truth; the
-measurements behind each one are in docs/proposals/lane-d.md, and nothing here is swept.
+from the tracking: the ball observed outside the pitch, else the whole field standing still.
+docs/proposals/lane-d.md records the initial constants and their tracking/tagging aggregates;
+the provenance of active choices remains open in #63 (docs/analysis/issue63-provenance-audit.md).
 
 The four variants are cumulative, each adding one source of evidence to the previous one:
 
@@ -54,11 +54,11 @@ KICK_OFF_GOAL = "Kick Off (After Goal)"
 
 @dataclass(frozen=True)
 class Params:
-    """Fixed before measuring against any label (docs/proposals/lane-d.md, section 3)."""
+    """Defaults documented in lane-d.md; admissible provenance remains open in #63."""
 
-    # Where the restart sits inside a `SET PIECES` window. The two real kick-offs fall 3.52 s and
-    # 3.28 s after their 5 s tags begin; across the 35 s tags the field is stillest from 0 to +4 s
-    # and play resumes between +4 and +6 s.
+    # Estimated within-clip restart offsets, derived from the provided match's tracking/tagging
+    # aggregates (lane-d.md sections 2-3). They are not a documented export convention or a clock
+    # correction; their admissible provenance remains open in #63.
     kick_off_restart_s: float = 3.5
     restart_s: float = 5.0
     # A ball that goes out is not back on the pitch within a second, so shorter interruptions of
