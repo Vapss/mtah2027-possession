@@ -29,6 +29,7 @@
     "page_numbers_checked": true,
     "no_unfilled_placeholders_or_local_profile_paths": true,
     "characters_outside_page": 0,
-    "scope": "Generated from a verified candidate; final PDF remains local and is not byte-identical across metadata timestamps."
+    "scope": "Generated from a verified candidate; final PDF remains local and is not byte-identical across metadata timestamps.",
+    "source_revision": "7d8b810e5fea72665ba90e501247d5782179956c"
   }
 }
