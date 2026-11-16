@@ -20,10 +20,11 @@ and Python 3.12.3; dependencies are pinned in `uv.lock`. Obtain the licensed mat
 through the authorized organizer process. Do not commit, redistribute or upload that bundle to the
 public repository.
 
-Clone the team's `dev` branch: the inherited default `main` branch does not contain the final engine
-or lockfile in the inspected Git history. The audited pipeline revision is
-`3fabbf4e0e53db4017ef8aa2323ffafa7777524c`; this identifies the implementation, not a claim that
-later documentation edits have already been published.
+The inherited default `main` branch does not contain the final engine or lockfile in the inspected
+Git history. Use the explicit reproduction revision in the checkout commands below. The inference
+implementation is unchanged from `3fabbf4e0e53db4017ef8aa2323ffafa7777524c`; the reproduction
+revision also contains the delivery manifest and PDF checks. Later documentation-only commits may
+identify that same reproducible revision without changing the candidate.
 
 Tracked inputs are the source, configuration, lockfile and supplied SVG figures. The licensed bundle
 is a separate input; `.venv/` and `runs/` are generated locally. Neither the internal reference
@@ -55,7 +56,8 @@ $env:MTAH_DATA_DIR = "C:\path\to\bundle"
 ```
 
 After cloning, all remaining commands run from the repository root. The hash command prints the
-generated candidate's SHA-256 and fails unless it matches the recorded submission hash. The validator
+generated candidate's SHA-256 and fails unless it matches the recorded submission hash, independently
+stored in `configs/delivery.json`. The validator
 checks format, not accuracy. Neither step reads ground-truth labels. The build recreates
 `runs/evaluator/`; do not put a preserved reference there. No cached intermediates or external DFL
 training files are required: the fitted stoppage weights are embedded in the tracked code.
@@ -89,14 +91,19 @@ Build the PDF from the tracked SVG figures and the regenerated candidate:
 ```
 
 Chrome or Edge is required. Close any viewer holding the output PDF before rebuilding, then check
-its title and displayed hash. This command preserves the configured paper date; change it only by
+its title and displayed hash. The builder rejects a CSV whose digest differs from the delivery
+manifest before writing HTML or launching the browser. It includes the current Git commit in the
+paper's checkout command; build from the clean, committed checkout described above.
+This command preserves the configured paper date; change it only by
 an explicit team decision. Regenerating figures with `make paper` additionally requires the
 `starter` dependency group (`uv sync --locked --inexact --group starter`).
 
 Static inspection confirms that this primary workflow generates its ignored CSV input before using
-it. It does not require prior local outputs. A fresh-clone execution has not been performed as part
-of this documentation correction; obtaining the authorized bundle and installing the pinned
-environment remain prerequisites.
+it. It does not require prior local outputs. Environment installation was verified locally on
+Windows, and synthetic tests cover rejection of a mismatching candidate and Git checkout with
+`core.autocrlf=true`. Full inference from a fresh clone, final CSV hash verification and final PDF
+layout verification remain pending because the licensed bundle and delivery CSV are unavailable in
+this review environment. CI also omits bundle-dependent tests; its demo is not final-engine evidence.
 
 For delivery, use a byte-identical copy of the verified candidate named `Chilangorithms.csv`, the generated
 `Chilangorithms.pdf`, and the public repository URL. Validate and hash the delivery copy itself;
@@ -104,6 +111,19 @@ keep the reference unchanged. Local delivery files can be kept under the gitigno
 See [`SUBMISSION.md`](../SUBMISSION.md) for the organizer's delivery instructions. Historical research
 protocols are not reproduction steps; the paper and D44–D45 retain the selection-history disclosures
 and unresolved methodological and compliance limitations.
+
+### Delivery gates still requiring evidence
+
+| Gate | Evidence required before delivery | Status of this PR |
+|---|---|---|
+| Final-file reproduction | Two fresh engine builds, official format validation, complete SHA-256 match and comparison with the preserved delivery CSV | Pending: authorized bundle and delivery reference unavailable here |
+| Final document | Generate the PDF from the verified candidate; inspect layout, title, repository URL and recorded hash | Pending |
+| Selection provenance | Traceable independent justification for control thresholds and resolution of the historical slice exposure, including the W3 reselection (D44–D45, issue #63) | Unresolved; this PR does not establish compliance |
+| Public access | Public repository containing the pinned reproduction revision, accessible without authentication after a data/history audit | Pending: repository was private at review time |
+
+The recorded hash is an existing delivery reference, not a new measurement or a new candidate.
+These documentation and packaging checks do not change model parameters, possession labels or
+the interpretation of the organisers' rules. A technical fix does not resolve the selection history.
 
 Lo que cambió respecto a la versión anterior de este archivo (decisiones 44 y 45):
 

@@ -15,6 +15,7 @@ import argparse
 import base64
 import hashlib
 import html as html_lib
+import json
 import os
 import re
 import shutil
@@ -24,6 +25,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
+DELIVERY = REPO / "configs" / "delivery.json"
 CANDIDATES = (
     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
     r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
@@ -49,7 +51,21 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def render(team: str, repo: str, sha: str, date: str) -> str:
+def expected_sha256() -> str:
+    """The delivery reference must not be derived from the candidate being checked."""
+    digest = json.loads(DELIVERY.read_text(encoding="utf-8"))["submission_sha256"]
+    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise ValueError("delivery manifest must contain a complete SHA-256 digest")
+    return digest
+
+
+def render(team: str, repo: str, sha: str, date: str, revision: str) -> str:
+    """Render only the recorded delivery, with a checkout command for this paper's revision."""
+    expected = expected_sha256()
+    if sha != expected:
+        raise ValueError(f"Submission SHA-256 mismatch: expected {expected}, got {sha}")
+    if not re.fullmatch(r"[0-9a-f]{40}", revision):
+        raise ValueError("revision must be a full Git commit SHA")
     html = (HERE / "paper.html").read_text(encoding="utf-8")
 
     def figure(match: re.Match) -> str:
@@ -58,7 +74,15 @@ def render(team: str, repo: str, sha: str, date: str) -> str:
         return f'<img alt="" src="data:image/svg+xml;base64,{encoded}" style="max-width:100%">'
 
     html = re.sub(r"\{\{FIG:([\w.-]+)\}\}", figure, html)
-    for key, value in {"TEAM": team, "REPO": repo, "SHA": sha, "DATE": date}.items():
+    fields = {
+        "TEAM": team,
+        "REPO": repo,
+        "SHA": sha,
+        "EXPECTED_SHA": expected,
+        "DATE": date,
+        "REVISION": revision,
+    }
+    for key, value in fields.items():
         if not value.strip():
             raise ValueError(f"{key.lower()} must not be empty")
         html = html.replace("{{" + key + "}}", html_lib.escape(value.strip()))
@@ -80,7 +104,10 @@ def main(argv: list[str] | None = None) -> int:
     if not args.out.stem or args.out.suffix.lower() != ".pdf":
         parser.error(f"--out must name a .pdf file, got {args.out}")
 
-    html = render(args.team, args.repo, sha256(args.submission), args.date)
+    revision = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=REPO, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    html = render(args.team, args.repo, sha256(args.submission), args.date, revision)
     out = args.out.resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
     page = out.with_suffix(".html")

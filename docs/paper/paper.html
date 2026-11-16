@@ -147,9 +147,10 @@ establish a stoppage.</p>
 <h3>3.4 Restarts</h3>
 <p>The challenge defines a restart as having a clear possessor; our task is to infer that team and the restart time. At a
 tagged restart with a known team, the decoder forces the corresponding state unless an accepted, non-duel control has
-already occurred in the tag window before the estimated restart frame. Observed control thus takes precedence over the
-time estimate (D30, D32, D35); 17 restarts are forced this way. Conflicting team tags on the same frame produce no forced
-state.</p>
+already occurred in the tag window before the estimated restart frame. An earlier accepted control cancels the forced
+team assignment (D30, D32, D35); 17 restarts are forced this way. Conflicting team tags on the same frame produce no forced
+state. Cancelling this forced team assignment does not shorten the dead-ball mask: the output remains
+<code>D</code> until the estimated end of the tagged stoppage, even if control was observed earlier.</p>
 <p>For a stoppage without a closing restart tag, the decoder finds the first subsequent accepted control and assigns its
 team retrospectively from the first live frame. It does so only within the same half and without crossing another
 stoppage (D45); this rule applies 37 times in the match. The team assignment therefore uses later evidence rather than
@@ -173,7 +174,7 @@ the restarting team's state.</figcaption></figure>
 <tr><td>Challenge or duel</td><td>No change while the team in possession also has a player within 1.5 m.</td></tr>
 <tr><td>Ball out of play</td><td><code>D</code> from the selected observed exit within the search window to the tagged restart; otherwise the tag interval is used. An observed ball outside the pitch cannot establish control.</td></tr>
 <tr><td>Foul or other stoppage without an exit</td><td><code>D</code> for player-based detections retained by the minimum-duration rule of 4 s.</td></tr>
-<tr><td>Restart</td><td>A known tagged team is forced unless an earlier accepted, non-duel control supersedes the estimate. Without a closing tag, the first later accepted control supplies the team retrospectively.</td></tr>
+<tr><td>Restart</td><td>A known tagged team is forced unless an earlier accepted, non-duel control cancels that team assignment. The tagged dead-ball interval keeps its estimated end. Without a closing tag, the first later accepted control supplies the team retrospectively.</td></tr>
 <tr><td>Before a half's kick-off</td><td><code>D</code>, by the laws of the game.</td></tr>
 <tr><td>Ball not detected</td><td>No new ball-based control evidence: the state is carried unless a restart rule intervenes. Player-based stoppage detection remains available.</td></tr>
 </tbody></table>
@@ -303,9 +304,13 @@ that would require separate evaluation.</p>
 <h2>8. Reproduction</h2>
 <p>The reported builds used Python 3.12.3. The labelling path depends only on numpy and pandas, with dependencies recorded
 in <code>uv.lock</code>. Inference requires no network access or training and uses no random sampling.</p>
-<p class="note repro-details">Run these Unix-shell commands from the repository root using the separately obtained licensed
-match bundle. Clean-clone setup, PowerShell equivalents and PDF generation are documented in <code>docs/technical-report.md</code>.</p>
-<pre style="line-height: 1;">uv sync --locked --no-dev --inexact
+<p class="note repro-details">Run these Unix-shell commands using the separately obtained licensed match bundle.
+The checkout pins the source revision used to build this paper. PowerShell equivalents and PDF generation are
+documented in <code>docs/technical-report.md</code>.</p>
+<pre style="line-height: 1;">git clone https://github.com/Vapss/mtah2027-possession.git
+cd mtah2027-possession
+git checkout --detach {{REVISION}}
+uv sync --locked --no-dev --inexact
 export MTAH_DATA_DIR=/path/to/bundle
 .venv/bin/python tools/engine.py --build runs/evaluator \
   --submission runs/evaluator/submission.csv
@@ -317,7 +322,7 @@ from pathlib import Path
 
 candidate = Path("runs/evaluator/submission.csv")
 actual = hashlib.sha256(candidate.read_bytes()).hexdigest()
-expected = "{{SHA}}"
+expected = "{{EXPECTED_SHA}}"
 
 print(actual)
 assert actual == expected, "Submission SHA-256 mismatch"
@@ -325,7 +330,8 @@ PY</pre>
 <p class="repro-details">The validator checks format, not predictive accuracy. <code>repro.py</code> performs two fresh builds
 and compares their SHA-256 hashes. Its optional <code>--against</code> argument requires a separately preserved delivery
 artifact; it is not needed for the primary workflow. The candidate's hash is checked against the recorded submission
-SHA-256, <code class="sha256">{{SHA}}</code>. On an Intel i9-13980HX laptop (16 GB, Windows 11), one build takes 17.3–17.8 s and
+SHA-256, <code class="sha256">{{EXPECTED_SHA}}</code>, independently recorded in <code>configs/delivery.json</code>.
+The PDF builder rejects a candidate with a different digest. On an Intel i9-13980HX laptop (16 GB, Windows 11), one build takes 17.3–17.8 s and
 <code>make repro</code> takes 33.7 s. These are measured wall-clock times for that machine. The test B analysis, which does
 not use public ground-truth labels, is implemented in <code>tools/readjudicate.py</code>. External component experiments
 are implemented in <code>tools/dead_ball_v2.py dfl-bench</code>, using DFL data stored outside the repository; its directory
