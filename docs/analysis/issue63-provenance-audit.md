@@ -70,6 +70,28 @@ La admisibilidad de sustituir decisiones históricas requiere respuesta de la or
 permita dar por superado ese paso. No se ejecuta la rejilla antigua de #63 sobre una referencia
 inadecuada ni se escogen variantes por el slice.
 
+### Comprobación adicional de adecuación de DFL
+
+Se contrastó el descriptor IDSSE con [Bauer y Anzer, §2.1](https://link.springer.com/article/10.1007/s10618-021-00763-7):
+ese estudio describe operadores que mantienen al equipo hasta el control rival y distingue control
+de mera proximidad. También introduce exclusiones y una segmentación propia de fases, y estudia
+otras temporadas; no acredita por sí solo las instrucciones de anotación de los siete archivos
+IDSSE de 2022/23. El descriptor IDSSE remite al catálogo DFL 5.1, sin detallar allí todos los casos
+de disputa. No se deduce de ello que ambos corpus tengan reglas distintas: la equivalencia queda
+sin verificar al nivel necesario para justificar esta aproximación del duelo.
+
+D37 ya restringió DFL como árbitro de la escala temporal y del número de cambios. Su compuerta
+histórica P1 compara agregados con el slice: se conserva como historial y **no se reutiliza para
+elegir hoy**, por D44 y la regla 11. Tampoco se borran esas cautelas para declarar automáticamente
+adecuada la referencia. D44 exige revisar derechos y dominio antes de usar la rejilla, y permite
+declarar el conflicto sin afirmar cumplimiento si la evidencia no basta.
+
+La decisión de esta auditoría es no ejecutar esa rejilla como supuesto cierre de control/duelo.
+No es una prohibición literal del concurso contra DFL: una calibración externa nueva podría
+plantearse con su propio protocolo y límites, pero produciría una decisión nueva; no probaría
+independencia de la elección histórica ni subsanaría por sí sola offsets o W3. La candidata actual
+y el partido reservado de ELASTIC permanecen intactos.
+
 ## 2. Offsets de reanudación de 3,5 y 5 segundos
 
 **Método:** distinguir conversión de reloj, metadatos del export y estimación del instante de saque;
