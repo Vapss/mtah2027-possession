@@ -1,0 +1,2 @@
+# Byte comparisons must survive a Windows checkout with core.autocrlf=true.
+*.csv text eol=lf

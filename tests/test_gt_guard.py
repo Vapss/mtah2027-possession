@@ -78,21 +78,6 @@ def test_guard_blocks_import_from_synthetic_gt_directory(tmp_path) -> None:
     assert "module executed" not in result.stderr
 
 
-def test_b5_generation_default_does_not_read_gt(tmp_path) -> None:
-    code = "import sys; from tools import emision; emision.generate(sys.argv[1])"
-    result = guarded(code, str(tmp_path / "artifact.csv"), synthetic=True)
-    assert result.returncode == 0, result.stderr
-    assert not result.gt_attempted
-
-
-@requires_bundle
-def test_b5_generation_with_real_inputs_does_not_read_gt(tmp_path) -> None:
-    code = "import sys; from tools import emision; emision.generate(sys.argv[1])"
-    result = guarded(code, str(tmp_path / "artifact.csv"))
-    assert result.returncode == 0, result.stderr
-    assert not result.gt_attempted
-
-
 def test_repro_build_runs_with_synthetic_inputs_and_gt_guard() -> None:
     # Work directories are restricted to runs/ by the real pipeline; use a fresh child there.
     runs = ROOT / "runs"
@@ -116,7 +101,8 @@ def test_repro_build_with_real_inputs_never_opens_ground_truth() -> None:
     with tempfile.TemporaryDirectory(prefix="gt-guard-real-", dir=runs) as workdir:
         code = (
             "from pathlib import Path; import sys; from tools import repro; "
-            "a,b = repro.repro(workdir=Path(sys.argv[1])); assert a == b"
+            "from docs.paper.build import expected_sha256; "
+            "a,b = repro.repro(workdir=Path(sys.argv[1])); assert a == b == expected_sha256()"
         )
         result = guarded(code, workdir)
     assert result.returncode == 0, result.stderr

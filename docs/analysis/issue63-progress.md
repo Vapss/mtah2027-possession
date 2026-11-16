@@ -1,90 +1,80 @@
 # #63: evidencia y pendientes de procedencia
 
-Esta nota distingue pruebas con datos sintéticos de una reproducción real. No es una decisión de
-freeze ni justifica elegir parámetros con el slice. La referencia es `dev` en `ebec47f`.
+Esta nota distingue pruebas sintéticas de reproducción real. No decide un freeze ni justifica
+seleccionar parámetros con el slice. Se actualiza al integrar `dev` en `b3d7ed4` (#70 y #71).
+La referencia de entrega es `configs/delivery.json`; no se vuelve a medir ni a elegir el candidato.
 
-## Prior de duración
+## Estado tras retirar B5 y el postproceso
 
-El `355` de `postprocess.py` se obtenía de la duración media del slice (D20). Se elimina, sin
-sustituirlo por otro valor: la primera clave del desempate maximiza la duración original del vecino.
-Si las duraciones difieren, esa clave ya decide; si son iguales, ambas distancias a cualquier prior
-son iguales. Por tanto la segunda clave no podía cambiar la elección. Se conserva el desempate al
-vecino anterior. Este postproceso no está en la cadena `make repro`; sus otros umbrales siguen
-necesitando procedencia admisible si se propone incorporarlo.
+#70 retiró la emisión B5, su temperatura y su interfaz de generación. `tools/emision.py` conserva
+solo la identidad de equipos del XML y el cálculo de velocidad que utiliza el motor. También se
+retiraron `tools/postprocess.py`, sus pruebas y el verificador/manifiesto B6. La resolución de los
+conflictos de #69 conserva esas retiradas; no reintroduce una emisión o un postproceso inactivo.
 
-## Temperatura de emisión
+El prior de duración de 355 frames procedía del slice (D20) y era redundante en su desempate,
+pero ya no existe en el código actual. La candidata de temperatura externa de 2,864606845062 m
+se obtuvo antes de integrar #70 mediante `docs/proposals/b5-external-calibration.md`; su evidencia
+está en `docs/analysis/b5-external.json` y su programa es `tools/calibrate_b5_external.py`.
+Se conserva como investigación histórica sin consumidor en la entrega. Una mejora de log-loss
+en DFL no demuestra calibración en el partido del reto ni mejora de `spellF1`.
 
-La temperatura `2,857386876102962` se calibró con el GT público (D18). La función `engine.run`
-calcula rasgos y control, y el build convierte etiquetas con `onehot`: no llama a `emision.emit`.
-Una prueba sintética modifica la temperatura y hace fallar una llamada a `emit`, y comprueba la
-salida del motor en ambos casos. Eso no sustituye la reproducción del CSV real. B5 sí usa esa
-temperatura en probabilidades y confianza: no se debe afirmar que cambiarla deja inalterado un
-ensemble. Se reemplazó por `2,864606845062 m` conforme al protocolo externo pre-registrado de
-`docs/proposals/b5-external-calibration.md`. Resultados reproducibles en `b5-external.json`:
-log-loss condicional en el segundo partido DFL 0,5347 frente a 0,7437 con el prior de 1 m.
-Esto demuestra la compuerta DFL especificada, no calibración en el partido de competición.
-Además, `tools/emision.py` ya no consulta automáticamente el GT público al generar el artefacto;
-los diagnósticos quedan disponibles solo con `--diagnostics` y no pueden decidir la selección.
-Ese modo imprime también agregados del partido: debe ejecutarse localmente sin enviarlos a un
-servicio de IA, salvo que ya estén publicados en las fuentes permitidas por AGENTS.md.
-La generación predeterminada se prueba con entradas sintéticas y el GT bloqueado; la prueba con
-el bundle real queda pendiente. El cambio afecta al informe impreso, no a la tabla del artefacto.
-El manifiesto histórico B6 fija el hash del artefacto con la temperatura anterior: generar B5 con
-la nueva temperatura cambia sus probabilidades y no puede satisfacer ese hash. `make verify-b6`
-solo puede comprobar esa evidencia con el artefacto histórico correspondiente; queda por preparar
-una ruta reproducible para conservarla sin devolver la temperatura anterior al flujo actual. No se
-actualiza el manifiesto sin regeneración y auditoría con el bundle. Se propone comprobar la evidencia
-histórica en un checkout aislado del commit anterior al cambio, sin usarla para generar la entrega:
+Los programas aceptan datos externos fuera del repositorio, sin copiarlos a la entrega:
 
 ```bash
-git worktree add --detach runs/b6-historical ebec47f9267edae2089389dd845ac4340bdb1a53
-cd runs/b6-historical
-uv sync --locked
-# MTAH_DATA_DIR debe apuntar al bundle licenciado, fuera del repositorio.
-.venv/bin/python tools/emision.py --output artifacts/possession.csv
-make verify-b6
+python tools/calibrate_b5_external.py --dir /path/to/external/idsse --write runs/b5-check.json
+python tools/elastic_audit.py all --dir /path/to/external --write runs/elastic-check.md
 ```
 
-En Windows se usa `.venv/Scripts/python`. El commit conserva la emisión histórica; la auditoría no
-vuelve a adoptar su temperatura para el modelo actual. **Ruta propuesta, no verificada:** aquí no hay
-bundle y no se ha comprobado el hash antiguo ni el resultado de `make verify-b6` en ese checkout.
+El segundo comando requiere `pyarrow==26.0.1` únicamente para exploración. Ambos verifican
+las huellas de entrada registradas; no descargan datos ni seleccionan parámetros del motor W3.
+Al adaptar #69 se ejecutaron ambos comandos sobre la copia externa local ya disponible: los
+resultados fueron byte-idénticos a los blobs versionados de `b5-external.json` y
+`elastic-feasibility.md`. Es una comprobación de reproducción de evidencia histórica, no una
+evaluación nueva ni una validación del candidato W3.
 
-## Constantes activas identificadas en la ruta del motor
+La prueba sintética del motor comprueba que B5 sigue ausente y que inyectar las antiguas interfaces
+no cambia su salida. No sustituye la comparación de los bytes reales. Para reproducir el antiguo
+artefacto B6 habría que usar un checkout histórico aislado, por ejemplo `ebec47f`, con el bundle
+autorizado. Esa ruta no se ejecutó aquí y no forma parte de la entrega; no se restaura el manifiesto
+antiguo ni se modifica el hash de referencia actual.
 
-Inventario estático inicial; la fecha es la de incorporación del carril en la historia consultada,
-no necesariamente la fecha en que cada valor se eligió. Las fuentes son referencias, no una
-certificación de que la regla 11 se haya cumplido.
+## Constantes activas identificadas en la ruta W3
 
-| Elemento | Valores activos | Procedencia y estado |
+Inventario estático inicial: las referencias no certifican independencia de selección. La fecha de
+incorporación no necesariamente coincide con la elección de cada valor. D44–D45 siguen abiertos.
+
+| Elemento | Valores o reglas activos | Procedencia y estado |
 |---|---|---|
-| Control y duelo | 1,5 m; 5 m/s; `dwell=1`; `duel=True` | D29 y D34: adopción con comparación en el slice. Pendiente justificación externa. |
-| Fecha de reanudación | +3,5 s en saques de centro; +5 s en otros tags | `lane-d.md` §2–3, incorporado el 29-oct: se eligieron usando agregados del tracking y tags del partido. Bajo la regla 11 actual no basta con que no usaran GT; necesitan procedencia externa y prior admisible. |
-| Episodios fuera | fusión de huecos de hasta 1 s; retrospección de 40 s, o 120 s tras gol | `lane-d.md` §3, 29-oct; prior físico descrito allí. La selección de la variante `out` y los criterios de D30–D31 también consultaron el slice; evaluar la cadena y su procedencia completa. |
-| Fuera breve | sin mínimo para episodios vinculados a una reanudación | D31: regla física, con referencia además al slice. Pendiente separar justificación del uso histórico de GT. |
-| Parada W1 | velocidad ±12 frames, máximo 12 m/s, al menos 8 jugadores, p90 en ±1 s < 2 m/s; cerrar huecos vivos < 1 s y descartar paradas < 4 s | `lane-dead-v2.md` §2–3, 29-oct; DFL y prior físico, con selección del decodificador usando DFL y patrón de huecos del partido. Auditar independencia y selección de W1 antes de afirmar cumplimiento. |
-| Reanudación | forzar equipo conocido salvo control previo aceptado; empate entre equipos se ignora | D30, D32 y D35; reglas de estado. Auditar si la elección entre variantes y sus límites dependió del slice. |
-| Geometría y reloj | FPS, dimensiones y mitades proceden de `games.py` | Metadatos de alineación del organizador, no umbrales elegidos para optimizar; verificar versión de las entradas al reproducir. |
+| Control y duelo | 1,5 m; 5 m/s; `dwell=1`; `duel=True` | D29 y D34: adopción con comparación en el slice. Pendiente justificación independiente. |
+| Fecha de reanudación | +3,5 s en saques de centro; +5 s en otros tags | `lane-d.md` §2–3: agregados del tracking y tags del partido. Auditar procedencia y selección bajo D44–D45. |
+| Episodios fuera | fusionar huecos de hasta 1 s; buscar 40 s hacia atrás, o 120 s tras gol; sin mínimo para salida vinculada a tag | D30–D31; la selección y la reversión de episodios cortos consultaron el slice. Separar justificación del historial. |
+| Detector W3 | `KINEMATIC=model`; regresión logística de 29 rasgos, medias/escalas/pesos incrustados; umbral >0,5 | `dead_ball_v2.MODEL`, D36 y D45: entrenado en siete DFL. La reselección W3 ocurrió con resultados públicos ya conocidos; no es evidencia independiente. |
+| Rasgos de jugadores y decodificación W3 | desplazamiento ±12 frames; descartar velocidades >12 m/s; al menos 8 velocidades válidas; cerrar huecos vivos <1 s y descartar paradas <4 s | `dead_ball_v2.Params`: protocolo DFL y ventanas temporales del módulo. Inventariar y justificar cada constante, incluidas geometría de rasgos y ventanas. |
+| Reanudación con tag | equipo conocido salvo control previo no disputado; conflictos de equipos no fuerzan estado | D30, D32 y D35. Cancelar el forzado no acorta la máscara D; auditar selección histórica. |
+| Reanudación sin tag | primer control aceptado posterior asignado desde el primer frame vivo, sin cruzar otra parada ni mitad | D45; interpretación del reinicio con poseedor claro. Auditar la selección de W3 y la aproximación operacional. |
+| Geometría y reloj | FPS, dimensiones y mitades de `games.py`; geometría de áreas en rasgos | Metadatos y reglas de campo; verificar versión de entradas y distinguir de umbrales elegidos. |
 
-`still_mps`, `still_window_s` y el mínimo de salida sin tag se calculan o existen en `dead_ball`,
-pero la variante final `out` no consulta esas señales para decidir sus paradas. El modelo logístico
-de `dead_ball_v2` y sus umbrales de modelo tampoco se usan en W1. Este inventario no pretende cubrir
-cada constante de bibliotecas o validadores; faltan auditorías de dependencias y fechas precisas.
+W1 (`rule_mps=2`) es una variante histórica: ese umbral no decide las paradas del detector `model`.
+`still_mps`, `still_window_s` y el mínimo de salida sin tag tampoco deciden las paradas etiquetadas
+de la variante `out`. Esta distinción no elimina la necesidad de auditar todas las constantes activas.
 
 ## Control de acceso al GT
 
 `tests/test_gt_guard.py` activa un audit hook de Python en el proceso y en procesos Python hijos.
-Los controles negativos comprueban que un acceso prohibido deja evidencia incluso si se captura la
-excepción; también se intenta importar un módulo desde un directorio GT sintético. La prueba
-sintética ejecuta la cadena de reproducción real sustituyendo los lectores y
-detectores cuyos datos licenciados no están disponibles. Una prueba separada, marcada para cuando
-exista el bundle, ejecuta la reproducción con entradas reales y la misma vigilancia. Se exige que
-el hook se haya iniciado en al menos siete procesos: `repro` y los tres pasos de cada build.
+Los controles negativos usan rutas inexistentes o módulos de GT sintéticos, sin leer etiquetas
+del partido. Registran la tentativa incluso si el código captura la excepción.
 
-Alcance: los hooks de auditoría no son un sandbox del sistema operativo. Cubren eventos `open` de
-procesos Python que heredan el entorno; no demuestran ausencia de lecturas mediante procesos nativos,
-extensiones que eviten esos eventos, intérpretes aislados o rutas sustituidas por el propio código.
-La prueba sintética tampoco cubre el interior de las funciones de entrada sustituidas. La evidencia
-real y una revisión de esas rutas siguen siendo necesarias antes de certificar el build completo.
+La prueba sintética ejecuta la reproducción real con lectores y detectores licenciados sustituidos;
+exige que la vigilancia haya arrancado en al menos siete procesos: `repro` y los tres pasos de
+cada build. No comprueba el interior de las funciones sustituidas ni el hash real de entrega.
+La prueba separada con bundle ejecuta la misma cadena W3 con entradas reales, comprueba ausencia
+de intentos de lectura y exige igualdad entre los dos hashes y el digest completo del manifiesto.
+Sin bundle se omite, no se considera superada.
+
+Alcance: los hooks no son un sandbox del sistema operativo. Cubren eventos `open` de procesos
+Python que heredan el entorno; no descartan accesos mediante programas nativos, extensiones que
+eludan esos eventos, intérpretes aislados o rutas deliberadamente sustituidas. Falta la prueba real
+y la revisión de las rutas de entrada antes de acreditar el build completo.
 
 ## Evidencia externa candidata
 
@@ -120,10 +110,14 @@ ELASTIC es MPL-2.0 y es distinta de la licencia de las anotaciones; este proyect
 
 ## Pendiente para cerrar #63
 
-1. Reproducir y revisar la calibración externa B5 y verificar sus consumidores reales.
+1. Confirmar con el bundle la reproducción W3 bajo vigilancia. B5 ya no tiene consumidor activo;
+   revisar su calibración queda como investigación separada, no como requisito para regenerar W3.
 2. Para 1,5 m / 5 m/s / `dwell` 1 y la regla del duelo, producir una decisión justificada por
    corpus externo adecuado y prior escrito antes de medir; declarar un conflicto no es por sí solo
    una justificación de los valores actuales. Inventariar además el resto de constantes activas.
 3. Reproducir dos veces con el bundle licenciado, comparar con el archivo candidato, pasar el
    validador y ejecutar la prueba de GT real. El bundle no está en esta copia.
 4. Revisar y registrar la decisión final antes de cerrar el issue y congelar la entrega.
+
+El #69 prepara estas comprobaciones y conserva la evidencia histórica; no cierra #63 ni acredita
+por sí solo el cumplimiento del concurso.

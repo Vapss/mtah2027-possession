@@ -1,5 +1,9 @@
 # #63 — pre-registro de calibración externa de B5
 
+> Estado tras integrar #70: protocolo histórico. La emisión B5 se retiró del código activo;
+> la candidata externa no se incorpora a la entrega W3. El texto original se conserva debajo
+> como registro previo a la medición, sin reinterpretar su resultado como validación del motor.
+
 **Antes de ejecutar ninguna calibración B5 sobre DFL.** La selección no utiliza ground truth del
 partido del reto, su slice ni el banco de trasplante. Los partidos DFL ya se exploraron para otras
 reglas y estos dos se usaron para la auditoría descriptiva de ELASTIC; no se presentan como una

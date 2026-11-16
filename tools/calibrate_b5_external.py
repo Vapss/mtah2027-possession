@@ -2,6 +2,7 @@
 
 The method and acceptance rule were registered in docs/proposals/b5-external-calibration.md.
 Input hashes are verified; the command is offline and writes aggregate results only.
+This is historical research: B5 was removed in PR #70 and this fit is not used by the W3 engine.
 """
 
 from __future__ import annotations
@@ -110,9 +111,9 @@ def accepts(candidate: float, candidate_loss: float, prior_loss: float) -> bool:
     return LOWER < candidate < UPPER and candidate_loss < prior_loss - 1e-12
 
 
-def run() -> dict[str, Any]:
+def run(directory: Path | None = None) -> dict[str, Any]:
     """Evaluate only the preregistered external training and check matches."""
-    directory = ROOT / "runs" / "external" / "idsse"
+    directory = ROOT / "runs" / "external" / "idsse" if directory is None else directory
     data = {}
     fingerprints = {}
     for match in (TRAIN, CHECK):
@@ -155,9 +156,12 @@ def run() -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--dir", type=Path, help="external DFL XML directory (default: runs/external/idsse)"
+    )
     parser.add_argument("--write", type=Path, help="write aggregate JSON instead of stdout")
     args = parser.parse_args()
-    result = json.dumps(run(), sort_keys=True, indent=2) + "\n"
+    result = json.dumps(run(args.dir), sort_keys=True, indent=2) + "\n"
     if args.write:
         with args.write.open("w", encoding="utf-8", newline="\n") as destination:
             destination.write(result)

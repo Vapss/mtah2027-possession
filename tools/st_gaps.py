@@ -236,7 +236,7 @@ def chain(
     side = match_sides() if side is None else np.asarray(side)
     dead = engine.delivered_dead(ev) if dead is None else np.asarray(dead, dtype=bool)
     runs = engine.halves()
-    ctrl, switch, forced = engine.inputs(f, params, ev.restarts)
+    ctrl, switch, forced = engine.inputs(f, params, ev.restarts, dead)
     forced = forced or {}
     moves = st_switches(ctrl, switch, forced, f.present, dead, side, runs, variant, params.dwell)
     # A restart wins a shared frame; st_switches already skips those, this keeps it true by order.

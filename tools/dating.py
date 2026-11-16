@@ -147,10 +147,11 @@ class Chain:
 def delivered(
     f: engine.Features, ev: dead_ball.Evidence, params: engine.Params = engine.DEFAULT
 ) -> Chain:
-    ctrl, switch, forced = engine.inputs(f, params, ev.restarts)
+    dead = engine.delivered_dead(ev)
+    ctrl, switch, forced = engine.inputs(f, params, ev.restarts, dead)
     forced = forced or {}
     state = engine.decode(ctrl, engine.halves(), params.dwell, forced, switch)
-    return Chain(ctrl, state, forced, engine.delivered_dead(ev))
+    return Chain(ctrl, state, forced, dead)
 
 
 def finish(state: np.ndarray, dead: np.ndarray) -> np.ndarray:

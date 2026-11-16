@@ -76,7 +76,7 @@ def test_labels_are_h_a_and_x() -> None:
 
 
 def test_engine_does_not_consume_b5_temperature(monkeypatch) -> None:
-    """Synthetic regression: the engine decodes controls rather than B5 probabilities."""
+    """Removed B5 entry points stay absent; even injected ones cannot affect the engine."""
     import pandas as pd
 
     from tools import dead_ball, emision
@@ -94,8 +94,10 @@ def test_engine_does_not_consume_b5_temperature(monkeypatch) -> None:
     def unexpected_emit(*_args):
         raise AssertionError("engine unexpectedly called B5 emission")
 
-    monkeypatch.setattr(emision, "emit", unexpected_emit)
-    monkeypatch.setattr(emision, "EMISSION_TEMPERATURE_M", 0.1)
+    assert not hasattr(emision, "emit")
+    assert not hasattr(emision, "EMISSION_TEMPERATURE_M")
+    monkeypatch.setattr(emision, "emit", unexpected_emit, raising=False)
+    monkeypatch.setattr(emision, "EMISSION_TEMPERATURE_M", 0.1, raising=False)
     first, _ = engine.run()
     monkeypatch.setattr(emision, "EMISSION_TEMPERATURE_M", 100.0)
     second, _ = engine.run()
@@ -137,6 +139,24 @@ def test_a_restart_already_seen_resuming_is_not_forced() -> None:
     assert engine.restart_controls(restarts, ctrl) == {18: 1}
 
 
+def test_cancelling_the_tagged_team_assignment_does_not_shorten_dead_ball(monkeypatch) -> None:
+    # The paper must distinguish cancellation of the team forcing from the final D override.
+    n = 20
+    home, away = np.full(n, 5.0), np.full(n, 5.0)
+    home[2], away[7] = 0.5, 0.5
+    f = feats(home, away, np.ones(n))
+    dead = np.zeros(n, dtype=bool)
+    dead[5:10] = True
+    restarts = (_restart(10, 5, 0),)
+    monkeypatch.setattr(engine, "halves", lambda: [(0, n)])
+
+    assert 10 not in engine.inputs(f, engine.DEFAULT, restarts, dead)[2]
+    _ctrl, state, labels = engine.chain(f, engine.DEFAULT, restarts, dead)
+    assert state[7] == 1
+    assert np.all(labels[7:10] == "D")
+    assert labels[10] == "A"
+
+
 def test_two_restarts_on_one_frame_for_different_teams_are_not_forced() -> None:
     restarts = [_restart(10, 5, 0), _restart(10, 5, 1), _restart(30, 25, 0), _restart(30, 26, 0)]
     assert engine.restart_controls(restarts) == {30: 0}
@@ -175,14 +195,15 @@ def test_the_engine_before_the_duel_rule_reproduces_its_public_score() -> None:
 
 @requires_bundle
 def test_the_delivered_chain_reproduces_its_public_score() -> None:
-    """DECISIONS 34-36 anchors: bare (duel) 0,4757; tagged D only 0,5189; with the players'
-    stoppages, I0 0,5231 and the delivered chain 0,5368, with 40,0% D in the halves."""
+    """DECISIONS 34-36 and 44 anchors, a reproduction check and never a target: bare (duel) 0,4757;
+    tagged D only 0,5189; with the players' stoppages (W3), I0 and the delivered chain 0,5714, with
+    48,2% D in the halves."""
     assert round(_public_score(engine.run(dead=False, restarts=False)[0])[0], 4) == 0.4757
     assert round(_public_score(engine.run(kinematic=False)[0])[0], 4) == 0.5189
-    assert round(_public_score(engine.run(restarts=False)[0])[0], 4) == 0.5231
+    assert round(_public_score(engine.run(restarts=False)[0])[0], 4) == 0.5714
     table, summary = engine.run()
-    assert round(_public_score(table)[0], 4) == 0.5368
-    assert round(summary["dead_share"], 3) == 0.400
+    assert round(_public_score(table)[0], 4) == 0.5714
+    assert round(summary["dead_share"], 3) == 0.482
 
 
 def test_a_duel_in_the_restart_window_does_not_cancel_the_restart() -> None:
@@ -205,3 +226,38 @@ def test_a_duel_in_the_restart_window_does_not_cancel_the_restart() -> None:
     # Before the fix the duel cancelled the restart and was then ignored: home kept the ball.
     before = engine.decode(ctrl, [(0, n)], 1, engine.restart_controls(restarts, ctrl), switch)
     assert before[15] == 0
+
+
+def _stoppage_scene():
+    """Home controls at 2, an untagged stoppage over [5, 10), away's first control at 12."""
+    n = 16
+    home = np.full(n, 5.0)
+    away = np.full(n, 5.0)
+    home[2], away[12] = 0.5, 0.5
+    f = feats(home=home, away=away, speed=np.full(n, 1.0))
+    dead = np.zeros(n, dtype=bool)
+    dead[5:10] = True
+    return f, dead, [(0, n)]
+
+
+def test_an_untagged_stoppage_restarts_with_its_first_accepted_control() -> None:
+    """DECISIONS 45 (W3): after the stoppage the ball is away's from its first live frame."""
+    f, dead, runs = _stoppage_scene()
+    ctrl, switch, forced = engine.inputs(f, engine.DEFAULT, (), dead, runs)
+    assert forced == {10: 1}
+    state = engine.decode(ctrl, runs, 1, forced, switch)
+    assert state[4] == 0 and state[10] == 1 and state[11] == 1
+
+
+def test_without_the_stoppages_or_with_first_control_off_nothing_is_forced() -> None:
+    f, dead, runs = _stoppage_scene()
+    assert engine.inputs(f, engine.DEFAULT, (), None, runs)[2] == {}
+    assert engine.inputs(f, engine.D36, (), dead, runs)[2] == {}
+    ctrl, switch, forced = engine.inputs(f, engine.D36, (), dead, runs)
+    assert engine.decode(ctrl, runs, 1, forced, switch)[11] == 0  # home carried to the control
+
+
+def test_a_tagged_restart_inside_the_stoppage_wins_over_the_first_control() -> None:
+    f, dead, runs = _stoppage_scene()
+    forced = engine.inputs(f, engine.DEFAULT, (_restart(9, 6, 0),), dead, runs)[2]
+    assert forced == {9: 0}  # the tag closes the stoppage: no first-control forcing

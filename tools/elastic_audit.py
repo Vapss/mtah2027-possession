@@ -300,11 +300,17 @@ def report(results: dict[str, dict[str, Any]]) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("match", choices=(*DEVELOPMENT, "all"))
+    parser.add_argument(
+        "--dir",
+        type=Path,
+        default=ROOT / "runs" / "external",
+        help="external root containing idsse/ and elastic/",
+    )
     parser.add_argument("--write", type=Path, help="write an aggregate report (requires all)")
     args = parser.parse_args()
     if args.write and args.match != "all":
         parser.error("--write requires all")
-    external_dir = ROOT / "runs" / "external"
+    external_dir = args.dir
     results = {}
     for match in DEVELOPMENT if args.match == "all" else (args.match,):
         metadata, tracking = external._files(match, external_dir / "idsse")

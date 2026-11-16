@@ -379,17 +379,17 @@ las pérdidas H/A solo se interpretan en frames vivos con balón observado. Sin 
 uniforme y `confidence=0`; el campo es `max(p_home,p_away) × ball_present` e incluye el suelo D.
 Las métricas del slice público son diagnóstico, no evidencia de generalización al partido completo.
 
-**Corrección #63.** Se reemplaza la temperatura histórica ajustada al slice por
-`2,864606845062 m`, obtenida con el protocolo previo `docs/proposals/b5-external-calibration.md`.
+**Investigación histórica #63 (anterior a integrar #70).** Se obtuvo la candidata externa
+`2,864606845062 m` con el protocolo previo `docs/proposals/b5-external-calibration.md`.
 El ajuste usa `J03WMX` y la comprobación `J03WN1` del corpus externo DFL; los resultados y hashes
 se regeneran con `tools/calibrate_b5_external.py` y están en `docs/analysis/b5-external.json`.
 En la comprobación, log-loss condicional fue 0,5347 frente a 0,7437 del prior de 1 m. Los DFL ya
 se habían explorado en otras decisiones, su balón es más limpio y su propietario no necesariamente
 equivale a control: esto no demuestra calibración en el partido del reto ni mejora de `spellF1`.
-En B5 cambian probabilidades y confianza; una mezcla podría cambiar etiquetas. El motor one-hot no
-llama a esta emisión en la prueba sintética, pero falta reproducir el CSV real con el bundle.
-La generación B5 no consulta el GT por defecto; `--diagnostics` habilita expresamente la medición
-retrospectiva, que no se usa para seleccionar parámetros ni variantes.
+En B5 cambiarían probabilidades y confianza; una mezcla podría cambiar etiquetas. #70 retiró por
+completo la emisión B5 y su interfaz de generación. Al integrar #69 se conserva esa retirada:
+la candidata externa queda como investigación, no como constante activa ni cambio de la entrega.
+Falta reproducir el CSV W3 real con el bundle y el control de acceso al GT.
 
 ---
 
@@ -498,10 +498,10 @@ posesiones por ser cortas. Cada operación reduce el número de runs RLE y el bu
 fijo, con límite defensivo de `n_frames+1`. Cualquier otro umbral o variante corresponde al barrido
 pre-registrado de #22.
 
-**Aclaración #63.** El prior de 355 se retira: si los vecinos empatan en duración original,
+**Auditoría histórica #63.** El prior de 355 era redundante: si los vecinos empatan en duración original,
 también empatan en distancia a cualquier prior; si no empatan, la duración ya decide. Su presencia
-nunca modificaba el desempate. Se conserva la elección del vecino anterior y no se cambia ninguno
-de los otros umbrales de #35. Este postproceso no forma parte de la cadena `make repro`.
+nunca modificaba el desempate. #70 retiró todo el postproceso; #69 mantiene esa retirada y no
+reintroduce la elección del vecino ni los demás umbrales de #35 en la cadena `make repro`.
 
 **Baseline y resultado público.** El baseline se generó desde el commit de `dev` `d9e0bfb` con
 `python tools/emision.py --output artifacts/possession.csv`; H/A toma el argmin del artefacto y las
@@ -1376,3 +1376,262 @@ los invariantes sobre las 199.319 filas. Declararlo es más barato que dejar que
 **Coste.** El informe técnico pierde la frase «el slice no dirigió las decisiones», que era falsa en
 el sentido estricto; gana una sección que admite el riesgo y dice qué se está haciendo. El efecto de cambiar la temperatura depende de la cadena y sus consumidores; se verificará en #63.
 El freeze requiere una decisión trazable y no convierte la falta de evidencia en justificación.
+
+---
+
+## 45. Las reglas aclaradas, en su lectura más estricta: reaplicar sin el ground truth (pre-registro)
+
+**Contexto.** Los organizadores enviaron a todos los equipos una aclaración que **prevalece** sobre la
+documentación, los correos anteriores y las respuestas individuales. No está permitido comprobar la
+salida contra el vídeo; usar etiquetas a mano o cualquier dato creado manualmente sobre el partido
+dado; subir los datos a servicios de IA; ni entrenar, ajustar o calibrar el algoritmo con el ground
+truth de posesión o con el vídeo. Si hay parámetros que ajustar, **solo con datos externos**. Está
+permitido: comprobaciones automáticas con los datos dados, inspeccionar datos y vídeo para entender
+qué es posesión, usar vídeo, tracking y Smart Tagging como entrada (si nada se entrenó con el ground
+truth ni con el vídeo), entregar ficheros intermedios y usar datasets con derechos de uso. El equipo
+decide **no consultar** a los organizadores y aplicar la lectura más estricta.
+
+La cadena entregada no tiene ningún valor ajustado con el ground truth, pero varias piezas entraron
+con el slice público (o el banco, que puntúa contra ese mismo ground truth) entre sus compuertas.
+Elegir con el ground truth qué pieza entra es, en la lectura estricta, calibrar con él.
+
+**Decidido, antes de medir.**
+
+1. **Principio.** Ninguna constante, regla o decisión de incluir una pieza en la cadena entregada
+   puede apoyarse en el ground truth público ni en un instrumento que puntúe contra él (slice,
+   banco, auditoría del margen). Justificaciones válidas: el reglamento, la física o la literatura
+   sin constante ajustada; datos externos con derechos de uso (DFL/IDSSE, CC-BY 4.0; los partidos de
+   muestra de Metrica, publicados por el propio organizador para su uso con reconocimiento de la
+   fuente); y el tracking y el Smart Tagging como comprobaciones automáticas, que no son ground truth.
+   Las cifras del slice y del banco se siguen informando, solo como diagnóstico y después de decidir.
+2. **Cada pieza, otra vez:**
+   - **Control** (1,5 m, 5 m/s, `dwell` 1): física, fijados antes de medir (decisión 29). Se queda;
+     el barrido de la 29 fue un mapa de sensibilidad y no eligió nada.
+   - **Reanudaciones** que fuerzan la posesión y su cancelación (decisiones 32 y 35): el reglamento
+     da el balón al equipo que saca y el Smart Tagging es la entrada. Se quedan por principio; el
+     veto del slice de la 32 sale de la justificación (nunca se activó).
+   - **Paradas etiquetadas** (`out`, decisiones 30-31): Smart Tagging y balón fuera del campo, con
+     constantes fijadas desde el tracking y el etiquetado. Se quedan si la auditoría de procedencia
+     no encuentra ground truth en ellas.
+   - **Paradas de los jugadores** (W1, decisión 36): constantes fijadas en los 7 partidos de DFL y
+     7 de 7 a favor allí. Se quedan.
+   - **Regla del duelo** (decisión 34): viene de la literatura y no añade constante, pero entró con
+     el slice y el banco como compuertas. Se vuelve a decidir con el juez que la decisión 42 fijó
+     para las reglas de *si* cambia la posesión: la verdad de eventos de Metrica en g1 **y** g2 (la
+     37 descarta DFL para reglas de número de posesiones). Métrica: el `spellF1` oficial contra esa
+     verdad, media de g1 y g2, con el balón degradado de la ronda 6 (σ = 0,85 m fijada sin etiquetas
+     y nuestro patrón de balón visto), que reproduce nuestras condiciones. **Regla: la regla del
+     duelo se queda si su media degradada es ≥ la de `engine.D31` (la misma cadena sin ella); si no,
+     sale de la entrega, diga lo que diga el slice.** El balón limpio, los errores de cambio, DFL y
+     el acuerdo con el Smart Tagging se informan como contexto, sin peso.
+3. **El código que ajusta algo con el ground truth sale del repositorio**, esté o no en la entrega.
+4. **`AGENTS.md` incorpora la aclaración**: ningún dato producido por personas sobre este partido,
+   tampoco para validar, y nada derivado de los datos en servicios de IA salvo agregados.
+
+**Medido (punto 2, regla del duelo).** `python tools/readjudicate.py --write
+docs/analysis/readjudication.md`: con el balón degradado, la regla del duelo da 0,4743 frente a 0,4357
+en g1 y 0,4430 frente a 0,4020 en g2 (media +0,0398); con el balón limpio pierde 0,0111 (contexto).
+**Se queda.** Se repite con la cadena final (adenda A).
+
+### Adenda A (escrita antes de medir lo que sigue, tras una auditoría de procedencia)
+
+Un agente revisó en solo lectura, sin ver datos y sin mis conclusiones, la procedencia de cada
+constante, regla e inclusión de la cadena entregada, y luego de cada alternativa descartada. Encontró
+que el ground truth decidió más de lo que suponía el punto 2:
+
+- **W1 frente a W2/W3** (decisión 36): solo la compuerta G2 del carril dead-v2 (precisión de `D` en
+  el slice ≥ 0,80) descartó W2 y W3. Su orden de prior era W3 > W2 > W1 > W4, y DFL (0,3529 frente a
+  0,3216 con nuestro balón) y el Smart Tagging (77,5% frente a 76,9%) iban con W3.
+- **La corrección 2 de la decisión 31** (un episodio de menos de 1 s fuera del campo no abre parada)
+  se revirtió con evidencia del slice, fuera de su regla escrita.
+- La decisión 29 declaró una exploración de 5 configuraciones en el slice antes de fijar el control;
+  el diseño del control se motivó inspeccionando el slice; la "referencia física" de 3,4
+  posesiones/min es la cifra del propio slice.
+
+**Procedimiento, mecánico y sin discreción.** Cada regla de selección escrita que dio forma a la
+entrega se vuelve a aplicar tal cual, **borrando toda compuerta que lea el ground truth** (slice,
+banco, precisión o recall de `D` públicos, auditoría) **o una cifra derivada de él** (3,4/min,
+14,2 s, 19,6% de `D`). Una pieza entra solo con evidencia admisible a favor bajo su propia regla; si
+al borrar las compuertas una decisión se queda sin base, vale el estado anterior a ella. Inspeccionar
+el ground truth para entender qué es posesión está permitido por la aclaración y no decide nada.
+
+**Resultado de reaplicar, por orden cronológico** (todo lo que no requiere medir):
+
+| decisión | sin compuertas del GT | efecto |
+|---|---|---|
+| 29 control | nada puede sustituir al default; valores de física | se queda |
+| 30 carril D | solo la compuerta de bloques: V3 y V4 la fallan (bloque 7 al 50,4%); el prior da V2 | se queda `out` |
+| 30, 31.1, 32, 35 reanudaciones | por principio; los vetos del slice desaparecen | se quedan |
+| 30 motor frente al respaldo | Smart Tagging 73,1% frente a 62,2%; DFL 7 de 7 | se queda el motor |
+| 31.2 episodios cortos | la regla escrita la adopta por principio; la reversión fue del GT | **prueba B** |
+| 34 duelo | punto 2: Metrica | se queda (se repite en C) |
+| 36 paradas de los jugadores | solo G4 (límites de DFL); pasan las cuatro; el prior da **W3** | **W3 sustituye a W1** |
+| 39 dead-v3 | sus variantes están definidas sobre los tramos de W1 ("los inicios W1"), que ya no están; `first-control` ya va en W3 | no aplica |
+| 39 dating `first` | la rechaza la compuerta DFL de la 42 (el mismo fichero) | fuera |
+| 40 d-edges E2 `kick` | su propio §2.2 dice, antes de medir, que DFL no puede juzgarla; sin juez admisible | fuera |
+| 34 imputación, 39 st-gaps, 38 vídeo | sin evidencia admisible a favor (el Smart Tagging va en contra de la imputación) | fuera |
+| 34/37 V6 `mid` | `mid` salió de mirar latencias del slice | fuera |
+| F, decodificador V1/V3/V4/V5, U2, d-edges E1/E3/E4, 41, 42, 43 | fallan compuertas sin GT (Smart Tagging, bloques, DFL, Metrica) | fuera |
+
+**W3 en la cadena entregada.** El detector logístico de DFL (`dead_ball_v2.MODEL`, entrenado en los 7
+partidos, pesos en el código) se une a las paradas etiquetadas, y cada parada que no cierra una
+reanudación etiquetada da el balón al equipo del **primer control que el decodificador acepta** tras
+ella (un duelo no observa posesión, decisión 35).
+
+**Lo que falta medir, en este orden, y cómo decide:**
+
+- **B. Premisa de la corrección 2, sin etiquetas.** Entre las paradas etiquetadas que abre un
+  episodio fuera del campo de menos de 1 s, ¿cuántas terminan en un saque de banda, un córner o un
+  saque de puerta, reanudaciones que solo siguen a un balón fuera? **La corrección 2 sigue revertida
+  si son más de la mitad; si no, se adopta.**
+- **G4 sobre la cadena final** (límites de DFL, decisión 36): `%D` desde cada saque ≤ 51,7%, ningún
+  bloque > 88,6% y ningún bloque sin posesiones. Si W3 la falla, se baja en el prior (W2, W1).
+- **C. La regla del duelo otra vez**, con la regla del punto 2 sobre la cadena final (las paradas de
+  W3 y el primer control en Metrica). Si el veredicto cambia, se sigue, y G4 se repite.
+
+Las cifras del slice, el banco y el Smart Tagging se informan después, sin peso.
+
+**Código que sale (punto 3).** Lo que ajusta un valor con el ground truth o entrena con el vídeo:
+la temperatura calibrada en el slice y el artefacto de emisión (`tools/emision.py`, que la cadena
+importa) y `tools/ablate_emision.py`; el posprocesado con el prior de 14,2 s (`tools/postprocess.py`,
+`tools/verify_b6.py`); la imputación con el prior de 3,4/min (`tools/impute.py`); el decodificador
+con `viterbi` (prior de 3,4/min) y `mid` (`tools/decoder.py`); y el carril de vídeo, que entrenó un
+detector con el vídeo (`tools/video_ball.py`). Su última versión está en `dev` `8ec43a8`; la
+evidencia que generaron sigue en `docs/` como historia.
+
+**Resultado de la adenda A** (medido después de su pre-registro, `f61feb9`):
+
+- **B.** De las 16 paradas etiquetadas que abre un episodio de menos de 1 s fuera del campo, 11
+  (69%) terminan en un saque de banda, un córner o un saque de puerta (de las 12 con episodios
+  largos, 11). Los episodios cortos son salidas reales: **la corrección 2 sigue revertida**, ahora
+  sin el ground truth (`readjudicate.short_outs`).
+- **G4 con W3:** 48,2% de `D` en los medios tiempos (≤ 51,7%), bloque máximo 70,8% (≤ 88,6%), ningún
+  bloque sin posesiones. **Pasa: W3 entra.**
+- **C.** Con la cadena final, la regla del duelo da 0,4414 frente a 0,4067 degradado (g1 0,4614 /
+  0,4255; g2 0,4215 / 0,3880). **Se queda.**
+
+**La cadena entregada pasa a W3.** SHA-256 `7a7f70b68d39…`, 3,11 posesiones/min, 48,2% de `D`,
+acuerdo con el Smart Tagging 77,7% (W1: 77,1%). Diagnóstico, después de decidir y sin peso:
+
+| | W1 (`72c98ed4bb4a…`) | **W3** |
+|---|---:|---:|
+| `spellF1` slice | 0,5368 | 0,5714 (+0,035; jackknife +0,022 .. +0,059) |
+| `macroF1` slice | 0,8533 | 0,8254 |
+| banco: media / poco balón / peor | 0,4351 / 0,3595 / 0,2400 | 0,4326 / 0,3454 / 0,2571 |
+| Metrica degradado (contexto; no juzga `D`, decisión 42) | 0,4586 | 0,4414 |
+
+Ninguna de estas filas decidió nada: la cadena es la que da la reaplicación de las reglas escritas.
+
+**Documentos.** El documento técnico pasa a ser el paper en inglés de `docs/paper/` (`make paper`),
+con la cadena W3 y este protocolo; `docs/technical-report.md` apunta a él. `bench.md`, `blocks.md`,
+`headroom.md` y `runtime.md` se regeneraron con W3. `engine-sensitivity.md` queda como el mapa
+histórico de la decisión 29 sobre W1: un barrido puntuado con el ground truth ya no puede elegir
+nada (`AGENTS.md`, regla 11).
+
+**Revisión de código (PR #70).** `/code-review` encontró 10 puntos; todos se corrigieron:
+
+- **Primer control coherente.** Las variantes de la ronda 6 ya aplican el mismo primer control que su
+  referencia, a través de `engine.restart_forcing`, que también usa `engine.inputs`.
+- **Referencias separadas.** `engine.D31` vuelve a ser histórico (sin primer control) y
+  `engine.NO_DUEL` es "la cadena entregada sin duelo", con la que la 45 compara. Los números de la
+  prueba C no cambian.
+- **σ fijada a W1.** El ajuste de σ de la ronda 6 y su objetivo quedan fijados a W1
+  (`SIGMA_DETECTOR`), así que regenerar ese informe vuelve a dar 0,85.
+- **Máscara de Metrica única.** Las paradas de los jugadores en Metrica se calculan una vez por
+  partido (`change_dating.metrica_kinematic`) y hay una sola función de `D` degradado.
+- **Prueba B reproducible.** La prueba B forma parte de `readjudication.md`, que se regeneró con el
+  comando documentado.
+- **Tests sin datos** del primer control y de las dos reglas de veredicto.
+- **Documento técnico.** `make paper` y `build.py` rechazan un equipo o repositorio vacíos y escapan
+  los valores.
+- **Metrica.** La regla 5 dice ya en qué términos se usan sus datos: el editor, que es el organizador,
+  los ofrece para su uso con reconocimiento de la fuente.
+
+### Adenda B: integración con la decisión 44 del equipo; Metrica no decide nada
+
+Esta decisión se escribió en paralelo a la 44, que el equipo mergeó antes (#62, #64), y se numera 45
+al integrarse. Las dos dicen lo mismo en lo esencial: el slice y el banco comprueban, no eligen. La
+44 es más estricta en un punto, y manda la versión más estricta:
+
+- **Metrica no es evidencia admisible.** Su repositorio no declara licencia, y la 44 exige permiso
+  escrito antes de volver a usar sus datos como evidencia. La prueba del duelo en Metrica (punto 2 y
+  C) usó esos datos, así que **se retira sin peso**: se quita de `tools/readjudicate.py` y del
+  documento técnico, y sus cifras de arriba quedan solo como registro de lo que se midió. Lo mismo
+  para la fila "Metrica degradado" de la tabla de resultados y para la línea sobre Metrica de la
+  revisión de código: la regla 5 de `AGENTS.md` es la del equipo.
+- **Se declara la desviación del pre-registro.** El punto 2 nombraba a Metrica como juez. Retirado el
+  juez, la regla del duelo se queda por la definición del reto, que es una justificación admisible
+  sin datos: «In phases where the ball is contested or loose, possession stays with the last team
+  that had it» (`CHALLENGE.md`). Un duelo es un balón disputado. Esa debió ser su justificación desde
+  el principio; el resultado no cambia, porque la medición retirada iba en el mismo sentido.
+- **El primer control de W3** también es la definición del reto («whenever play restarts after a
+  stoppage, there is a clear possessor»).
+- **W1 cae por la regla de la propia 44.** La 44 no lo lista, pero W1 se eligió sobre W2/W3 con la
+  precisión de `D` del slice, que la 44 prohíbe como criterio. W3 no depende de Metrica: se entrenó en
+  DFL (CC-BY 4.0, datos externos con derechos, como exige la aclaración para entrenar) y entra por
+  el orden de prior escrito antes de medir y por la compuerta G4 (límites de DFL).
+- **Exposición declarada.** Ya sabíamos que W2/W3 puntuaban más en el slice (0,5026 frente a 0,4762,
+  `lane-dead-v2.md` §9). El cambio a W3 no se eligió por eso, sino al borrar la compuerta del ground
+  truth y aplicar el prior escrito; pero con esa exposición la cifra del slice de W3 no es evidencia
+  independiente, como dice la 44 de toda cifra del slice.
+- **Sigue abierto en #63**: la justificación externa de 1,5 m / 5 m/s / `dwell` 1 más allá de la
+  física. Esta decisión no la da por cerrada.
+
+**Segunda revisión de código (PR #70, tras integrar `dev`).** 9 puntos, todos corregidos:
+
+- **El duelo, aislado otra vez.** La anatomía de la ronda 6 vuelve a aislar la regla del duelo: compara
+  con `engine.NO_DUEL` (la entrega sin duelo, con primer control), no con `engine.D31`, que desde
+  `8ebd11f` es histórico y tampoco tiene primer control. `NO_DUEL` vuelve a existir para eso; la
+  prueba retirada de Metrica ya no lo usa.
+- **Un solo detector en el perfil de σ.** El perfil de ruido de la ronda 6 mide g1 y BAR-ATH con el
+  mismo detector con que se fijó σ (W1).
+- **restart-team sigue a la entrega.** Infiere el equipo con el primer control de la cadena
+  entregada.
+- **Caché correcta.** La caché de paradas de Metrica se indexa por los jugadores y las mitades, no por
+  el nombre.
+- **Paper determinista.** `make paper` fija la fecha (`PAPER_DATE`).
+- **Regla 11 en su sitio.** Va dentro de las no negociables de `AGENTS.md`.
+- **Metrica coherente con la 44.** El docstring y las referencias del paper la citan con su salvedad y
+  su atribución.
+- **Correcciones a lo de arriba.** En la primera revisión, la frase "con la que la 45 compara" ya no
+  vale tras la adenda B, y de las "dos reglas de veredicto" queda una: la prueba B.
+
+---
+
+## 46. PR #71: referencia de entrega independiente y reproducción fijada
+
+**Decidido.** El SHA-256 completo ya registrado para la entrega se conserva en
+`configs/delivery.json`. El constructor del paper rechaza un CSV distinto antes de escribir HTML
+o lanzar el navegador. La receta del PDF usa esa referencia independiente y un checkout del commit
+que construye el documento; la guía fija una revisión reproducible en vez de ejecutar una rama móvil.
+La prueba de reproducción del motor compara el digest completo con el manifiesto.
+
+**Portabilidad.** `.gitattributes` fija LF para CSV: un checkout con `core.autocrlf=true` no puede
+invalidar una comparación byte a byte. Se verifica con un repositorio temporal y datos sintéticos,
+sin editar los archivos de referencia de los organizadores.
+
+**Alcance.** No cambia la inferencia ni se vuelve a medir o elegir con el slice. La prioridad del
+control observado cancela el forzado del equipo, pero no acorta la máscara `D`; el paper lo aclara.
+La ejecución completa con el bundle, la comparación con el CSV entregado, la maquetación final del
+PDF, el acceso público y la procedencia pendiente de D44–D45 siguen siendo condiciones de entrega,
+no resultados acreditados por esta corrección.
+
+---
+
+## 47. PR #69: auditoría compatible con W3 y protección del GT en procesos Python
+
+**Decidido.** Al integrar `dev` tras #70–#71 se mantienen retirados la emisión B5, su temperatura,
+el postproceso y el verificador B6. Su código de calibración externa y sus resultados quedan como
+investigación histórica, sin consumidor en la cadena entregada. Se conserva el documento vigente
+y el manifiesto de entrega del #71, sin cambiar el motor, sus constantes ni su hash esperado.
+
+**Comprobación.** Los controles negativos del audit hook intentan abrir e importar un GT sintético
+y vigilan también procesos hijos. La reproducción sintética ejecuta el motor, ensamblador y
+validador reales con lectores de datos sustituidos. La prueba separada con bundle exige además
+que ambos builds coincidan con el SHA-256 completo del manifiesto. Sin bundle esa prueba se omite;
+los hooks no son un sandbox del sistema operativo ni acreditan la procedencia histórica.
+
+**Pendiente.** El inventario activo se actualiza a W3, con el detector logístico y sus reglas de
+reanudación. La evidencia externa exploratoria no valida por sí sola control/duelo ni autoriza
+recalibrar con el slice. El cierre de #63 sigue requiriendo la reproducción real y una decisión
+trazable sobre las constantes y la exposición de selección de D44–D45.
