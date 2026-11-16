@@ -1658,3 +1658,9 @@ no cambia la inferencia ni se elige un candidato nuevo. La reproducción real qu
 del alcance del hook; no equivale a una auditoría de sistema operativo. La comparación directa con
 el CSV realmente entregado, la procedencia pendiente en #63 y el acceso público siguen siendo
 condiciones de entrega independientes de promover `dev` a `main`.
+
+**Revisión fijada del paper.** Los comandos principales apuntan a
+`7d8b810e5fea72665ba90e501247d5782179956c`, conservado en `repro/pr72-2026-11-16`.
+Ese commit incluye el registro real y la maquetación de ocho páginas que se inspeccionó.
+`repro/pr71-2026-11-16` queda como referencia histórica: su motor produce el mismo candidato,
+pero su template anterior no reproduce la paginación verificada del documento final.

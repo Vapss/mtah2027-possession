@@ -22,10 +22,10 @@ public repository.
 
 Use the frozen reproduction revision below, independently of which branch is the default after
 the release merge. The frozen reproduction revision is
-`838801e996d61e28715947931640721b1ec6e5c2`, retained under tag `repro/pr71-2026-11-16`;
+`7d8b810e5fea72665ba90e501247d5782179956c`, retained under tag `repro/pr72-2026-11-16`;
 use the explicit checkout commands below. The inference
 implementation is unchanged from `3fabbf4e0e53db4017ef8aa2323ffafa7777524c`; the reproduction
-revision also contains the delivery manifest and PDF checks. Later documentation-only commits may
+revision also contains the delivery manifest, real-data verification record and checked eight-page paper layout. Later documentation-only commits may
 identify that same reproducible revision without changing the candidate.
 
 Tracked inputs are the source, configuration, lockfile and supplied SVG figures. The licensed bundle
@@ -36,9 +36,9 @@ are supplied by a clean clone. The primary workflow needs none of these pre-exis
 Unix-like shell (replace the bundle path with its authorized local location):
 
 ```bash
-git clone --branch repro/pr71-2026-11-16 https://github.com/Vapss/mtah2027-possession.git
+git clone --branch repro/pr72-2026-11-16 https://github.com/Vapss/mtah2027-possession.git
 cd mtah2027-possession
-git checkout --detach 838801e996d61e28715947931640721b1ec6e5c2
+git checkout --detach 7d8b810e5fea72665ba90e501247d5782179956c
 uv sync --locked --no-dev --inexact
 export MTAH_DATA_DIR=/path/to/bundle
 .venv/bin/python tools/engine.py --build runs/evaluator --submission runs/evaluator/submission.csv
@@ -49,9 +49,9 @@ export MTAH_DATA_DIR=/path/to/bundle
 Windows PowerShell:
 
 ```powershell
-git clone --branch repro/pr71-2026-11-16 https://github.com/Vapss/mtah2027-possession.git
+git clone --branch repro/pr72-2026-11-16 https://github.com/Vapss/mtah2027-possession.git
 Set-Location mtah2027-possession
-git checkout --detach 838801e996d61e28715947931640721b1ec6e5c2
+git checkout --detach 7d8b810e5fea72665ba90e501247d5782179956c
 uv sync --locked --no-dev --inexact
 $env:MTAH_DATA_DIR = "C:\path\to\bundle"
 .\.venv\Scripts\python.exe tools/engine.py --build runs/evaluator --submission runs/evaluator/submission.csv
