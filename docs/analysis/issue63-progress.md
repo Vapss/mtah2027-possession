@@ -4,6 +4,57 @@ Esta nota distingue pruebas sintéticas de reproducción real. No decide un free
 seleccionar parámetros con el slice. Se actualiza al integrar `dev` en `b3d7ed4` (#70 y #71).
 La referencia de entrega es `configs/delivery.json`; no se vuelve a medir ni a elegir el candidato.
 
+Actualización 16-nov-2026: la [auditoría de los tres pendientes](issue63-provenance-audit.md)
+recupera los commits originales de #52/#54/#70, contrasta el prior de W3 y el origen de los offsets,
+y registra qué evidencia falta. El equipo no dispone de la especificación del proveedor sobre
+la posición del saque dentro del clip. La auditoría no cierra #63.
+
+## Contraste con las capturas de la aclaración original
+
+El 16-nov-2026 el equipo aportó cuatro capturas del mensaje «Clarification of the rules».
+Esta sección resume el texto visible; no incorpora las imágenes ni sus elementos personales al
+repositorio. Las capturas no muestran cabeceras de remitente o fecha: permiten contrastar la
+redacción, pero no verificar por sí solas la fecha del 3 de noviembre citada en D44–D45.
+
+El mensaje declara precedencia sobre documentación, correos y respuestas individuales anteriores.
+Prohíbe contrastar la salida con el vídeo, usar etiquetas o cualquier dato producido manualmente sobre el partido dado,
+subir los datos proporcionados a servicios de IA y entrenar, ajustar o calibrar con el GT de
+posesión o el vídeo proporcionado. Permite comprobaciones automáticas, inspección para entender
+la posesión, tracking/Smart Tagging/vídeo como entradas bajo esas condiciones, intermediarios y
+datasets con derechos de uso. Exige datos externos para entrenar y ajustar parámetros.
+
+**Texto e interpretación se distinguen.** Usar el tracking o los tags como entrada está permitido;
+eso no acredita que estimar con ellos un parámetro sea una mera comprobación. Tampoco toda
+constante física o metadato es automáticamente un parámetro ajustado. Hay que documentar qué
+se decidió, con qué evidencia y cuándo. D44–D45 y la regla 11 del repositorio consideran selección
+con el slice/banco una forma de ajuste; esa formulación operativa no aparece literalmente en
+las capturas. El mensaje no describe un procedimiento que garantice subsanar una exposición
+histórica, ni establece que haber visto el slice implique una descalificación automática.
+
+### Hallazgos del contraste estático, sin nuevas mediciones
+
+| Elemento | Evidencia disponible | Conclusión de auditoría y siguiente paso |
+|---|---|---|
+| Temperatura B5 y prior de 355 frames | #70 los retiró; #69 conservó la retirada | Resueltos como consumidores de la entrega actual. La investigación B5 externa no valida W3. |
+| Control: 1,5 m / 5 m/s / `dwell=1` | D29 registra cinco configuraciones exploradas con el slice antes de su pre-registro; luego declara elección por prior. `engine.Params` aún dice «fixed before measuring». | La motivación física no prueba independencia histórica. «Antes del barrido» no equivale a «antes de toda medición». Completar la cronología y la justificación admisible; no elegir de nuevo con el slice. |
+| Duelo | D34 y `lane-decode.md` adoptan el filtro con compuertas del slice/banco; reusa el radio de control. D45 retira el juez Metrica. | La definición de posesión motiva la regla cualitativa, no demuestra por sí sola la selección independiente de su aproximación ni del radio. |
+| Offsets de reanudación: 3,5 y 5 s | `lane-d.md` §§2–3 vincula los valores a saques y perfiles temporales agregados del partido, aunque no usó GT para fijarlos. | Averiguar si existe una especificación del export que determine esos offsets o si fueron una calibración de parámetros. No basta con llamarlos «entrada permitida» ni con afirmar «sin GT». |
+| Balón fuera: 1 s / 40 s / 120 s y episodios breves | `lane-d.md` declara priors físicos; D30–D31 y D45 registran selección/reversión y exposición al slice. | Separar el origen de cada valor de la decisión de incluir la variante. No se declara que todos esos priors sean ajustes prohibidos. |
+| Detector W3 y primer control | Pesos y decodificador proceden de DFL; D45 registra reselección después de conocer resultados públicos. | La fuente externa del entrenamiento está documentada; la independencia de la reselección sigue abierta. Una recepción externa o un posterior resultado favorable no resuelve por sí solo ese historial. |
+| Reloj, dimensiones y alineación de `games.py` | Referencia suministrada por la organización, conservada sin cambios | Distinguir metadatos de parámetros elegidos para optimizar. No sustituirlos por una calibración nueva. |
+| Reproducción y vigilancia de GT | Registro real de #69, dos builds idénticos, hash completo y siete procesos vigilados | Verificado dentro del alcance del hook. No prueba la procedencia de las decisiones anteriores. |
+
+El historial integrado incorpora motor y paradas en `1131895` (29-oct), duelo/W1 en `a65bba7`
+(29-oct) y revisión W3 en `3fabbf4` (3-nov). Son fechas de incorporación, no prueba de cuándo se
+eligió cada constante; algunos commits integran trabajo previo. Se preservan las fuentes históricas
+sin reescribirlas como si fueran pre-registros independientes.
+
+La rejilla de 27 configuraciones todavía propuesta en el cuerpo original de #63 no se ejecuta
+automáticamente: D44–D45 exigen un protocolo admisible, derechos verificados y adecuación de la
+referencia a control/duelo. Tampoco se inspecciona el partido reservado de ELASTIC. Con estas
+capturas ya se puede continuar la auditoría documental; cerrar la incertidumbre metodológica exige
+evidencia y una decisión trazable, no otro test del mismo CSV ni un cambio silencioso del hash.
+
 ## Estado tras retirar B5 y el postproceso
 
 #70 retiró la emisión B5, su temperatura y su interfaz de generación. `tools/emision.py` conserva
