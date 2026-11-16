@@ -75,6 +75,35 @@ def test_labels_are_h_a_and_x() -> None:
     assert engine.labels(np.array([0, 1, NONE], dtype=np.int8)).tolist() == ["H", "A", "X"]
 
 
+def test_engine_does_not_consume_b5_temperature(monkeypatch) -> None:
+    """Removed B5 entry points stay absent; even injected ones cannot affect the engine."""
+    import pandas as pd
+
+    from tools import dead_ball, emision
+
+    n = engine.games.source_frames()
+    features = feats(np.ones(n), np.full(n, 3.0), np.ones(n))
+    monkeypatch.setattr(engine.atd, "load", lambda *_: None)
+    monkeypatch.setattr(emision, "team_slots", lambda: None)
+    monkeypatch.setattr(engine, "features", lambda *_: features)
+    monkeypatch.setattr(
+        dead_ball, "load_evidence", lambda: type("Evidence", (), {"restarts": ()})()
+    )
+    monkeypatch.setattr(engine, "delivered_dead", lambda *_: np.zeros(n, dtype=bool))
+
+    def unexpected_emit(*_args):
+        raise AssertionError("engine unexpectedly called B5 emission")
+
+    assert not hasattr(emision, "emit")
+    assert not hasattr(emision, "EMISSION_TEMPERATURE_M")
+    monkeypatch.setattr(emision, "emit", unexpected_emit, raising=False)
+    monkeypatch.setattr(emision, "EMISSION_TEMPERATURE_M", 0.1, raising=False)
+    first, _ = engine.run()
+    monkeypatch.setattr(emision, "EMISSION_TEMPERATURE_M", 100.0)
+    second, _ = engine.run()
+    pd.testing.assert_frame_equal(first, second)
+
+
 def _restart(frame: int, tag_start: int, team: int | None):
     from tools.dead_ball import Restart
 

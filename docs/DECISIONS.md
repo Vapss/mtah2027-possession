@@ -379,6 +379,18 @@ las pérdidas H/A solo se interpretan en frames vivos con balón observado. Sin 
 uniforme y `confidence=0`; el campo es `max(p_home,p_away) × ball_present` e incluye el suelo D.
 Las métricas del slice público son diagnóstico, no evidencia de generalización al partido completo.
 
+**Investigación histórica #63 (anterior a integrar #70).** Se obtuvo la candidata externa
+`2,864606845062 m` con el protocolo previo `docs/proposals/b5-external-calibration.md`.
+El ajuste usa `J03WMX` y la comprobación `J03WN1` del corpus externo DFL; los resultados y hashes
+se regeneran con `tools/calibrate_b5_external.py` y están en `docs/analysis/b5-external.json`.
+En la comprobación, log-loss condicional fue 0,5347 frente a 0,7437 del prior de 1 m. Los DFL ya
+se habían explorado en otras decisiones, su balón es más limpio y su propietario no necesariamente
+equivale a control: esto no demuestra calibración en el partido del reto ni mejora de `spellF1`.
+En B5 cambiarían probabilidades y confianza; una mezcla podría cambiar etiquetas. #70 retiró por
+completo la emisión B5 y su interfaz de generación. Al integrar #69 se conserva esa retirada:
+la candidata externa queda como investigación, no como constante activa ni cambio de la entrega.
+Falta reproducir el CSV W3 real con el bundle y el control de acceso al GT.
+
 ---
 
 ## 19. Ablación B5 preregistrada: voto, vecinos y confianza
@@ -485,6 +497,11 @@ frames y luego se prefiere el anterior. La referencia de 355 frames solo desempa
 posesiones por ser cortas. Cada operación reduce el número de runs RLE y el bucle termina en punto
 fijo, con límite defensivo de `n_frames+1`. Cualquier otro umbral o variante corresponde al barrido
 pre-registrado de #22.
+
+**Auditoría histórica #63.** El prior de 355 era redundante: si los vecinos empatan en duración original,
+también empatan en distancia a cualquier prior; si no empatan, la duración ya decide. Su presencia
+nunca modificaba el desempate. #70 retiró todo el postproceso; #69 mantiene esa retirada y no
+reintroduce la elección del vecino ni los demás umbrales de #35 en la cadena `make repro`.
 
 **Baseline y resultado público.** El baseline se generó desde el commit de `dev` `d9e0bfb` con
 `python tools/emision.py --output artifacts/possession.csv`; H/A toma el argmin del artefacto y las
@@ -1598,3 +1615,23 @@ control observado cancela el forzado del equipo, pero no acorta la máscara `D`;
 La ejecución completa con el bundle, la comparación con el CSV entregado, la maquetación final del
 PDF, el acceso público y la procedencia pendiente de D44–D45 siguen siendo condiciones de entrega,
 no resultados acreditados por esta corrección.
+
+---
+
+## 47. PR #69: auditoría compatible con W3 y protección del GT en procesos Python
+
+**Decidido.** Al integrar `dev` tras #70–#71 se mantienen retirados la emisión B5, su temperatura,
+el postproceso y el verificador B6. Su código de calibración externa y sus resultados quedan como
+investigación histórica, sin consumidor en la cadena entregada. Se conserva el documento vigente
+y el manifiesto de entrega del #71, sin cambiar el motor, sus constantes ni su hash esperado.
+
+**Comprobación.** Los controles negativos del audit hook intentan abrir e importar un GT sintético
+y vigilan también procesos hijos. La reproducción sintética ejecuta el motor, ensamblador y
+validador reales con lectores de datos sustituidos. La prueba separada con bundle exige además
+que ambos builds coincidan con el SHA-256 completo del manifiesto. Sin bundle esa prueba se omite;
+los hooks no son un sandbox del sistema operativo ni acreditan la procedencia histórica.
+
+**Pendiente.** El inventario activo se actualiza a W3, con el detector logístico y sus reglas de
+reanudación. La evidencia externa exploratoria no valida por sí sola control/duelo ni autoriza
+recalibrar con el slice. El cierre de #63 sigue requiriendo la reproducción real y una decisión
+trazable sobre las constantes y la exposición de selección de D44–D45.

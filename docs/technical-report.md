@@ -128,6 +128,9 @@ and unresolved methodological and compliance limitations.
 The recorded hash is an existing delivery reference, not a new measurement or a new candidate.
 These documentation and packaging checks do not change model parameters, possession labels or
 the interpretation of the organisers' rules. A technical fix does not resolve the selection history.
+The W3 provenance inventory and Python-process GT audit tests are described in
+[`analysis/issue63-progress.md`](analysis/issue63-progress.md). Synthetic checks do not certify the
+real-data build; B5 calibration remains historical research and has no active inference consumer.
 
 Lo que cambió respecto a la versión anterior de este archivo (decisiones 44 y 45):
 

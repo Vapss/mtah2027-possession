@@ -1,0 +1,44 @@
+{
+  "candidate_m": 2.864606845062,
+  "input_sha256": {
+    "J03WMX": {
+      "metadatos": "a884728647a564cf8b20e5223a1d04a5da6f6725e1e506c8651505327c197ba9",
+      "tracking": "d3dd92e509421a6466acb0a083c009035f1751bc5fd9ef42ffa8f20d01cf7d49"
+    },
+    "J03WN1": {
+      "metadatos": "5490286436c86e6f80a538d2b1b379d0efd016e0defcaf594bc59d9ef5079f4c",
+      "tracking": "56ef948961a18e150dba0b7b16869d0008ff66f3050a0c355d31fa5b8ec2fcec"
+    }
+  },
+  "metrics": {
+    "J03WMX": {
+      "candidate_brier": 0.1623722682270573,
+      "candidate_log_loss": 0.5100594288291881,
+      "counts": {
+        "alive_owner": 85369,
+        "away": 46021,
+        "eligible": 84888,
+        "home": 38867,
+        "inside": 84888,
+        "total": 145967
+      },
+      "prior_brier": 0.17096344283854253,
+      "prior_log_loss": 0.7202390398217612
+    },
+    "J03WN1": {
+      "candidate_brier": 0.17514721800594416,
+      "candidate_log_loss": 0.5346755934984544,
+      "counts": {
+        "alive_owner": 68377,
+        "away": 31776,
+        "eligible": 67888,
+        "home": 36112,
+        "inside": 67888,
+        "total": 141561
+      },
+      "prior_brier": 0.18929406493873832,
+      "prior_log_loss": 0.7436890601351076
+    }
+  },
+  "status": "accepted_dfl_only"
+}
