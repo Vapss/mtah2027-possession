@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Team Possession from Incomplete Football Tracking: A Last-Controlled-Ball Approach</title>
 <style>
-  @page { size: A4; margin: 17mm 17mm 18mm 17mm; }
+  @page { size: A4; margin: 17mm 17mm 18mm 17mm;
+          @bottom-center { content: counter(page) " / " counter(pages);
+                           font: 8pt "Cambria", "Georgia", serif; color: #555; } }
   :root { --ink: #161616; --muted: #555; --rule: #c9c9c9; --home: #1f5fa8; --bg: #ffffff; }
   html { background: var(--bg); }
   body { font-family: "Cambria", "Georgia", "Times New Roman", serif; font-size: 10pt; line-height: 1.38;
@@ -21,7 +23,7 @@
   p { margin: 0 0 5pt; text-align: justify; hyphens: auto; }
   .keep-with-next { break-inside: avoid; page-break-inside: avoid;
                     break-after: avoid; page-break-after: avoid; }
-  .repro-details { text-align: left; }
+  .repro-details { text-align: left; break-inside: avoid; }
   .repro-details .sha256 { white-space: nowrap; hyphens: none; }
   ul { margin: 0 0 5pt 0; padding-left: 15pt; }
   li { margin: 0 0 2pt; text-align: justify; }
@@ -30,6 +32,9 @@
         border: 0.5pt solid var(--rule); padding: 5pt 7pt; margin: 3pt 0 6pt; white-space: pre-wrap;
         break-inside: avoid; }
   table { border-collapse: collapse; width: 100%; font-size: 8.6pt; margin: 3pt 0 4pt; break-inside: avoid; }
+  table.long-table { break-inside: auto; }
+  table.long-table tr { break-inside: avoid; }
+  thead { display: table-header-group; }
   th, td { padding: 2.2pt 4pt; vertical-align: top; text-align: left; }
   thead th { border-top: 0.9pt solid var(--ink); border-bottom: 0.6pt solid var(--ink); }
   tbody tr:last-child td { border-bottom: 0.9pt solid var(--ink); }
@@ -211,7 +216,7 @@ plausibility rather than accuracy.</p>
 <tr><td>Tagged stoppages (<code>out</code>)</td><td>The block-structure criterion excludes the two richer variants. The recorded preference order then selects <code>out</code>.</td><td>Kept</td></tr>
 <tr><td>Short ball-out episodes</td><td>11 of 16 short-episode stoppages end in an out-of-play restart (test B).</td><td>Kept</td></tr>
 <tr><td>Player-based stoppages</td><td>W1 was originally selected by public-window dead-ball precision. The revised procedure selects the DFL-trained logistic model with first-control forcing (W3) through the recorded preference order and DFL-derived structural checks, which all four variants pass. The restart interpretation follows the challenge's "whenever play restarts after a stoppage, there is a clear possessor". Component experiments on DFL with our ball pattern report mean <code>spellF1</code> of 0.3529, against 0.3216 for W1 and 0.2553 without player-based stoppages.</td><td><b>W3 replaces W1</b></td></tr>
-<tr><td>Restarts</td><td>The laws of the game motivate assigning possession to the restarting team; observed accepted control takes precedence over the tagged time estimate.</td><td>Kept</td></tr>
+<tr><td>Restarts</td><td>The laws of the game motivate assigning possession to the restarting team. Earlier accepted control cancels tagged team forcing without shortening the dead-ball interval.</td><td>Kept</td></tr>
 </tbody></table>
 
 <p>The DFL results in Table 3 evaluate stoppage variants within the external benchmark's control-and-carry engine. That
@@ -264,7 +269,7 @@ stoppage errors.</p>
 <p>Table 5 summarises approaches investigated to improve continuity, recover missing observations or refine transition
 timing. Their exclusion reflects the available evidence and selection constraints, not a general claim of ineffectiveness.
 Variant names link the comparisons to their research records.</p>
-<table>
+<table class="long-table">
 <caption><b>Table 5.</b> Investigated alternatives and reasons for exclusion under the revised protocol (D19–D43).</caption>
 <thead><tr><th>Alternative</th><th>Why it is not delivered</th></tr></thead>
 <tbody>
@@ -304,6 +309,11 @@ that would require separate evaluation.</p>
 <h2>8. Reproduction</h2>
 <p>The reported builds used Python 3.12.3. The labelling path depends only on numpy and pandas, with dependencies recorded
 in <code>uv.lock</code>. Inference requires no network access or training and uses no random sampling.</p>
+<p>On 16 November 2026, real-data verification at revision <code>4146b2453b2bd4618549077182bc640a8ae69cae</code>
+produced two byte-identical candidates matching the complete recorded digest. Both passed the official format validator.
+The Python audit hook registered seven processes and no forbidden ground-truth access attempts. A clean-checkout suite
+passed 509 tests with 6 skipped and no failures or errors. This verifies the observed Python build, not arbitrary native
+access or historical selection independence. A separate preserved delivery CSV was not available for direct comparison.</p>
 <p class="note repro-details">Run these Unix-shell commands using the separately obtained licensed match bundle.
 The checkout pins the source revision used to build this paper. PowerShell equivalents and PDF generation are
 documented in <code>docs/technical-report.md</code>.</p>
@@ -338,7 +348,7 @@ are implemented in <code>tools/dead_ball_v2.py dfl-bench</code>, using DFL data 
 argument and optional dropout mode are documented in that module.</p>
 <p class="note repro-details">To build the paper from the regenerated candidate (Chrome or Edge required):</p>
 <pre>.venv/bin/python docs/paper/build.py --team "Chilangorithms" \
-  --repo "Vapss/mtah2027-possession" --date "November 2026" \
+  --repo "https://github.com/Vapss/mtah2027-possession" --date "November 2026" \
   --submission runs/evaluator/submission.csv \
   --out runs/paper/Chilangorithms.pdf</pre>
 

@@ -69,12 +69,16 @@ exige que la vigilancia haya arrancado en al menos siete procesos: `repro` y los
 cada build. No comprueba el interior de las funciones sustituidas ni el hash real de entrega.
 La prueba separada con bundle ejecuta la misma cadena W3 con entradas reales, comprueba ausencia
 de intentos de lectura y exige igualdad entre los dos hashes y el digest completo del manifiesto.
-Sin bundle se omite, no se considera superada.
+Sin bundle se omite, no se considera superada. El 16-nov-2026 se ejecutó con el bundle real en
+`4146b2453b2bd4618549077182bc640a8ae69cae`: dos builds idénticos byte a byte, validador oficial
+correcto, digest completo igual al manifiesto, siete procesos vigilados y cero intentos registrados.
+La suite desde clon limpio pasó 509 pruebas con 6 omitidas y ningún fallo/error. El registro
+sanitizado está en `docs/analysis/reproduction-verification.json`; no contiene datos del partido.
 
 Alcance: los hooks no son un sandbox del sistema operativo. Cubren eventos `open` de procesos
 Python que heredan el entorno; no descartan accesos mediante programas nativos, extensiones que
-eludan esos eventos, intérpretes aislados o rutas deliberadamente sustituidas. Falta la prueba real
-y la revisión de las rutas de entrada antes de acreditar el build completo.
+eludan esos eventos, intérpretes aislados o rutas deliberadamente sustituidas. La ejecución real
+acredita ese alcance observado; no demuestra aislamiento de sistema ni procedencia independiente.
 
 ## Evidencia externa candidata
 
@@ -110,13 +114,13 @@ ELASTIC es MPL-2.0 y es distinta de la licencia de las anotaciones; este proyect
 
 ## Pendiente para cerrar #63
 
-1. Confirmar con el bundle la reproducción W3 bajo vigilancia. B5 ya no tiene consumidor activo;
-   revisar su calibración queda como investigación separada, no como requisito para regenerar W3.
+1. **Verificado:** reproducción W3 con bundle real bajo vigilancia, comparación de bytes y hash
+   completo. B5 ya no tiene consumidor activo; su calibración queda como investigación separada.
 2. Para 1,5 m / 5 m/s / `dwell` 1 y la regla del duelo, producir una decisión justificada por
    corpus externo adecuado y prior escrito antes de medir; declarar un conflicto no es por sí solo
    una justificación de los valores actuales. Inventariar además el resto de constantes activas.
-3. Reproducir dos veces con el bundle licenciado, comparar con el archivo candidato, pasar el
-   validador y ejecutar la prueba de GT real. El bundle no está en esta copia.
+3. **Verificado para el candidato:** dos builds, validador y prueba de GT real. Falta comparar
+   directamente con una copia preservada o realmente enviada del CSV de entrega, cuando exista.
 4. Revisar y registrar la decisión final antes de cerrar el issue y congelar la entrega.
 
 El #69 prepara estas comprobaciones y conserva la evidencia histórica; no cierra #63 ni acredita
