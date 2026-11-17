@@ -1,0 +1,40 @@
+[project]
+name = "mtah2027-possession"
+version = "0.1.0"
+description = "More than a Hack 2027 Phase 1 -- per-frame ball possession"
+# The interpreter and the two libraries that write the submission are pinned (#9): the CSV is
+# compared byte for byte, and pandas' writer is part of that contract (DECISIONS 27). The patch
+# release is in .python-version (3.12.3, the one the evidence records). The code stays
+# 3.9-compatible in syntax (ruff target below); the reproduction environment is this one.
+requires-python = "==3.12.*"
+dependencies = ["numpy==2.5.4", "pandas==3.0.6"]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+# The organisers' notebooks (requirements-starter.txt). Not in the path that writes the file.
+starter = ["kloppy==3.18.0", "matplotlib", "notebook"]
+
+[tool.uv]
+# A repository of scripts, not an installable package: `uv sync` only builds the environment.
+package = false
+
+[project.urls]
+Upstream = "https://github.com/metrica-sports/more-than-a-hack-2027"
+
+# Only our code is linted. `evaluation/` and `starter/` are the organisers' files: they are
+# read-only reference, and reformatting them would make every upstream merge a conflict.
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+extend-exclude = ["evaluation", "starter", "data", ".venv", "artifacts", "runs", "submissions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["tools", "games"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+filterwarnings = ["error::FutureWarning"]
